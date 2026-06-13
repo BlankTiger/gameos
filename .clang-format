@@ -1,0 +1,12 @@
+BasedOnStyle: google
+IndentWidth:  4
+PointerAlignment: Left
+ColumnLimit: 120
+AlignAfterOpenBracket: AlwaysBreak
+BinPackArguments: false
+BinPackParameters: false
+ExperimentalAutoDetectBinPacking: false
+AllowAllParametersOfDeclarationOnNextLine: false
+BreakInheritanceList: BeforeComma
+AllowShortFunctionsOnASingleLine: Empty
+PackConstructorInitializers: Never
