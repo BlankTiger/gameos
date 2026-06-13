@@ -21,6 +21,9 @@
               with pkgs; [
                 pkgsCross.i686-embedded.buildPackages.gcc
                 fish
+                grub2
+                qemu
+                xorriso
               ];
           };
         }
