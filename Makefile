@@ -6,7 +6,7 @@ build: src
 	@grub-file --is-x86-multiboot build/gameos || echo "Something went wrong and kernel is not multiboot compliant."
 
 iso: build
-	mkdir -p isodir/boot/grub
-	cp build/gameos isodir/boot/gameos
-	cp grub.cfg isodir/boot/grub/grub.cfg
-	grub-mkrescue -o gameos.iso isodir
+	mkdir -p build/isodir/boot/grub
+	cp build/gameos build/isodir/boot/gameos
+	cp grub.cfg build/isodir/boot/grub/grub.cfg
+	grub-mkrescue -o build/gameos.iso build/isodir

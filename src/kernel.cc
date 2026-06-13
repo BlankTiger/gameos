@@ -98,5 +98,5 @@ extern "C" void kernel_main() {
     terminal_initialize();
 
     /* Newline support is left as an exercise. */
-    terminal_writestring("Hello, kernel World!\n");
+    terminal_writestring("Hello, kernel World!\nW");
 }
