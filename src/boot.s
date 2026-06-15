@@ -65,6 +65,11 @@ _start:
 	*/
 	mov $stack_top, %esp
 
+	/* Preserve 16-byte alignment before calling into C++. */
+	sub $8, %esp
+	push %ebx
+	push %eax
+
 	/*
 	This is a good place to initialize crucial processor state before the
 	high-level kernel is entered. It's best to minimize the early
@@ -85,6 +90,7 @@ _start:
 	preserved and the call is well defined.
 	*/
 	call kernel_main
+	add $16, %esp
 
 	/*
 	If the system has nothing more to do, put the computer into an

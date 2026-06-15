@@ -2,6 +2,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <cstddef>
+#include <cstdint>
+
+#include "kstd.hh"
+#include "terminal.hh"
+
 /* Check if the compiler thinks you are targeting the wrong operating system. */
 #if defined(__linux__)
 #error "You are not using a cross-compiler, you will most certainly run into trouble"
@@ -12,99 +18,81 @@
 #error "This tutorial needs to be compiled with a ix86-elf compiler"
 #endif
 
-/* Hardware text mode color constants. */
-enum vga_color {
-    VGA_COLOR_BLACK = 0,
-    VGA_COLOR_BLUE = 1,
-    VGA_COLOR_GREEN = 2,
-    VGA_COLOR_CYAN = 3,
-    VGA_COLOR_RED = 4,
-    VGA_COLOR_MAGENTA = 5,
-    VGA_COLOR_BROWN = 6,
-    VGA_COLOR_LIGHT_GREY = 7,
-    VGA_COLOR_DARK_GREY = 8,
-    VGA_COLOR_LIGHT_BLUE = 9,
-    VGA_COLOR_LIGHT_GREEN = 10,
-    VGA_COLOR_LIGHT_CYAN = 11,
-    VGA_COLOR_LIGHT_RED = 12,
-    VGA_COLOR_LIGHT_MAGENTA = 13,
-    VGA_COLOR_LIGHT_BROWN = 14,
-    VGA_COLOR_WHITE = 15,
+struct Multiboot_Info {
+    uint32_t flags;
+    uint32_t mem_lower;
+    uint32_t mem_upper;
+    uint32_t boot_device;
+    uint32_t cmdline;
+    uint32_t mods_count;
+    uint32_t mods_addr;
+    uint32_t syms[4];
+    uint32_t mmap_length;
+    uint32_t mmap_addr;
+} __attribute__((packed));
+
+struct Multiboot_MMAP_Entry {
+    uint32_t size;
+    uint64_t addr;
+    uint64_t len;
+    uint32_t type;
+} __attribute__((packed));
+
+struct Memory_Region {
+    uint64_t base;
+    uint64_t length;
 };
 
-static inline uint8_t vga_entry_color(enum vga_color fg, enum vga_color bg) {
-    return fg | bg << 4;
-}
+static constexpr uint32_t multiboot_info_has_mmap = 1u << 6;
+static constexpr uint32_t multiboot_mmap_usable = 1u;
+static constexpr size_t max_memory_regions = 32;
 
-static inline uint16_t vga_entry(unsigned char uc, uint8_t color) {
-    return (uint16_t)uc | (uint16_t)color << 8;
-}
+static Memory_Region _usable_regions[max_memory_regions];
 
-size_t strlen(const char* str) {
-    size_t len = 0;
-    while (str[len]) len++;
-    return len;
-}
+static kstd::Array<Memory_Region> usable_regions = {0, _usable_regions};
+static uint64_t usable_memory_bytes;
 
-#define VGA_WIDTH 80
-#define VGA_HEIGHT 25
-#define VGA_MEMORY 0xB8000
+void parse_multiboot_memory_map(const Multiboot_Info* mbi) {
+    usable_memory_bytes = 0;
 
-size_t terminal_row;
-size_t terminal_column;
-uint8_t terminal_color;
-uint16_t* terminal_buffer = (uint16_t*)VGA_MEMORY;
+    if ((mbi->flags & multiboot_info_has_mmap) == 0) return;
 
-void terminal_initialize() {
-    terminal_row = 0;
-    terminal_column = 0;
-    terminal_color = vga_entry_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK);
+    auto* entry = reinterpret_cast<const Multiboot_MMAP_Entry*>((uintptr_t)mbi->mmap_addr);
+    const auto* end = reinterpret_cast<const Multiboot_MMAP_Entry*>((uintptr_t)mbi->mmap_addr + mbi->mmap_length);
 
-    for (size_t y = 0; y < VGA_HEIGHT; y++) {
-        for (size_t x = 0; x < VGA_WIDTH; x++) {
-            const size_t index = y * VGA_WIDTH + x;
-            terminal_buffer[index] = vga_entry(' ', terminal_color);
+    while (reinterpret_cast<uintptr_t>(entry) < reinterpret_cast<uintptr_t>(end)) {
+        const uint64_t entry_length = entry->len;
+        if (entry->type == multiboot_mmap_usable && usable_regions.size < max_memory_regions) {
+            usable_regions[usable_regions.size++] = {entry->addr, entry_length};
+            usable_memory_bytes += entry_length;
         }
+
+        entry = reinterpret_cast<const Multiboot_MMAP_Entry*>(
+            reinterpret_cast<uintptr_t>(entry) + entry->size + sizeof(entry->size));
     }
 }
 
-void terminal_setcolor(uint8_t color) {
-    terminal_color = color;
-}
-
-void terminal_putentryat(char c, uint8_t color, size_t x, size_t y) {
-    const size_t index = y * VGA_WIDTH + x;
-    terminal_buffer[index] = vga_entry(c, color);
-}
-
-void terminal_next_row() {
-    terminal_column = 0;
-    if (++terminal_row == VGA_HEIGHT) terminal_row = 0;
-}
-
-void terminal_putchar(char c) {
-    if (c == '\n') {
-        terminal_next_row();
-    } else {
-        terminal_putentryat(c, terminal_color, terminal_column, terminal_row);
-        if (++terminal_column == VGA_WIDTH) {
-            terminal_next_row();
-        }
-    }
-}
-
-void terminal_write(const char* data, size_t size) {
-    for (size_t i = 0; i < size; i++) terminal_putchar(data[i]);
-}
-
-void terminal_writestring(const char* data) {
-    terminal_write(data, strlen(data));
-}
-
-extern "C" void kernel_main() {
-    /* Initialize terminal interface */
+extern "C" void kernel_main(uint32_t magic, const Multiboot_Info* mbi) {
     terminal_initialize();
 
-    /* Newline support is left as an exercise. */
-    terminal_writestring("Hello, kernel World!\nW");
+    if (magic != 0x2BADB002) {
+        terminal_writestring("Bad multiboot magic\n");
+        return;
+    }
+
+    parse_multiboot_memory_map(mbi);
+    // auto entries = parse_multiboot_memory_map(mbi);
+
+    for (uint32_t i = 0; i < usable_regions.size; i++) {
+        terminal_write_hex(usable_regions[i].base);
+        terminal_writestring(" ");
+        terminal_write_hex(usable_regions[i].length);
+        terminal_writestring("\n");
+    }
+
+    terminal_writestring("Usable RAM bytes: 0x");
+    terminal_write_hex(usable_memory_bytes);
+    terminal_writestring("\nRegions: 0x");
+    terminal_write_hex(usable_regions.size);
+    terminal_writestring("\n");
 }
