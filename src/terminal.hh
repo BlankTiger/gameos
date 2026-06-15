@@ -79,14 +79,8 @@ void terminal_write(const char* data, size_t size) {
     for (size_t i = 0; i < size; i++) terminal_putchar(data[i]);
 }
 
-size_t strlen(const char* str) {
-    size_t len = 0;
-    while (str[len]) len++;
-    return len;
-}
-
 void terminal_writestring(const char* data) {
-    terminal_write(data, strlen(data));
+    terminal_write(data, kstd::strlen(data));
 }
 
 void terminal_write_hex(uint64_t value) {
