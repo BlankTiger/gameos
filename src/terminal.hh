@@ -1,4 +1,5 @@
 #pragma once
+namespace term {
 
 /* Hardware text mode color constants. */
 enum vga_color {
@@ -20,12 +21,12 @@ enum vga_color {
     VGA_COLOR_WHITE = 15,
 };
 
-static inline uint8_t vga_entry_color(enum vga_color fg, enum vga_color bg) {
+static inline u8 vga_entry_color(enum vga_color fg, enum vga_color bg) {
     return fg | bg << 4;
 }
 
-static inline uint16_t vga_entry(unsigned char uc, uint8_t color) {
-    return (uint16_t)uc | (uint16_t)color << 8;
+static inline u16 vga_entry(u8 uc, u8 color) {
+    return (u16)uc | (u16)color << 8;
 }
 
 #define VGA_WIDTH 80
@@ -34,8 +35,8 @@ static inline uint16_t vga_entry(unsigned char uc, uint8_t color) {
 
 size_t terminal_row;
 size_t terminal_column;
-uint8_t terminal_color;
-uint16_t* terminal_buffer = (uint16_t*)VGA_MEMORY;
+u8 terminal_color;
+u16* terminal_buffer = (u16*)VGA_MEMORY;
 
 void terminal_initialize() {
     terminal_row = 0;
@@ -50,11 +51,11 @@ void terminal_initialize() {
     }
 }
 
-void terminal_setcolor(uint8_t color) {
+void terminal_setcolor(u8 color) {
     terminal_color = color;
 }
 
-void terminal_putentryat(char c, uint8_t color, size_t x, size_t y) {
+void terminal_putentryat(u8 c, u8 color, size_t x, size_t y) {
     const size_t index = y * VGA_WIDTH + x;
     terminal_buffer[index] = vga_entry(c, color);
 }
@@ -64,7 +65,7 @@ void terminal_next_row() {
     if (++terminal_row == VGA_HEIGHT) terminal_row = 0;
 }
 
-void terminal_putchar(char c) {
+void terminal_putchar(u8 c) {
     if (c == '\n') {
         terminal_next_row();
     } else {
@@ -80,10 +81,10 @@ void terminal_write(const char* data, size_t size) {
 }
 
 void terminal_writestring(const char* data) {
-    terminal_write(data, kstd::strlen(data));
+    terminal_write(data, strlen(data));
 }
 
-void terminal_write_hex(uint64_t value) {
+void terminal_write_hex(u64 value) {
     static const char digits[] = "0123456789abcdef";
     char buffer[16];
 
@@ -94,3 +95,32 @@ void terminal_write_hex(uint64_t value) {
 
     terminal_write(buffer, sizeof(buffer));
 }
+
+void terminal_writeint(s64 value) {
+    char buffer[21];
+    size_t length = 0;
+
+    u64 magnitude;
+    if (value < 0) {
+        terminal_putchar('-');
+        magnitude = (u64)(-(value + 1)) + 1;
+    } else {
+        magnitude = (u64)value;
+    }
+
+    if (magnitude == 0) {
+        terminal_putchar('0');
+        return;
+    }
+
+    while (magnitude != 0) {
+        buffer[length++] = (char)('0' + (magnitude % 10));
+        magnitude /= 10;
+    }
+
+    while (length != 0) {
+        terminal_putchar(buffer[--length]);
+    }
+}
+
+}  // namespace term
