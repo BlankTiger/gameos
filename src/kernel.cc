@@ -22,10 +22,12 @@
 namespace term = kstd::term;
 namespace mem = kstd::mem;
 
-mem::Buddy_Allocator __global_allocator;
+mem::Allocator* __global_allocator;
+mem::Buddy_Allocator __buddy;
+mem::Arena_Allocator __arena;
 
 void* operator new(std::size_t size) {
-    if (void* ptr = __global_allocator.alloc(size)) return ptr;
+    if (void* ptr = __global_allocator->alloc(size)) return ptr;
 
     term::terminal_writestring("\nnew failed");
     for (;;) {
@@ -34,7 +36,7 @@ void* operator new(std::size_t size) {
 }
 
 void* operator new[](std::size_t size) {
-    if (void* ptr = __global_allocator.alloc(size)) return ptr;
+    if (void* ptr = __global_allocator->alloc(size)) return ptr;
 
     term::terminal_writestring("\nnew[] failed");
     for (;;) {
@@ -43,19 +45,19 @@ void* operator new[](std::size_t size) {
 }
 
 void operator delete(void* ptr) noexcept {
-    __global_allocator.free(ptr, 0);
+    __global_allocator->free(ptr, 0);
 }
 
 void operator delete[](void* ptr) noexcept {
-    __global_allocator.free(ptr, 0);
+    __global_allocator->free(ptr, 0);
 }
 
-void operator delete(void* ptr, std::size_t alignment) noexcept {
-    __global_allocator.free(ptr, 0, alignment);
+void operator delete(void* ptr, std::size_t size) noexcept {
+    __global_allocator->free(ptr, size);
 }
 
-void operator delete[](void* ptr, std::size_t alignment) noexcept {
-    __global_allocator.free(ptr, 0, alignment);
+void operator delete[](void* ptr, std::size_t size) noexcept {
+    __global_allocator->free(ptr, size);
 }
 
 static bool buddy_allocator_smoke_test() {
@@ -64,8 +66,8 @@ static bool buddy_allocator_smoke_test() {
     auto* value = new std::uint32_t(0x12345678u);
     if (value == nullptr || *value != 0x12345678u) return false;
 
-    auto* first = new std::uint8_t[block_size];
-    auto* second = new std::uint8_t[block_size];
+    auto* first = static_cast<std::uint8_t*>(::operator new(block_size));
+    auto* second = static_cast<std::uint8_t*>(::operator new(block_size));
     if (first == nullptr || second == nullptr) return false;
     if (first == second) return false;
 
@@ -78,14 +80,14 @@ static bool buddy_allocator_smoke_test() {
         if (first[i] != 0xAA || second[i] != 0x55) return false;
     }
 
-    delete[] second;
-    delete[] first;
+    ::operator delete(second);
+    ::operator delete(first);
     delete value;
 
-    auto* third = new std::uint8_t[block_size];
+    auto* third = static_cast<std::uint8_t*>(::operator new(block_size));
     if (third == nullptr) return false;
 
-    delete[] third;
+    ::operator delete(third);
     return true;
 }
 
@@ -98,9 +100,12 @@ extern "C" void kernel_main(uint32_t magic, const mem::Multiboot_Info* mbi) {
     }
 
     mem::memory_initialize(mbi);
-    __global_allocator.init();
+    __buddy.init();
+    __arena.init();
+    __global_allocator = &__buddy;
+    __global_allocator = &__arena;
 
-    // term::terminal_writestring("buddy allocator smoke test: \n");
+    term::terminal_writestring("buddy allocator smoke test: \n");
     if (buddy_allocator_smoke_test()) {
         term::terminal_writestring("pass\n");
     } else {
