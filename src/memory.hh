@@ -155,36 +155,6 @@ void memory_initialize(const Multiboot_Info* mbi) {
     reserve_multiboot_data(__regions, mbi);
 }
 
-// struct Frame_Allocator {
-//     Frame_Allocator() {}
-//
-//     void* allocate(size_t size, size_t alignment = alignof(std::max_align_t)) {
-//         if (size == 0) size = 1;
-//         if (alignment < alignof(void*)) alignment = alignof(void*);
-//
-//         for (size_t i = 0; i < __regions.size; i++) {
-//             const u64 region_start = __regions[i].base;
-//             const u64 region_end = region_start + __regions[i].length;
-//             const u64 aligned_start = align_up(region_start, alignment);
-//             if (region_end <= aligned_start) continue;
-//             const u64 available = region_end - aligned_start;
-//
-//             if (available < size) continue;
-//
-//             __regions[i].base = aligned_start + size;
-//             __regions[i].length = region_end - __regions[i].base;
-//             return reinterpret_cast<void*>((uintptr_t)aligned_start);
-//         }
-//
-//         return nullptr;
-//     }
-//
-//     void free(void* ptr, size_t alignment = alignof(std::max_align_t)) {
-//         (void)ptr;
-//         (void)alignment;
-//     }
-// };
-
 u64 floor_pow2(u64 n) {
     if (n == 0) return 0;
     n |= n >> 1;
@@ -196,227 +166,178 @@ u64 floor_pow2(u64 n) {
     return n & ~(n >> 1);
 }
 
-// static auto align_up(std::byte* p, size_t alignment) -> std::byte* {
-//     auto addr = reinterpret_cast<std::uintptr_t>(p);
-//     auto aligned = (addr + alignment - 1) & ~(alignment - 1);
-//     return reinterpret_cast<std::byte*>(aligned);
-// }
-
 struct Allocator {
     virtual auto alloc(size_t size, size_t alignment = alignof(std::max_align_t)) -> void* = 0;
     virtual auto free(void* pointer, size_t size, size_t alignment = alignof(std::max_align_t)) -> void = 0;
     virtual ~Allocator() = default;
 };
 
-struct Buddy_Block {
-    u64 size_;
-    bool free_;
+struct Buddy_Allocator final : Allocator {
+    struct Free_Block {
+        Free_Block* next;
+    };
 
-    auto next() -> Buddy_Block* {
-        return reinterpret_cast<Buddy_Block*>(reinterpret_cast<u8*>(this) + size_);
+    struct Allocation_Header {
+        u64 block_base;
+        u8 order;
+        u8 reserved[7];
+    };
+
+    static constexpr size_t MIN_ORDER = 12;  // 4 KiB pages
+    static constexpr size_t MAX_ORDER = 63;
+
+    Free_Block* free_lists[MAX_ORDER + 1]{};
+
+    static u64 block_size_for_order(size_t order) {
+        return 1ull << order;
     }
 
-    auto split(size_t size) -> Buddy_Block* {
-        auto* current_block = this;
-        debug_assert(current_block != nullptr, nullptr, std::source_location::current());
-
-        if (size != 0) {
-            while (size < current_block->size_) {
-                auto new_size = size_ >> 1;
-                current_block->size_ = new_size;
-                current_block = current_block->next();
-                *current_block = Buddy_Block(new_size, true);
-            }
-
-            if (size <= current_block->size_) {
-                return current_block;
-            }
+    static size_t order_for_block_size(u64 block_size) {
+        size_t order = MIN_ORDER;
+        u64 current = PAGE_SIZE;
+        while (current < block_size && order < MAX_ORDER) {
+            current <<= 1;
+            order++;
         }
-
-        return nullptr;
+        return order;
     }
 
-    static auto find_best(Buddy_Block* head, Buddy_Block* tail, size_t size) -> Buddy_Block* {
-        Buddy_Block* best_block = nullptr;
-        auto* block = head;
-        auto* buddy = block->next();
-
-        // The entire memory section between head and tail is free, just call
-        // 'split' to get the allocation.
-        if (buddy == tail && block->free_) {
-            return block->split(size);
+    static u64 next_block_size(u64 required_size) {
+        u64 block_size = PAGE_SIZE;
+        while (block_size < required_size && block_size < (1ull << MAX_ORDER)) {
+            block_size <<= 1;
         }
-
-        // Find the block which is the 'best_block' to requested allocation sized
-        // @TODO: Coalesce on neighboring free buddies.
-        while (block < tail && buddy < tail) {
-            // If both buddies are free, coalesce them together
-            // NOTE: this is an optimization to reduce fragmentation
-            //       this could be completely ignored
-            if (block->free_ && buddy->free_ && block->size_ == buddy->size_) {
-                block->size_ <<= 1;
-                if (size <= block->size_ && (best_block == nullptr || block->size_ <= best_block->size_)) {
-                    best_block = block;
-                }
-
-                block = buddy->next();
-                if (block < tail) {
-                    // Delay the buddy block for the next iteration
-                    buddy = block->next();
-                }
-                continue;
-            }
-
-            if (block->free_ && size <= block->size_ && (best_block == nullptr || block->size_ <= best_block->size_)) {
-                best_block = block;
-            }
-
-            if (buddy->free_ && size <= buddy->size_ && (best_block == nullptr || buddy->size_ < best_block->size_)) {
-                // If each buddy are the same size, then it makes more sense
-                // to pick the buddy as it "bounces around" less
-                best_block = buddy;
-            }
-
-            if (block->size_ <= buddy->size_) {
-                block = buddy->next();
-                if (block < tail) {
-                    // Delay the buddy block for the next iteration
-                    buddy = block->next();
-                }
-            } else {
-                // Buddy was split into smaller blocks
-                block = buddy;
-                buddy = buddy->next();
-            }
-        }
-
-        if (best_block != nullptr) {
-            // This will handle the case if the 'best_block' is also the perfect fit
-            return best_block->split(size);
-        }
-
-        // Maybe out of memory
-        return nullptr;
+        return block_size;
     }
 
-    auto coalescence(Buddy_Block* head, Buddy_Block* tail) -> void {
-        for (;;) {
-            // Keep looping until there are no more buddies to coalesce
+    void clear() {
+        for (size_t i = 0; i <= MAX_ORDER; ++i) free_lists[i] = nullptr;
+    }
 
-            auto* block = head;
-            auto* buddy = block->next();
+    void push_free_block(u64 base, size_t order) {
+        auto* block = reinterpret_cast<Free_Block*>((uintptr_t)base);
+        block->next = free_lists[order];
+        free_lists[order] = block;
+    }
 
-            auto no_coalescence = true;
-            while (block < tail && buddy < tail) {
-                if (block->free_ && buddy->free_ && block->size_ == buddy->size_) {
-                    // Coalesce buddies into one
-                    block->size_ <<= 1;
-                    block = block->next();
-                    if (block < tail) {
-                        buddy = block->next();
-                        no_coalescence = false;
-                    }
-                } else if (block->size_ < buddy->size_) {
-                    // The buddy block is split into smaller blocks
-                    block = buddy;
-                    buddy = buddy->next();
-                } else {
-                    block = buddy->next();
-                    if (block < tail) {
-                        // Leave the buddy block for the next iteration
-                        buddy = block->next();
-                    }
-                }
+    bool remove_free_block(size_t order, u64 base) {
+        auto** link = &free_lists[order];
+        while (*link != nullptr) {
+            if (reinterpret_cast<uintptr_t>(*link) == base) {
+                *link = (*link)->next;
+                return true;
+            }
+            link = &((*link)->next);
+        }
+
+        return false;
+    }
+
+    void add_region(u64 base, u64 size) {
+        const u64 start = align_up(base, PAGE_SIZE);
+        const u64 end = align_down(base + size, PAGE_SIZE);
+        if (start >= end) return;
+
+        u64 current = start;
+        while (current < end) {
+            u64 block_size = floor_pow2(end - current);
+            while (block_size > PAGE_SIZE && (current & (block_size - 1)) != 0) {
+                block_size >>= 1;
             }
 
-            if (no_coalescence) {
-                return;
-            }
+            if (block_size < PAGE_SIZE) block_size = PAGE_SIZE;
+
+            const size_t order = order_for_block_size(block_size);
+            push_free_block(current, order);
+            current += block_size;
         }
     }
 
-    static auto size_required(size_t size) -> size_t {
-        // @TODO: alignment??
-        size += sizeof(Buddy_Block);
-        return size;
-    }
+    void init() {
+        clear();
 
-};
-
-struct Buddy_Source_Block {
-    Buddy_Block* head;
-    Buddy_Block* tail;
-    // @TODO: is this necessary?
-    // size_t alignment;
-};
-
-struct Buddy_Allocator : Allocator {
-    Buddy_Source_Block __source_blocks[MAX_MEMORY_REGIONS];
-    Array<Buddy_Source_Block> source_blocks_;
-    bool initted_;
-
-    Buddy_Allocator() {}
-
-    auto init() -> void {
-        source_blocks_ = {__regions.size, __source_blocks};
-
-        for (u64 i = 0; i < __regions.size; ++i) {
-            auto& region = __regions[i];
-            auto* block = reinterpret_cast<Buddy_Block*>(region.base);
-            *block = Buddy_Block(floor_pow2(region.size), true);
-            source_blocks_[i] = Buddy_Source_Block{block, block->next()};
+        for (const auto& region : __regions) {
+            add_region(region.base, region.size);
         }
-
-        initted_ = true;
     }
 
     auto alloc(size_t size, size_t alignment = alignof(std::max_align_t)) -> void* override {
-        debug_assert(initted_, nullptr, std::source_location::current());
+        if (alignment == 0) alignment = 1;
+        if (size == 0) size = 1;
 
-        if (size != 0) {
-            auto actual_size = Buddy_Block::size_required(size);
-            actual_size = align_up(actual_size, alignment);
+        const u64 required_size = static_cast<u64>(size) + static_cast<u64>(alignment) + sizeof(Allocation_Header);
+        if (required_size < size) return nullptr;
 
-            for (auto& source_block : source_blocks_) {
-                auto* found = Buddy_Block::find_best(source_block.head, source_block.tail, actual_size);
-                if (found == nullptr) continue;
+        const u64 target_block_size = next_block_size(required_size);
+        if (target_block_size < PAGE_SIZE) return nullptr;
 
-                found->free_ = false;
-                // @TODO: alignment??
-                auto* result = static_cast<void*>(reinterpret_cast<std::byte*>(found) + sizeof(Buddy_Block));
-                term::terminal_writestring("Alloced: ");
-                term::terminal_write_hex(reinterpret_cast<u64>(result));
-                term::terminal_writestring("\n");
-                return result;
-            }
+        const size_t target_order = order_for_block_size(target_block_size);
+
+        size_t order = target_order;
+        while (order <= MAX_ORDER && free_lists[order] == nullptr) order++;
+        if (order > MAX_ORDER) return nullptr;
+
+        u64 block_base = reinterpret_cast<uintptr_t>(free_lists[order]);
+        free_lists[order] = free_lists[order]->next;
+
+        while (order > target_order) {
+            order--;
+            const u64 split_size = block_size_for_order(order);
+            push_free_block(block_base + split_size, order);
         }
-        return nullptr;
+
+        const u64 block_size = block_size_for_order(order);
+        const u64 user_ptr = align_up(block_base + sizeof(Allocation_Header), alignment);
+        if (user_ptr + size > block_base + block_size) {
+            push_free_block(block_base, order);
+            return nullptr;
+        }
+
+        auto* header = reinterpret_cast<Allocation_Header*>((uintptr_t)(user_ptr - sizeof(Allocation_Header)));
+        header->block_base = block_base;
+        header->order = static_cast<u8>(order);
+        header->reserved[0] = 0;
+        header->reserved[1] = 0;
+        header->reserved[2] = 0;
+        header->reserved[3] = 0;
+        header->reserved[4] = 0;
+        header->reserved[5] = 0;
+        header->reserved[6] = 0;
+
+        term::terminal_writestring("\nbruh: ");
+        term::terminal_writeint(user_ptr);
+        term::terminal_writestring("\n");
+        return reinterpret_cast<void*>((uintptr_t)user_ptr);
     }
 
-    auto free(void* pointer, size_t size, size_t alignment = alignof(std::max_align_t)) -> void override {
-        (void)size;
+    auto free(void* pointer, size_t, size_t alignment = alignof(std::max_align_t)) -> void override {
         (void)alignment;
+        if (pointer == nullptr) return;
 
-        debug_assert(initted_, nullptr, std::source_location::current());
-        assert(pointer != nullptr, nullptr, std::source_location::current());
+        Allocation_Header header{};
+        __builtin_memcpy(
+            &header,
+            reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(pointer) - sizeof(Allocation_Header)),
+            sizeof(header));
 
-        Buddy_Source_Block source;
-        auto found_source = false;
-        for (auto& source_block : source_blocks_) {
-            if (static_cast<void*>(source_block.head) <= pointer && static_cast<void*>(source_block.tail) > pointer) {
-                found_source = true;
-                source = source_block;
-                break;
-            }
+        u64 block_base = header.block_base;
+        size_t order = header.order;
+
+        while (order < MAX_ORDER) {
+            const u64 block_size = block_size_for_order(order);
+            const u64 buddy_base = block_base ^ block_size;
+            if (!remove_free_block(order, buddy_base)) break;
+
+            if (buddy_base < block_base) block_base = buddy_base;
+            order++;
         }
-        assert(found_source, nullptr, std::source_location::current());
 
-        auto* block = reinterpret_cast<Buddy_Block*>(static_cast<std::byte*>(pointer) - sizeof(Buddy_Block));
-        block->free_ = true;
-        term::terminal_writestring("Freed: ");
-        term::terminal_write_hex(reinterpret_cast<u64>(pointer));
+        term::terminal_writestring("\nbruh 2: ");
+        term::terminal_writeint(reinterpret_cast<u64>(pointer));
         term::terminal_writestring("\n");
+        push_free_block(block_base, order);
     }
 };
+
 
 }  // namespace mem
