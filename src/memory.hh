@@ -306,6 +306,8 @@ struct Buddy_Allocator final : Allocator {
 
         term::terminal_writestring("\nbruh: ");
         term::terminal_writeint(user_ptr);
+        term::terminal_writestring(", ");
+        term::terminal_writeint(size);
         term::terminal_writestring("\n");
         return reinterpret_cast<void*>((uintptr_t)user_ptr);
     }
@@ -339,5 +341,61 @@ struct Buddy_Allocator final : Allocator {
     }
 };
 
+constexpr size_t DEFAULT_RESERVE_SIZE = 2 * 1024 * 1024;
+constexpr size_t DEFAULT_PAGE_SIZE = 4096;
+
+template <bool DEBUG = false>
+struct Arena_Allocator final : Allocator {
+    std::byte* memory_base;
+    std::byte* current_point;
+    std::byte* address_limit;
+
+    explicit Arena_Allocator(size_t reserve = DEFAULT_RESERVE_SIZE) {
+        init(reserve);
+    }
+
+    void init(size_t reserve = DEFAULT_RESERVE_SIZE) {
+        reserve = align_up(reserve, DEFAULT_PAGE_SIZE);
+
+        memory_base = new std::byte[reserve];
+        assert(memory_base != nullptr);
+        current_point = memory_base;
+        address_limit = memory_base + reserve;
+    }
+
+    ~Arena_Allocator() {
+        reset();
+    }
+
+    void reset() {
+        if constexpr (DEBUG) {
+            const auto STAMP = 0xCC;
+            __builtin_memset(memory_base, STAMP, current_point - memory_base);
+            // std::memset(memory_base, STAMP, current_point - memory_base);
+        }
+        current_point = memory_base;
+    };
+
+    size_t bytes_left() {
+        return address_limit - current_point;
+    }
+
+    auto alloc(size_t size, size_t alignment = alignof(std::max_align_t)) -> void* override {
+        auto* old_point = current_point;
+        // @TODO: Unpacked allocations because of alignment.
+        auto* new_point = old_point + align_up(size, alignment);
+
+        assert(new_point < address_limit);
+        current_point = new_point;
+
+        return static_cast<void*>(old_point);
+    };
+
+    auto free(void* pointer, size_t size, size_t alignment = alignof(std::max_align_t)) -> void override {
+        (void)pointer;
+        (void)size;
+        (void)alignment;
+    };
+};
 
 }  // namespace mem
