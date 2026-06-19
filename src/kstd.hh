@@ -49,6 +49,26 @@ inline void debug_assert(
 #endif
 }
 
+[[noreturn]] static void halt_forever(
+    const char* message,
+    const std::source_location& location = std::source_location::current()) {
+    if (message != nullptr) {
+        term::terminal_writestring(message);
+        term::terminal_writestring("\n");
+    }
+
+    term::terminal_writestring(location.file_name());
+    term::terminal_writestring(":");
+    term::terminal_writeint(location.line());
+    term::terminal_writestring(":");
+    term::terminal_writeint(location.column());
+    term::terminal_writestring("\n");
+
+    for (;;) {
+        asm volatile("hlt");
+    }
+}
+
 template <typename T, size_t N>
 struct Static_Array {
     static constexpr auto size = N;
