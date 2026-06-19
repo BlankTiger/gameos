@@ -393,8 +393,8 @@ struct Arena_Allocator final : Allocator {
         term::terminal_writeint((s64)alignment);
         term::terminal_writestring("\n");
 
-        auto* aligned_point = reinterpret_cast<std::byte*>(
-            align_up(reinterpret_cast<uintptr_t>(current_point), alignment));
+        auto* aligned_point =
+            reinterpret_cast<std::byte*>(align_up(reinterpret_cast<uintptr_t>(current_point), alignment));
         auto* new_point = aligned_point + size;
 
         assert(new_point <= address_limit);

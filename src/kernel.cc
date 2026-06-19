@@ -1,10 +1,3 @@
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
-
-#include <cstddef>
-#include <cstdint>
-
 #include "kstd.hh"
 #include "memory.hh"
 #include "terminal.hh"
@@ -26,22 +19,34 @@ mem::Allocator* __global_allocator;
 mem::Buddy_Allocator __buddy;
 mem::Arena_Allocator __arena;
 
-void* operator new(std::size_t size) {
+void* operator new(usize size) {
+    term::terminal_writestring("new ");
+    term::terminal_writeint(size);
+    term::terminal_writestring("\n");
+    term::terminal_writestring("alloc call ");
+    term::terminal_write_hex((u64)(uintptr_t)__global_allocator);
+    term::terminal_writestring("\n");
+    term::terminal_writestring("alloc enter\n");
     if (void* ptr = __global_allocator->alloc(size)) return ptr;
 
-    term::terminal_writestring("\nnew failed");
-    for (;;) {
-        asm volatile("hlt");
-    }
+    term::terminal_writestring("alloc exit\n");
+
+    kstd::halt_forever("new failed");
 }
 
-void* operator new[](std::size_t size) {
+void* operator new[](usize size) {
+    term::terminal_writestring("new[] ");
+    term::terminal_writeint(size);
+    term::terminal_writestring("\n");
+    term::terminal_writestring("alloc call ");
+    term::terminal_write_hex((u64)(uintptr_t)__global_allocator);
+    term::terminal_writestring("\n");
+    term::terminal_writestring("alloc enter\n");
     if (void* ptr = __global_allocator->alloc(size)) return ptr;
 
-    term::terminal_writestring("\nnew[] failed");
-    for (;;) {
-        asm volatile("hlt");
-    }
+    term::terminal_writestring("alloc exit\n");
+
+    kstd::halt_forever("new[] failed");
 }
 
 void operator delete(void* ptr) noexcept {
@@ -52,16 +57,16 @@ void operator delete[](void* ptr) noexcept {
     __global_allocator->free(ptr, 0);
 }
 
-void operator delete(void* ptr, std::size_t size) noexcept {
+void operator delete(void* ptr, usize size) noexcept {
     __global_allocator->free(ptr, size);
 }
 
-void operator delete[](void* ptr, std::size_t size) noexcept {
+void operator delete[](void* ptr, usize size) noexcept {
     __global_allocator->free(ptr, size);
 }
 
 static bool buddy_allocator_smoke_test() {
-    constexpr std::size_t block_size = 64;
+    constexpr usize block_size = 64;
 
     auto* value = new std::uint32_t(0x12345678u);
     if (value == nullptr || *value != 0x12345678u) return false;
@@ -71,12 +76,12 @@ static bool buddy_allocator_smoke_test() {
     if (first == nullptr || second == nullptr) return false;
     if (first == second) return false;
 
-    for (std::size_t i = 0; i < block_size; ++i) {
+    for (usize i = 0; i < block_size; ++i) {
         first[i] = 0xAA;
         second[i] = 0x55;
     }
 
-    for (std::size_t i = 0; i < block_size; ++i) {
+    for (usize i = 0; i < block_size; ++i) {
         if (first[i] != 0xAA || second[i] != 0x55) return false;
     }
 
@@ -99,17 +104,35 @@ extern "C" void kernel_main(uint32_t magic, const mem::Multiboot_Info* mbi) {
         return;
     }
 
+    term::terminal_writestring("mem init\n");
     mem::memory_initialize(mbi);
+
+    term::terminal_writestring("buddy init\n");
     __buddy.init();
-    __arena.init();
+
+    term::terminal_writestring("set buddy global\n");
     __global_allocator = &__buddy;
+
+    term::terminal_writestring("arena init\n");
+    __arena.init();
+
+    term::terminal_writestring("arena ready\n");
+
+    term::terminal_writestring("set arena global\n");
     __global_allocator = &__arena;
 
-    term::terminal_writestring("buddy allocator smoke test: \n");
+    term::terminal_writestring("arena direct test\n");
+    void* arena_probe = __arena.alloc(64);
+    if (arena_probe == nullptr) {
+        kstd::halt_forever("arena direct alloc failed");
+    }
+    term::terminal_writestring("arena direct ok\n");
+    __arena.free(arena_probe, 64);
+
+    term::terminal_writestring("smoke test\n");
     if (buddy_allocator_smoke_test()) {
         term::terminal_writestring("pass\n");
     } else {
-        term::terminal_writestring("fail\n");
-        for (;;) asm volatile("hlt");
+        kstd::halt_forever("fail");
     }
 }
