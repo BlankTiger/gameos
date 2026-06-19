@@ -66,7 +66,7 @@ static void reserve_range(Array<Memory_Region>& regions, u64 start, u64 end) {
     start = align_down(start, PAGE_SIZE);
     end = align_up(end, PAGE_SIZE);
 
-    for (size_t i = 0; i < regions.size;) {
+    for (usize i = 0; i < regions.size;) {
         const u64 region_start = regions[i].base;
         const u64 region_end = region_start + regions[i].size;
 
@@ -167,8 +167,8 @@ u64 floor_pow2(u64 n) {
 }
 
 struct Allocator {
-    virtual auto alloc(size_t size, size_t alignment = alignof(std::max_align_t)) -> void* = 0;
-    virtual auto free(void* pointer, size_t size, size_t alignment = alignof(std::max_align_t)) -> void = 0;
+    virtual auto alloc(usize size, usize alignment = alignof(std::max_align_t)) -> void* = 0;
+    virtual auto free(void* pointer, usize size, usize alignment = alignof(std::max_align_t)) -> void = 0;
     virtual ~Allocator() = default;
 };
 
@@ -183,17 +183,17 @@ struct Buddy_Allocator final : Allocator {
         u8 reserved[7];
     };
 
-    static constexpr size_t MIN_ORDER = 12;  // 4 KiB pages
-    static constexpr size_t MAX_ORDER = 63;
+    static constexpr usize MIN_ORDER = 12;  // 4 KiB pages
+    static constexpr usize MAX_ORDER = 63;
 
     Free_Block* free_lists[MAX_ORDER + 1]{};
 
-    static u64 block_size_for_order(size_t order) {
+    static u64 block_size_for_order(usize order) {
         return 1ull << order;
     }
 
-    static size_t order_for_block_size(u64 block_size) {
-        size_t order = MIN_ORDER;
+    static usize order_for_block_size(u64 block_size) {
+        usize order = MIN_ORDER;
         u64 current = PAGE_SIZE;
         while (current < block_size && order < MAX_ORDER) {
             current <<= 1;
@@ -211,16 +211,16 @@ struct Buddy_Allocator final : Allocator {
     }
 
     void clear() {
-        for (size_t i = 0; i <= MAX_ORDER; ++i) free_lists[i] = nullptr;
+        for (usize i = 0; i <= MAX_ORDER; ++i) free_lists[i] = nullptr;
     }
 
-    void push_free_block(u64 base, size_t order) {
+    void push_free_block(u64 base, usize order) {
         auto* block = reinterpret_cast<Free_Block*>((uintptr_t)base);
         block->next = free_lists[order];
         free_lists[order] = block;
     }
 
-    bool remove_free_block(size_t order, u64 base) {
+    bool remove_free_block(usize order, u64 base) {
         auto** link = &free_lists[order];
         while (*link != nullptr) {
             if (reinterpret_cast<uintptr_t>(*link) == base) {
@@ -247,7 +247,7 @@ struct Buddy_Allocator final : Allocator {
 
             if (block_size < PAGE_SIZE) block_size = PAGE_SIZE;
 
-            const size_t order = order_for_block_size(block_size);
+            const usize order = order_for_block_size(block_size);
             push_free_block(current, order);
             current += block_size;
         }
@@ -261,7 +261,7 @@ struct Buddy_Allocator final : Allocator {
         }
     }
 
-    auto alloc(size_t size, size_t alignment = alignof(std::max_align_t)) -> void* override {
+    auto alloc(usize size, usize alignment = alignof(std::max_align_t)) -> void* override {
         if (alignment == 0) alignment = 1;
         if (size == 0) size = 1;
 
@@ -271,9 +271,9 @@ struct Buddy_Allocator final : Allocator {
         const u64 target_block_size = next_block_size(required_size);
         if (target_block_size < PAGE_SIZE) return nullptr;
 
-        const size_t target_order = order_for_block_size(target_block_size);
+        const usize target_order = order_for_block_size(target_block_size);
 
-        size_t order = target_order;
+        usize order = target_order;
         while (order <= MAX_ORDER && free_lists[order] == nullptr) order++;
         if (order > MAX_ORDER) return nullptr;
 
@@ -312,7 +312,7 @@ struct Buddy_Allocator final : Allocator {
         return reinterpret_cast<void*>((uintptr_t)user_ptr);
     }
 
-    auto free(void* pointer, size_t, size_t alignment = alignof(std::max_align_t)) -> void override {
+    auto free(void* pointer, usize, usize alignment = alignof(std::max_align_t)) -> void override {
         (void)alignment;
         if (pointer == nullptr) return;
 
@@ -323,7 +323,7 @@ struct Buddy_Allocator final : Allocator {
             sizeof(header));
 
         u64 block_base = header.block_base;
-        size_t order = header.order;
+        usize order = header.order;
 
         while (order < MAX_ORDER) {
             const u64 block_size = block_size_for_order(order);
@@ -341,8 +341,8 @@ struct Buddy_Allocator final : Allocator {
     }
 };
 
-constexpr size_t DEFAULT_RESERVE_SIZE = 2 * 1024 * 1024;
-constexpr size_t DEFAULT_PAGE_SIZE = 4096;
+constexpr usize DEFAULT_RESERVE_SIZE = 1 * 1024 * 1024;
+constexpr usize DEFAULT_PAGE_SIZE = 4096;
 
 template <bool DEBUG = false>
 struct Arena_Allocator final : Allocator {
@@ -350,17 +350,21 @@ struct Arena_Allocator final : Allocator {
     std::byte* current_point;
     std::byte* address_limit;
 
-    explicit Arena_Allocator(size_t reserve = DEFAULT_RESERVE_SIZE) {
-        init(reserve);
-    }
-
-    void init(size_t reserve = DEFAULT_RESERVE_SIZE) {
+    void init(usize reserve = DEFAULT_RESERVE_SIZE) {
         reserve = align_up(reserve, DEFAULT_PAGE_SIZE);
+
+        term::terminal_writestring("arena reserve ");
+        term::terminal_writeint((s64)reserve);
+        term::terminal_writestring("\n");
 
         memory_base = new std::byte[reserve];
         assert(memory_base != nullptr);
         current_point = memory_base;
         address_limit = memory_base + reserve;
+
+        term::terminal_writestring("arena base ");
+        term::terminal_write_hex((u64)(uintptr_t)memory_base);
+        term::terminal_writestring("\n");
     }
 
     ~Arena_Allocator() {
@@ -376,22 +380,34 @@ struct Arena_Allocator final : Allocator {
         current_point = memory_base;
     };
 
-    size_t bytes_left() {
+    usize bytes_left() {
         return address_limit - current_point;
     }
 
-    auto alloc(size_t size, size_t alignment = alignof(std::max_align_t)) -> void* override {
-        auto* old_point = current_point;
-        // @TODO: Unpacked allocations because of alignment.
-        auto* new_point = old_point + align_up(size, alignment);
+    auto alloc(usize size, usize alignment = alignof(std::max_align_t)) -> void* override {
+        if (alignment == 0) alignment = 1;
 
-        assert(new_point < address_limit);
+        term::terminal_writestring("arena alloc ");
+        term::terminal_writeint((s64)size);
+        term::terminal_writestring(" align ");
+        term::terminal_writeint((s64)alignment);
+        term::terminal_writestring("\n");
+
+        auto* aligned_point = reinterpret_cast<std::byte*>(
+            align_up(reinterpret_cast<uintptr_t>(current_point), alignment));
+        auto* new_point = aligned_point + size;
+
+        assert(new_point <= address_limit);
         current_point = new_point;
 
-        return static_cast<void*>(old_point);
+        term::terminal_writestring("arena out ");
+        term::terminal_write_hex((u64)(uintptr_t)aligned_point);
+        term::terminal_writestring("\n");
+
+        return static_cast<void*>(aligned_point);
     };
 
-    auto free(void* pointer, size_t size, size_t alignment = alignof(std::max_align_t)) -> void override {
+    auto free(void* pointer, usize size, usize alignment = alignof(std::max_align_t)) -> void override {
         (void)pointer;
         (void)size;
         (void)alignment;

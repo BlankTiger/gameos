@@ -8,8 +8,8 @@
 
 namespace kstd {
 
-size_t strlen(const char* str) {
-    size_t len = 0;
+usize strlen(const char* str) {
+    usize len = 0;
     while (str[len]) len++;
     return len;
 }
@@ -69,7 +69,7 @@ inline void debug_assert(
     }
 }
 
-template <typename T, size_t N>
+template <typename T, usize N>
 struct Static_Array {
     static constexpr auto size = N;
     T data[N];

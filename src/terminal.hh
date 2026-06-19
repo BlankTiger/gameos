@@ -33,8 +33,8 @@ static inline u16 vga_entry(u8 uc, u8 color) {
 #define VGA_HEIGHT 25
 #define VGA_MEMORY 0xB8000
 
-size_t terminal_row;
-size_t terminal_column;
+usize terminal_row;
+usize terminal_column;
 u8 terminal_color;
 u16* terminal_buffer = (u16*)VGA_MEMORY;
 
@@ -43,9 +43,9 @@ void terminal_initialize() {
     terminal_column = 0;
     terminal_color = vga_entry_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK);
 
-    for (size_t y = 0; y < VGA_HEIGHT; y++) {
-        for (size_t x = 0; x < VGA_WIDTH; x++) {
-            const size_t index = y * VGA_WIDTH + x;
+    for (usize y = 0; y < VGA_HEIGHT; y++) {
+        for (usize x = 0; x < VGA_WIDTH; x++) {
+            const usize index = y * VGA_WIDTH + x;
             terminal_buffer[index] = vga_entry(' ', terminal_color);
         }
     }
@@ -55,8 +55,8 @@ void terminal_setcolor(u8 color) {
     terminal_color = color;
 }
 
-void terminal_putentryat(u8 c, u8 color, size_t x, size_t y) {
-    const size_t index = y * VGA_WIDTH + x;
+void terminal_putentryat(u8 c, u8 color, usize x, usize y) {
+    const usize index = y * VGA_WIDTH + x;
     terminal_buffer[index] = vga_entry(c, color);
 }
 
@@ -76,8 +76,8 @@ void terminal_putchar(u8 c) {
     }
 }
 
-void terminal_write(const char* data, size_t size) {
-    for (size_t i = 0; i < size; i++) terminal_putchar(data[i]);
+void terminal_write(const char* data, usize size) {
+    for (usize i = 0; i < size; i++) terminal_putchar(data[i]);
 }
 
 void terminal_writestring(const char* data) {
@@ -88,7 +88,7 @@ void terminal_write_hex(u64 value) {
     static const char digits[] = "0123456789abcdef";
     char buffer[16];
 
-    for (size_t i = 0; i < 16; i++) {
+    for (usize i = 0; i < 16; i++) {
         buffer[15 - i] = digits[value & 0x0f];
         value >>= 4;
     }
@@ -98,7 +98,7 @@ void terminal_write_hex(u64 value) {
 
 void terminal_writeint(s64 value) {
     char buffer[21];
-    size_t length = 0;
+    usize length = 0;
 
     u64 magnitude;
     if (value < 0) {
