@@ -49,6 +49,67 @@ inline void debug_assert(
 #endif
 }
 
+template <typename T, size_t N>
+struct Static_Array {
+    static constexpr auto size = N;
+    T data[N];
+
+    T& operator[](u64 index, const std::source_location& location = std::source_location::current()) {
+        assert(index < size, "index out of bounds", location);
+        return data[index];
+    }
+
+    struct iterator {
+        T* ptr;
+        iterator(T* p)
+            : ptr(p) {}
+        T& operator*() {
+            return *ptr;
+        }
+        iterator& operator++() {
+            ++ptr;
+            return *this;
+        }
+        bool operator!=(const iterator& other) const {
+            return ptr != other.ptr;
+        }
+    };
+
+    struct const_iterator {
+        const T* ptr;
+        explicit const_iterator(const T* p)
+            : ptr(p) {}
+        const T& operator*() const {
+            return *ptr;
+        }
+        const_iterator& operator++() {
+            ++ptr;
+            return *this;
+        }
+        bool operator!=(const const_iterator& other) const {
+            return ptr != other.ptr;
+        }
+
+        // Implicit conversion from iterator to const_iterator
+        explicit const_iterator(iterator it)
+            : ptr(it.ptr) {}
+    };
+
+    iterator begin() {
+        return iterator(data);
+    }
+    iterator end() {
+        return iterator(data + size);
+    }
+
+    const_iterator cbegin() const noexcept {
+        return const_iterator(data);
+    }
+    const_iterator cend() const noexcept {
+        return const_iterator(data + size);
+    }
+};
+
 template <typename T>
 struct Array {
     u64 size;
