@@ -211,19 +211,23 @@ struct Bounded_Array {
 
 template <typename T>
 struct Array {
+    usize allocated;
     usize size;
     T* data;
-    usize allocated;
 
     Array()
         : allocated(1),
-          data(new T[allocated]),
-          size(0) {}
+          size(0),
+          data(new T[allocated]) {}
 
     explicit Array(usize initial_size)
         : allocated(initial_size),
-          data(new T[allocated]),
-          size(0) {}
+          size(0),
+          data(new T[allocated]) {}
+
+    ~Array() {
+        delete[] data;
+    }
 
     auto operator[](u64 index, const std::source_location& location = std::source_location::current()) -> T& {
         assert(index < size, "index out of bounds", location);
