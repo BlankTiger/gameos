@@ -147,15 +147,6 @@ static auto reserve_multiboot_data(Memory_Regions& regions, const Multiboot_Info
     }
 }
 
-static Memory_Regions __regions{};
-
-auto memory_initialize(const Multiboot_Info* mbi) -> void {
-    // static Static_Array<Memory_Region, MAX_MEMORY_REGIONS> __usable_regions;
-    // __regions.data = __usable_regions;
-    parse_multiboot_memory_map(__regions, mbi);
-    reserve_multiboot_data(__regions, mbi);
-}
-
 auto floor_pow2(u64 n) -> u64 {
     if (n == 0) return 0;
     n |= n >> 1;
@@ -165,6 +156,13 @@ auto floor_pow2(u64 n) -> u64 {
     n |= n >> 16;
     n |= n >> 32;
     return n & ~(n >> 1);
+}
+
+static Memory_Regions __regions{};
+
+auto memory_initialize(const Multiboot_Info* mbi) -> void {
+    parse_multiboot_memory_map(__regions, mbi);
+    reserve_multiboot_data(__regions, mbi);
 }
 
 struct Allocator {
