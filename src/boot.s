@@ -91,6 +91,7 @@ _start:
 	*/
 	call run_global_constructors
 	call kernel_main
+	call run_global_destructors
 	add $16, %esp
 
 	/*
