@@ -303,11 +303,6 @@ struct Buddy_Allocator final : Allocator {
         header->reserved[5] = 0;
         header->reserved[6] = 0;
 
-        term::terminal_writestring("\nbruh: ");
-        term::terminal_writeint(user_ptr);
-        term::terminal_writestring(", ");
-        term::terminal_writeint(size);
-        term::terminal_writestring("\n");
         return reinterpret_cast<void*>((uintptr_t)user_ptr);
     }
 
@@ -333,9 +328,6 @@ struct Buddy_Allocator final : Allocator {
             order++;
         }
 
-        term::terminal_writestring("\nbruh 2: ");
-        term::terminal_writeint(reinterpret_cast<u64>(pointer));
-        term::terminal_writestring("\n");
         push_free_block(block_base, order);
     }
 };
@@ -353,18 +345,11 @@ struct Arena_Allocator final : Allocator {
     auto init(usize reserve = DEFAULT_RESERVE_SIZE) -> void {
         reserve = align_up(reserve, DEFAULT_PAGE_SIZE);
 
-        term::terminal_writestring("arena reserve ");
-        term::terminal_writeint((s64)reserve);
-        term::terminal_writestring("\n");
-
         memory_base = new std::byte[reserve];
         assert(memory_base != nullptr);
         current_point = memory_base;
         address_limit = memory_base + reserve;
 
-        term::terminal_writestring("arena base ");
-        term::terminal_write_hex((u64)(uintptr_t)memory_base);
-        term::terminal_writestring("\n");
     }
 
     ~Arena_Allocator() {
@@ -389,22 +374,12 @@ struct Arena_Allocator final : Allocator {
     auto alloc(usize size, usize alignment = alignof(std::max_align_t)) -> void* override {
         if (alignment == 0) alignment = 1;
 
-        term::terminal_writestring("arena alloc ");
-        term::terminal_writeint((s64)size);
-        term::terminal_writestring(" align ");
-        term::terminal_writeint((s64)alignment);
-        term::terminal_writestring("\n");
-
         auto* aligned_point =
             reinterpret_cast<std::byte*>(align_up(reinterpret_cast<uintptr_t>(current_point), alignment));
         auto* new_point = aligned_point + size;
 
         assert(new_point <= address_limit);
         current_point = new_point;
-
-        term::terminal_writestring("arena out ");
-        term::terminal_write_hex((u64)(uintptr_t)aligned_point);
-        term::terminal_writestring("\n");
 
         return static_cast<void*>(aligned_point);
     };

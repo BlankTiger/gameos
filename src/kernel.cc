@@ -39,32 +39,12 @@ extern "C" auto run_global_constructors() -> void {
 }
 
 auto operator new(usize size) -> void* {
-    term::terminal_writestring("new ");
-    term::terminal_writeint(size);
-    term::terminal_writestring("\n");
-    term::terminal_writestring("alloc call ");
-    term::terminal_write_hex((u64)(uintptr_t)__global_allocator);
-    term::terminal_writestring("\n");
-    term::terminal_writestring("alloc enter\n");
     if (void* ptr = __global_allocator->alloc(size)) return ptr;
-
-    term::terminal_writestring("alloc exit\n");
-
     kstd::halt_forever("new failed");
 }
 
 auto operator new[](usize size) -> void* {
-    term::terminal_writestring("new[] ");
-    term::terminal_writeint(size);
-    term::terminal_writestring("\n");
-    term::terminal_writestring("alloc call ");
-    term::terminal_write_hex((u64)(uintptr_t)__global_allocator);
-    term::terminal_writestring("\n");
-    term::terminal_writestring("alloc enter\n");
     if (void* ptr = __global_allocator->alloc(size)) return ptr;
-
-    term::terminal_writestring("alloc exit\n");
-
     kstd::halt_forever("new[] failed");
 }
 
@@ -126,32 +106,9 @@ extern "C" auto kernel_main(uint32_t magic, const mem::Multiboot_Info* mbi) -> v
     term::terminal_writestring("mem init\n");
     mem::memory_initialize(mbi);
 
-    term::terminal_writestring("buddy init\n");
     __buddy.init();
-
-    term::terminal_writestring("set buddy global\n");
     __global_allocator = &__buddy;
-
-    term::terminal_writestring("arena init\n");
     __arena.init();
-
-    term::terminal_writestring("arena ready\n");
-
-    term::terminal_writestring("set arena global\n");
     __global_allocator = &__arena;
 
-    term::terminal_writestring("arena direct test\n");
-    void* arena_probe = __arena.alloc(64);
-    if (arena_probe == nullptr) {
-        kstd::halt_forever("arena direct alloc failed");
-    }
-    term::terminal_writestring("arena direct ok\n");
-    __arena.free(arena_probe, 64);
-
-    term::terminal_writestring("smoke test\n");
-    if (buddy_allocator_smoke_test()) {
-        term::terminal_writestring("pass\n");
-    } else {
-        kstd::halt_forever("fail");
-    }
 }
