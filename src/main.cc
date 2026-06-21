@@ -1,5 +1,4 @@
 #include "kstd.hh"
-#include "memory.hh"
 #include "terminal.hh"
 
 /* Check if the compiler thinks you are targeting the wrong operating system. */
@@ -14,10 +13,6 @@
 
 namespace term = kstd::term;
 namespace mem = kstd::mem;
-
-mem::Allocator* __global_allocator;
-mem::Buddy_Allocator __buddy;
-mem::Arena_Allocator __arena;
 
 using Init_Function = void (*)();
 
@@ -82,32 +77,6 @@ extern "C" auto run_global_destructors() -> void {
     __cxa_finalize(nullptr);
 }
 
-auto operator new(usize size) -> void* {
-    if (void* ptr = __global_allocator->alloc(size)) return ptr;
-    kstd::halt_forever("new failed");
-}
-
-auto operator new[](usize size) -> void* {
-    if (void* ptr = __global_allocator->alloc(size)) return ptr;
-    kstd::halt_forever("new[] failed");
-}
-
-auto operator delete(void* ptr) noexcept -> void {
-    __global_allocator->free(ptr, 0);
-}
-
-auto operator delete[](void* ptr) noexcept -> void {
-    __global_allocator->free(ptr, 0);
-}
-
-auto operator delete(void* ptr, usize size) noexcept -> void {
-    __global_allocator->free(ptr, size);
-}
-
-auto operator delete[](void* ptr, usize size) noexcept -> void {
-    __global_allocator->free(ptr, size);
-}
-
 extern "C" auto kernel_main(uint32_t magic, const mem::Multiboot_Info* mbi) -> void {
     term::terminal_initialize();
 
@@ -118,8 +87,4 @@ extern "C" auto kernel_main(uint32_t magic, const mem::Multiboot_Info* mbi) -> v
 
     term::terminal_writestring("mem init\n");
     mem::memory_initialize(mbi);
-
-    __buddy.init();
-    __arena.init(&__buddy);
-    __global_allocator = &__arena;
 }

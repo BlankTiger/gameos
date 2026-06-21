@@ -300,3 +300,5 @@ struct Array {
 #include "memory.hh"
 
 }  // namespace kstd
+
+#include "operator_new.hh"

@@ -160,11 +160,6 @@ auto floor_pow2(u64 n) -> u64 {
 
 static Memory_Regions __regions{};
 
-auto memory_initialize(const Multiboot_Info* mbi) -> void {
-    parse_multiboot_memory_map(__regions, mbi);
-    reserve_multiboot_data(__regions, mbi);
-}
-
 struct Allocator {
     virtual auto alloc(usize size, usize alignment = alignof(std::max_align_t)) -> void* = 0;
     virtual auto free(void* pointer, usize size, usize alignment = alignof(std::max_align_t)) -> void = 0;
@@ -391,5 +386,18 @@ struct Arena_Allocator final : Allocator {
         (void)alignment;
     };
 };
+
+mem::Allocator* __global_allocator;
+mem::Buddy_Allocator __buddy;
+mem::Arena_Allocator __arena;
+
+auto memory_initialize(const Multiboot_Info* mbi) -> void {
+    parse_multiboot_memory_map(__regions, mbi);
+    reserve_multiboot_data(__regions, mbi);
+
+    __buddy.init();
+    __arena.init(&__buddy);
+    __global_allocator = &__arena;
+}
 
 }  // namespace mem
