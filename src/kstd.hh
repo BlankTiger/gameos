@@ -211,12 +211,35 @@ struct Static_Array {
 
 template <typename T>
 struct Array {
-    u64 size;
+    usize size;
     T* data;
+    usize allocated;
 
-    T& operator[](u64 index, const std::source_location& location = std::source_location::current()) {
+    Array()
+        : allocated(1),
+          data(new T[allocated]),
+          size(0) {}
+
+    explicit Array(usize initial_size)
+        : allocated(initial_size),
+          data(new T[allocated]),
+          size(0) {}
+
+    auto operator[](u64 index, const std::source_location& location = std::source_location::current()) -> T& {
         assert(index < size, "index out of bounds", location);
         return data[index];
+    }
+
+    auto push_back(T&& element) -> void {
+        assert(size < allocated, "Implement resizing.");
+        ::new (data + size) T(std::move(element));
+        ++size;
+    }
+
+    auto push_back(const T& element) -> void {
+        assert(size < allocated, "Implement resizing.");
+        ::new (data + size) T(element);
+        ++size;
     }
 
     struct iterator {
