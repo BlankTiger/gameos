@@ -19,7 +19,7 @@ mem::Allocator* __global_allocator;
 mem::Buddy_Allocator __buddy;
 mem::Arena_Allocator __arena;
 
-void* operator new(usize size) {
+auto operator new(usize size) -> void* {
     term::terminal_writestring("new ");
     term::terminal_writeint(size);
     term::terminal_writestring("\n");
@@ -34,7 +34,7 @@ void* operator new(usize size) {
     kstd::halt_forever("new failed");
 }
 
-void* operator new[](usize size) {
+auto operator new[](usize size) -> void* {
     term::terminal_writestring("new[] ");
     term::terminal_writeint(size);
     term::terminal_writestring("\n");
@@ -49,23 +49,23 @@ void* operator new[](usize size) {
     kstd::halt_forever("new[] failed");
 }
 
-void operator delete(void* ptr) noexcept {
+auto operator delete(void* ptr) noexcept -> void {
     __global_allocator->free(ptr, 0);
 }
 
-void operator delete[](void* ptr) noexcept {
+auto operator delete[](void* ptr) noexcept -> void {
     __global_allocator->free(ptr, 0);
 }
 
-void operator delete(void* ptr, usize size) noexcept {
+auto operator delete(void* ptr, usize size) noexcept -> void {
     __global_allocator->free(ptr, size);
 }
 
-void operator delete[](void* ptr, usize size) noexcept {
+auto operator delete[](void* ptr, usize size) noexcept -> void {
     __global_allocator->free(ptr, size);
 }
 
-static bool buddy_allocator_smoke_test() {
+static auto buddy_allocator_smoke_test() -> bool {
     constexpr usize block_size = 64;
 
     auto* value = new std::uint32_t(0x12345678u);
@@ -96,7 +96,7 @@ static bool buddy_allocator_smoke_test() {
     return true;
 }
 
-extern "C" void kernel_main(uint32_t magic, const mem::Multiboot_Info* mbi) {
+extern "C" auto kernel_main(uint32_t magic, const mem::Multiboot_Info* mbi) -> void {
     term::terminal_initialize();
 
     if (magic != 0x2BADB002) {

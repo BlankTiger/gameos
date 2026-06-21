@@ -21,11 +21,11 @@ enum vga_color {
     VGA_COLOR_WHITE = 15,
 };
 
-static inline u8 vga_entry_color(enum vga_color fg, enum vga_color bg) {
+static inline auto vga_entry_color(enum vga_color fg, enum vga_color bg) -> u8 {
     return fg | bg << 4;
 }
 
-static inline u16 vga_entry(u8 uc, u8 color) {
+static inline auto vga_entry(u8 uc, u8 color) -> u16 {
     return (u16)uc | (u16)color << 8;
 }
 
@@ -38,7 +38,7 @@ usize terminal_column;
 u8 terminal_color;
 u16* terminal_buffer = (u16*)VGA_MEMORY;
 
-void terminal_initialize() {
+auto terminal_initialize() -> void {
     terminal_row = 0;
     terminal_column = 0;
     terminal_color = vga_entry_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK);
@@ -51,21 +51,21 @@ void terminal_initialize() {
     }
 }
 
-void terminal_setcolor(u8 color) {
+auto terminal_setcolor(u8 color) -> void {
     terminal_color = color;
 }
 
-void terminal_putentryat(u8 c, u8 color, usize x, usize y) {
+auto terminal_putentryat(u8 c, u8 color, usize x, usize y) -> void {
     const usize index = y * VGA_WIDTH + x;
     terminal_buffer[index] = vga_entry(c, color);
 }
 
-void terminal_next_row() {
+auto terminal_next_row() -> void {
     terminal_column = 0;
     if (++terminal_row == VGA_HEIGHT) terminal_row = 0;
 }
 
-void terminal_putchar(u8 c) {
+auto terminal_putchar(u8 c) -> void {
     if (c == '\n') {
         terminal_next_row();
     } else {
@@ -76,15 +76,15 @@ void terminal_putchar(u8 c) {
     }
 }
 
-void terminal_write(const char* data, usize size) {
+auto terminal_write(const char* data, usize size) -> void {
     for (usize i = 0; i < size; i++) terminal_putchar(data[i]);
 }
 
-void terminal_writestring(const char* data) {
+auto terminal_writestring(const char* data) -> void {
     terminal_write(data, strlen(data));
 }
 
-void terminal_write_hex(u64 value) {
+auto terminal_write_hex(u64 value) -> void {
     static const char digits[] = "0123456789abcdef";
     char buffer[16];
 
@@ -96,7 +96,7 @@ void terminal_write_hex(u64 value) {
     terminal_write(buffer, sizeof(buffer));
 }
 
-void terminal_writeint(s64 value) {
+auto terminal_writeint(s64 value) -> void {
     char buffer[21];
     usize length = 0;
 

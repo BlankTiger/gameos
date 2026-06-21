@@ -49,19 +49,19 @@ struct Multiboot_Module {
 extern "C" u8 __kernel_start;
 extern "C" u8 __kernel_end;
 
-static u64 align_up(u64 value, u64 alignment) {
+static auto align_up(u64 value, u64 alignment) -> u64 {
     return (value + alignment - 1) & ~(alignment - 1);
 }
 
-static u64 align_down(u64 value, u64 alignment) {
+static auto align_down(u64 value, u64 alignment) -> u64 {
     return value & ~(alignment - 1);
 }
 
-static void add_usable_region(Memory_Regions& regions, u64 base, u64 length) {
+static auto add_usable_region(Memory_Regions& regions, u64 base, u64 length) -> void {
     regions.push_back({base, length});
 }
 
-static void reserve_range(Memory_Regions& regions, u64 start, u64 end) {
+static auto reserve_range(Memory_Regions& regions, u64 start, u64 end) -> void {
     if (start >= end) return;
 
     start = align_down(start, PAGE_SIZE);
@@ -105,7 +105,7 @@ static void reserve_range(Memory_Regions& regions, u64 start, u64 end) {
     }
 }
 
-static void parse_multiboot_memory_map(Memory_Regions& regions, const Multiboot_Info* mbi) {
+static auto parse_multiboot_memory_map(Memory_Regions& regions, const Multiboot_Info* mbi) -> void {
     if ((mbi->flags & MULTIBOOT_INFO_HAS_MMAP) == 0) return;
 
     auto* entry = reinterpret_cast<const Multiboot_MMAP_Entry*>((uintptr_t)mbi->mmap_addr);
@@ -120,7 +120,7 @@ static void parse_multiboot_memory_map(Memory_Regions& regions, const Multiboot_
     }
 }
 
-static void reserve_multiboot_data(Memory_Regions& regions, const Multiboot_Info* mbi) {
+static auto reserve_multiboot_data(Memory_Regions& regions, const Multiboot_Info* mbi) -> void {
     reserve_range(regions, 0, PAGE_SIZE);
     reserve_range(regions, reinterpret_cast<uintptr_t>(mbi), reinterpret_cast<uintptr_t>(mbi) + sizeof(Multiboot_Info));
     reserve_range(regions, reinterpret_cast<uintptr_t>(&__kernel_start), reinterpret_cast<uintptr_t>(&__kernel_end));
@@ -149,14 +149,14 @@ static void reserve_multiboot_data(Memory_Regions& regions, const Multiboot_Info
 
 static Memory_Regions __regions{};
 
-void memory_initialize(const Multiboot_Info* mbi) {
+auto memory_initialize(const Multiboot_Info* mbi) -> void {
     // static Static_Array<Memory_Region, MAX_MEMORY_REGIONS> __usable_regions;
     // __regions.data = __usable_regions;
     parse_multiboot_memory_map(__regions, mbi);
     reserve_multiboot_data(__regions, mbi);
 }
 
-u64 floor_pow2(u64 n) {
+auto floor_pow2(u64 n) -> u64 {
     if (n == 0) return 0;
     n |= n >> 1;
     n |= n >> 2;
@@ -189,11 +189,11 @@ struct Buddy_Allocator final : Allocator {
 
     Static_Array<Free_Block*, MAX_ORDER + 1> free_lists{};
 
-    static u64 block_size_for_order(usize order) {
+    static auto block_size_for_order(usize order) -> usize {
         return 1ull << order;
     }
 
-    static usize order_for_block_size(u64 block_size) {
+    static auto order_for_block_size(u64 block_size) -> usize {
         usize order = MIN_ORDER;
         u64 current = PAGE_SIZE;
         while (current < block_size && order < MAX_ORDER) {
@@ -203,7 +203,7 @@ struct Buddy_Allocator final : Allocator {
         return order;
     }
 
-    static u64 next_block_size(u64 required_size) {
+    static auto next_block_size(u64 required_size) -> u64 {
         u64 block_size = PAGE_SIZE;
         while (block_size < required_size && block_size < (1ull << MAX_ORDER)) {
             block_size <<= 1;
@@ -211,17 +211,17 @@ struct Buddy_Allocator final : Allocator {
         return block_size;
     }
 
-    void clear() {
+    auto clear() -> void {
         for (usize i = 0; i <= MAX_ORDER; ++i) free_lists[i] = nullptr;
     }
 
-    void push_free_block(u64 base, usize order) {
+    auto push_free_block(u64 base, usize order) -> void {
         auto* block = reinterpret_cast<Free_Block*>((uintptr_t)base);
         block->next = free_lists[order];
         free_lists[order] = block;
     }
 
-    bool remove_free_block(usize order, u64 base) {
+    auto remove_free_block(usize order, u64 base) -> bool {
         auto** link = &free_lists[order];
         while (*link != nullptr) {
             if (reinterpret_cast<uintptr_t>(*link) == base) {
@@ -234,7 +234,7 @@ struct Buddy_Allocator final : Allocator {
         return false;
     }
 
-    void add_region(u64 base, u64 size) {
+    auto add_region(u64 base, u64 size) -> void {
         const u64 start = align_up(base, PAGE_SIZE);
         const u64 end = align_down(base + size, PAGE_SIZE);
         if (start >= end) return;
@@ -254,7 +254,7 @@ struct Buddy_Allocator final : Allocator {
         }
     }
 
-    void init() {
+    auto init() -> void {
         clear();
 
         for (const auto& region : __regions) {
@@ -352,7 +352,7 @@ struct Arena_Allocator final : Allocator {
     std::byte* current_point;
     std::byte* address_limit;
 
-    void init(usize reserve = DEFAULT_RESERVE_SIZE) {
+    auto init(usize reserve = DEFAULT_RESERVE_SIZE) -> void {
         reserve = align_up(reserve, DEFAULT_PAGE_SIZE);
 
         term::terminal_writestring("arena reserve ");
@@ -375,7 +375,7 @@ struct Arena_Allocator final : Allocator {
         // delete[] (memory_base);
     }
 
-    void reset() {
+    auto reset() -> void {
         if constexpr (DEBUG) {
             const auto STAMP = 0xCC;
             __builtin_memset(memory_base, STAMP, current_point - memory_base);
@@ -384,7 +384,7 @@ struct Arena_Allocator final : Allocator {
         current_point = memory_base;
     };
 
-    usize bytes_left() {
+    auto bytes_left() -> usize {
         return address_limit - current_point;
     }
 

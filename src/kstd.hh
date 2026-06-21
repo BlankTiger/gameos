@@ -10,7 +10,7 @@
 
 namespace kstd {
 
-usize strlen(const char* str) {
+auto strlen(const char* str) -> usize {
     usize len = 0;
     while (str[len]) len++;
     return len;
@@ -18,10 +18,10 @@ usize strlen(const char* str) {
 
 #include "terminal.hh"
 
-void assert(
+auto assert(
     bool predicate,
     const char* message = nullptr,
-    const std::source_location& location = std::source_location::current()) {
+    const std::source_location& location = std::source_location::current()) -> void {
     if (!predicate) {
         term::terminal_writestring(location.file_name());
         term::terminal_writestring(":");
@@ -40,10 +40,10 @@ void assert(
     }
 }
 
-inline void debug_assert(
+inline auto debug_assert(
     bool predicate,
     const char* message = nullptr,
-    const std::source_location& location = std::source_location::current()) {
+    const std::source_location& location = std::source_location::current()) -> void {
 #ifdef NDEBUG
     return;
 #else
@@ -51,9 +51,9 @@ inline void debug_assert(
 #endif
 }
 
-[[noreturn]] static void halt_forever(
+[[noreturn]] static auto halt_forever(
     const char* message,
-    const std::source_location& location = std::source_location::current()) {
+    const std::source_location& location = std::source_location::current()) -> void {
     if (message != nullptr) {
         term::terminal_writestring(message);
         term::terminal_writestring("\n");
@@ -101,14 +101,14 @@ struct Bounded_Array {
         T* ptr;
         iterator(T* p)
             : ptr(p) {}
-        T& operator*() {
+        auto operator*() -> T& {
             return *ptr;
         }
-        iterator& operator++() {
+        auto operator++() -> iterator& {
             ++ptr;
             return *this;
         }
-        bool operator!=(const iterator& other) const {
+        auto operator!=(const iterator& other) const -> bool {
             return ptr != other.ptr;
         }
     };
@@ -117,14 +117,14 @@ struct Bounded_Array {
         const T* ptr;
         explicit const_iterator(const T* p)
             : ptr(p) {}
-        const T& operator*() const {
+        auto operator*() const -> const T& {
             return *ptr;
         }
-        const_iterator& operator++() {
+        auto operator++() -> const_iterator& {
             ++ptr;
             return *this;
         }
-        bool operator!=(const const_iterator& other) const {
+        auto operator!=(const const_iterator& other) const -> bool {
             return ptr != other.ptr;
         }
 
@@ -133,17 +133,17 @@ struct Bounded_Array {
             : ptr(it.ptr) {}
     };
 
-    iterator begin() {
+    auto begin() -> iterator {
         return iterator(data);
     }
-    iterator end() {
+    auto end() -> iterator {
         return iterator(data + size);
     }
 
-    const_iterator cbegin() const noexcept {
+    auto cbegin() const noexcept -> const_iterator {
         return const_iterator(data);
     }
-    const_iterator cend() const noexcept {
+    auto cend() const noexcept -> const_iterator {
         return const_iterator(data + size);
     }
 };
@@ -153,7 +153,7 @@ struct Static_Array {
     static constexpr auto size = N;
     T data[N];
 
-    T& operator[](u64 index, const std::source_location& location = std::source_location::current()) {
+    auto operator[](u64 index, const std::source_location& location = std::source_location::current()) -> T& {
         assert(index < size, "index out of bounds", location);
         return data[index];
     }
@@ -162,14 +162,14 @@ struct Static_Array {
         T* ptr;
         iterator(T* p)
             : ptr(p) {}
-        T& operator*() {
+        auto operator*() -> T& {
             return *ptr;
         }
-        iterator& operator++() {
+        auto operator++() -> iterator& {
             ++ptr;
             return *this;
         }
-        bool operator!=(const iterator& other) const {
+        auto operator!=(const iterator& other) const -> bool {
             return ptr != other.ptr;
         }
     };
@@ -178,14 +178,14 @@ struct Static_Array {
         const T* ptr;
         explicit const_iterator(const T* p)
             : ptr(p) {}
-        const T& operator*() const {
+        auto operator*() const -> const T& {
             return *ptr;
         }
-        const_iterator& operator++() {
+        auto operator++() -> const_iterator& {
             ++ptr;
             return *this;
         }
-        bool operator!=(const const_iterator& other) const {
+        auto operator!=(const const_iterator& other) const -> bool {
             return ptr != other.ptr;
         }
 
@@ -194,17 +194,17 @@ struct Static_Array {
             : ptr(it.ptr) {}
     };
 
-    iterator begin() {
+    auto begin() -> iterator {
         return iterator(data);
     }
-    iterator end() {
+    auto end() -> iterator {
         return iterator(data + size);
     }
 
-    const_iterator cbegin() const noexcept {
+    auto cbegin() const noexcept -> const_iterator {
         return const_iterator(data);
     }
-    const_iterator cend() const noexcept {
+    auto cend() const noexcept -> const_iterator {
         return const_iterator(data + size);
     }
 };
@@ -246,14 +246,14 @@ struct Array {
         T* ptr;
         iterator(T* p)
             : ptr(p) {}
-        T& operator*() {
+        auto operator*() -> T& {
             return *ptr;
         }
-        iterator& operator++() {
+        auto operator++() -> iterator& {
             ++ptr;
             return *this;
         }
-        bool operator!=(const iterator& other) const {
+        auto operator!=(const iterator& other) const -> bool {
             return ptr != other.ptr;
         }
     };
@@ -262,14 +262,14 @@ struct Array {
         const T* ptr;
         explicit const_iterator(const T* p)
             : ptr(p) {}
-        const T& operator*() const {
+        auto operator*() const -> const T& {
             return *ptr;
         }
-        const_iterator& operator++() {
+        auto operator++() -> const_iterator& {
             ++ptr;
             return *this;
         }
-        bool operator!=(const const_iterator& other) const {
+        auto operator!=(const const_iterator& other) const -> bool {
             return ptr != other.ptr;
         }
 
@@ -278,17 +278,17 @@ struct Array {
             : ptr(it.ptr) {}
     };
 
-    iterator begin() {
+    auto begin() -> iterator {
         return iterator(data);
     }
-    iterator end() {
+    auto end() -> iterator {
         return iterator(data + size);
     }
 
-    const_iterator cbegin() const noexcept {
+    auto cbegin() const noexcept -> const_iterator {
         return const_iterator(data);
     }
-    const_iterator cend() const noexcept {
+    auto cend() const noexcept -> const_iterator {
         return const_iterator(data + size);
     }
 };
