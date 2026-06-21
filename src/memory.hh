@@ -7,10 +7,17 @@
 
 namespace mem {
 
+static constexpr int MULTIBOOT_INFO_HAS_MMAP = 1u << 6;
+static constexpr int MULTIBOOT_MMAP_USABLE = 1u;
+static constexpr int PAGE_SIZE = 4096;
+static constexpr int MAX_MEMORY_REGIONS = 32;
+
 struct Memory_Region {
     u64 base;
     u64 size;
 };
+
+using Memory_Regions = Bounded_Array<Memory_Region, MAX_MEMORY_REGIONS>;
 
 struct Multiboot_Info {
     u32 flags;
@@ -20,7 +27,7 @@ struct Multiboot_Info {
     u32 cmdline;
     u32 mods_count;
     u32 mods_addr;
-    u32 syms[4];
+    Static_Array<u32, 4> syms;
     u32 mmap_length;
     u32 mmap_addr;
 } __attribute__((packed));
@@ -39,11 +46,6 @@ struct Multiboot_Module {
     u32 reserved;
 } __attribute__((packed));
 
-static constexpr int MULTIBOOT_INFO_HAS_MMAP = 1u << 6;
-static constexpr int MULTIBOOT_MMAP_USABLE = 1u;
-static constexpr int PAGE_SIZE = 4096;
-static constexpr int MAX_MEMORY_REGIONS = 32;
-
 extern "C" u8 __kernel_start;
 extern "C" u8 __kernel_end;
 
@@ -55,12 +57,11 @@ static u64 align_down(u64 value, u64 alignment) {
     return value & ~(alignment - 1);
 }
 
-static void add_usable_region(Array<Memory_Region>& regions, u64 base, u64 length) {
-    if (length == 0 || regions.size >= MAX_MEMORY_REGIONS) return;
-    regions[regions.size++] = {base, length};
+static void add_usable_region(Memory_Regions& regions, u64 base, u64 length) {
+    regions.push_back({base, length});
 }
 
-static void reserve_range(Array<Memory_Region>& regions, u64 start, u64 end) {
+static void reserve_range(Memory_Regions& regions, u64 start, u64 end) {
     if (start >= end) return;
 
     start = align_down(start, PAGE_SIZE);
@@ -104,7 +105,7 @@ static void reserve_range(Array<Memory_Region>& regions, u64 start, u64 end) {
     }
 }
 
-static void parse_multiboot_memory_map(Array<Memory_Region>& regions, const Multiboot_Info* mbi) {
+static void parse_multiboot_memory_map(Memory_Regions& regions, const Multiboot_Info* mbi) {
     if ((mbi->flags & MULTIBOOT_INFO_HAS_MMAP) == 0) return;
 
     auto* entry = reinterpret_cast<const Multiboot_MMAP_Entry*>((uintptr_t)mbi->mmap_addr);
@@ -119,7 +120,7 @@ static void parse_multiboot_memory_map(Array<Memory_Region>& regions, const Mult
     }
 }
 
-static void reserve_multiboot_data(Array<Memory_Region>& regions, const Multiboot_Info* mbi) {
+static void reserve_multiboot_data(Memory_Regions& regions, const Multiboot_Info* mbi) {
     reserve_range(regions, 0, PAGE_SIZE);
     reserve_range(regions, reinterpret_cast<uintptr_t>(mbi), reinterpret_cast<uintptr_t>(mbi) + sizeof(Multiboot_Info));
     reserve_range(regions, reinterpret_cast<uintptr_t>(&__kernel_start), reinterpret_cast<uintptr_t>(&__kernel_end));
@@ -146,11 +147,11 @@ static void reserve_multiboot_data(Array<Memory_Region>& regions, const Multiboo
     }
 }
 
-static Array<Memory_Region> __regions;
+static Memory_Regions __regions{};
 
 void memory_initialize(const Multiboot_Info* mbi) {
-    static Memory_Region __usable_regions[MAX_MEMORY_REGIONS];
-    __regions = {0, __usable_regions};
+    // static Static_Array<Memory_Region, MAX_MEMORY_REGIONS> __usable_regions;
+    // __regions.data = __usable_regions;
     parse_multiboot_memory_map(__regions, mbi);
     reserve_multiboot_data(__regions, mbi);
 }
@@ -180,13 +181,13 @@ struct Buddy_Allocator final : Allocator {
     struct Allocation_Header {
         u64 block_base;
         u8 order;
-        u8 reserved[7];
+        Static_Array<u8, 7> reserved;
     };
 
     static constexpr usize MIN_ORDER = 12;  // 4 KiB pages
     static constexpr usize MAX_ORDER = 63;
 
-    Free_Block* free_lists[MAX_ORDER + 1]{};
+    Static_Array<Free_Block*, MAX_ORDER + 1> free_lists{};
 
     static u64 block_size_for_order(usize order) {
         return 1ull << order;
@@ -346,6 +347,7 @@ constexpr usize DEFAULT_PAGE_SIZE = 4096;
 
 template <bool DEBUG = false>
 struct Arena_Allocator final : Allocator {
+    // @TODO: unique_ptr?
     std::byte* memory_base;
     std::byte* current_point;
     std::byte* address_limit;
@@ -369,6 +371,8 @@ struct Arena_Allocator final : Allocator {
 
     ~Arena_Allocator() {
         reset();
+        // @TODO: why doesn't this work?
+        // delete[] (memory_base);
     }
 
     void reset() {
