@@ -108,37 +108,6 @@ auto operator delete[](void* ptr, usize size) noexcept -> void {
     __global_allocator->free(ptr, size);
 }
 
-static auto buddy_allocator_smoke_test() -> bool {
-    constexpr usize block_size = 64;
-
-    auto* value = new std::uint32_t(0x12345678u);
-    if (value == nullptr || *value != 0x12345678u) return false;
-
-    auto* first = static_cast<std::uint8_t*>(::operator new(block_size));
-    auto* second = static_cast<std::uint8_t*>(::operator new(block_size));
-    if (first == nullptr || second == nullptr) return false;
-    if (first == second) return false;
-
-    for (usize i = 0; i < block_size; ++i) {
-        first[i] = 0xAA;
-        second[i] = 0x55;
-    }
-
-    for (usize i = 0; i < block_size; ++i) {
-        if (first[i] != 0xAA || second[i] != 0x55) return false;
-    }
-
-    ::operator delete(second);
-    ::operator delete(first);
-    delete value;
-
-    auto* third = static_cast<std::uint8_t*>(::operator new(block_size));
-    if (third == nullptr) return false;
-
-    ::operator delete(third);
-    return true;
-}
-
 extern "C" auto kernel_main(uint32_t magic, const mem::Multiboot_Info* mbi) -> void {
     term::terminal_initialize();
 
@@ -151,8 +120,6 @@ extern "C" auto kernel_main(uint32_t magic, const mem::Multiboot_Info* mbi) -> v
     mem::memory_initialize(mbi);
 
     __buddy.init();
-    __global_allocator = &__buddy;
-    __arena.init();
+    __arena.init(&__buddy);
     __global_allocator = &__arena;
-
 }

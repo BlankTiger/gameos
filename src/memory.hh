@@ -342,20 +342,21 @@ struct Arena_Allocator final : Allocator {
     std::byte* current_point;
     std::byte* address_limit;
 
-    auto init(usize reserve = DEFAULT_RESERVE_SIZE) -> void {
-        reserve = align_up(reserve, DEFAULT_PAGE_SIZE);
+    usize allocated_;
+    Allocator* backing_allocator_;
 
-        memory_base = new std::byte[reserve];
+    auto init(Allocator* backing_allocator, usize reserve = DEFAULT_RESERVE_SIZE) -> void {
+        allocated_ = align_up(reserve, DEFAULT_PAGE_SIZE);
+        memory_base = static_cast<std::byte*>(backing_allocator->alloc(allocated_));
         assert(memory_base != nullptr);
         current_point = memory_base;
-        address_limit = memory_base + reserve;
-
+        address_limit = memory_base + allocated_;
+        backing_allocator_ = backing_allocator;
     }
 
     ~Arena_Allocator() {
         reset();
-        // @TODO: why doesn't this work?
-        // delete[] (memory_base);
+        backing_allocator_->free(memory_base, allocated_);
     }
 
     auto reset() -> void {
