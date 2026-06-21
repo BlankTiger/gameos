@@ -30,7 +30,7 @@ System V ABI standard and de-facto extensions. The compiler will assume the
 stack is properly aligned and failure to align the stack will result in
 undefined behavior.
 */
-.section .bss
+.section .bootstrap_stack, "aw", @nobits
 .align 16
 stack_bottom:
 .skip 16384 # 16 KiB
@@ -89,6 +89,7 @@ _start:
 	stack since (pushed 0 bytes so far), so the alignment has thus been
 	preserved and the call is well defined.
 	*/
+	call run_global_constructors
 	call kernel_main
 	add $16, %esp
 

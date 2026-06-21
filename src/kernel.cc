@@ -19,6 +19,25 @@ mem::Allocator* __global_allocator;
 mem::Buddy_Allocator __buddy;
 mem::Arena_Allocator __arena;
 
+using Init_Function = void (*)();
+
+extern "C" Init_Function __init_array_start[];
+extern "C" Init_Function __init_array_end[];
+extern "C" Init_Function __ctors_start[];
+extern "C" Init_Function __ctors_end[];
+
+extern "C" auto run_global_constructors() -> void {
+    for (Init_Function* fn = __init_array_start; fn != __init_array_end; ++fn) {
+        (*fn)();
+    }
+
+    for (Init_Function* fn = __ctors_end; fn != __ctors_start;) {
+        --fn;
+        if (*fn == nullptr || *fn == reinterpret_cast<Init_Function>(-1)) continue;
+        (*fn)();
+    }
+}
+
 auto operator new(usize size) -> void* {
     term::terminal_writestring("new ");
     term::terminal_writeint(size);

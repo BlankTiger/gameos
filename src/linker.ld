@@ -35,6 +35,22 @@ SECTIONS
 		*(.rodata)
 	}
 
+	.init_array BLOCK(4K) : ALIGN(4K)
+	{
+		__init_array_start = .;
+		KEEP(*(SORT_BY_INIT_PRIORITY(.init_array.*)))
+		KEEP(*(.init_array))
+		__init_array_end = .;
+	}
+
+	.ctors BLOCK(4K) : ALIGN(4K)
+	{
+		__ctors_start = .;
+		KEEP(*(.ctors))
+		KEEP(*(.ctors.*))
+		__ctors_end = .;
+	}
+
 	/* Read-write data (initialized) */
 	.data BLOCK(4K) : ALIGN(4K)
 	{
@@ -46,6 +62,11 @@ SECTIONS
 	{
 		*(COMMON)
 		*(.bss)
+	}
+
+	.bootstrap_stack (NOLOAD) : ALIGN(16)
+	{
+		*(.bootstrap_stack)
 	}
 	__kernel_end = .;
 
