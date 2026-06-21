@@ -9,7 +9,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 add_executable(gameos
     src/boot.s
-    src/kernel.cc
+    src/main.cc
 )
 
 target_compile_options(gameos PRIVATE
