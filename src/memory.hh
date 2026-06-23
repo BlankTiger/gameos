@@ -389,15 +389,13 @@ struct Arena_Allocator final : Allocator {
 
 mem::Allocator* __global_allocator;
 mem::Buddy_Allocator __buddy;
-mem::Arena_Allocator __arena;
 
 auto memory_initialize(const Multiboot_Info* mbi) -> void {
     parse_multiboot_memory_map(__regions, mbi);
     reserve_multiboot_data(__regions, mbi);
 
     __buddy.init();
-    __arena.init(&__buddy);
-    __global_allocator = &__arena;
+    __global_allocator = &__buddy;
 }
 
 }  // namespace mem
