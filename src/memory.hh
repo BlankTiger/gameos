@@ -26,16 +26,10 @@ struct Memory_Region {
 
 using Memory_Regions = Bounded_Array<Memory_Region, MAX_MEMORY_REGIONS>;
 
-struct Multiboot2_Info {
-    u32 total_size;
-    u32 reserved;
-} __attribute__((packed));
-
-struct Multiboot2_Tag {
-    u16 type;
-    u16 flags;
-    u32 size;
-} __attribute__((packed));
+template <typename T>
+static force_inline auto ptr_addr(const T* pointer) -> uintptr_t {
+    return reinterpret_cast<uintptr_t>(pointer);
+}
 
 enum class Multiboot2_Tag_Type : u16 {
     END = 0,
@@ -49,17 +43,62 @@ enum class Multiboot2_Tag_Type : u16 {
     FRAMEBUFFER = 8,
 };
 
-struct Multiboot2_Memory_Map_Tag {
-    Multiboot2_Tag tag;
-    u32 entry_size;
-    u32 entry_version;
-} __attribute__((packed));
-
 struct Multiboot2_Memory_Map_Entry {
     u64 addr;
     u64 len;
     u32 type;
     u32 zero;
+} __attribute__((packed));
+
+struct Multiboot2_Tag {
+    Multiboot2_Tag_Type type;
+    u16 flags;
+    u32 size;
+
+    template <typename T>
+    auto as() const -> const T* {
+        return reinterpret_cast<const T*>(this);
+    }
+
+    auto payload() const -> const void* {
+        return reinterpret_cast<const void*>(ptr_addr(this) + sizeof(*this));
+    }
+
+    template <typename T>
+    auto payload_as() const -> const T* {
+        return reinterpret_cast<const T*>(payload());
+    }
+
+    auto next() const -> const Multiboot2_Tag* {
+        return reinterpret_cast<const Multiboot2_Tag*>(ptr_addr(this) + ((size + 7u) & ~7u));
+    }
+} __attribute__((packed));
+
+struct Multiboot2_Info {
+    u32 total_size;
+    u32 reserved;
+
+    auto first_tag() const -> const Multiboot2_Tag* {
+        return reinterpret_cast<const Multiboot2_Tag*>(ptr_addr(this) + sizeof(*this));
+    }
+
+    auto end_tag() const -> const Multiboot2_Tag* {
+        return reinterpret_cast<const Multiboot2_Tag*>(ptr_addr(this) + total_size);
+    }
+} __attribute__((packed));
+
+struct Multiboot2_Memory_Map_Tag {
+    Multiboot2_Tag tag;
+    u32 entry_size;
+    u32 entry_version;
+
+    auto first_entry() const -> const Multiboot2_Memory_Map_Entry* {
+        return reinterpret_cast<const Multiboot2_Memory_Map_Entry*>(ptr_addr(this) + sizeof(*this));
+    }
+
+    auto end_entry() const -> const Multiboot2_Memory_Map_Entry* {
+        return reinterpret_cast<const Multiboot2_Memory_Map_Entry*>(ptr_addr(this) + tag.size);
+    }
 } __attribute__((packed));
 
 struct Multiboot2_Module_Tag {
@@ -68,6 +107,10 @@ struct Multiboot2_Module_Tag {
     u32 mod_end;
     u32 string;
     u32 reserved;
+
+    auto string_ptr() const -> const char* {
+        return reinterpret_cast<const char*>(static_cast<uintptr_t>(string));
+    }
 } __attribute__((packed));
 
 struct Multiboot2_Framebuffer_Tag {
@@ -155,66 +198,60 @@ static auto reserve_range(Memory_Regions& regions, u64 start, u64 end) -> void {
 }
 
 static auto parse_multiboot2_memory_map(Memory_Regions& regions, const Multiboot2_Info* mbi) -> void {
-    auto* tag = reinterpret_cast<const Multiboot2_Tag*>(reinterpret_cast<uintptr_t>(mbi) + sizeof(Multiboot2_Info));
-    const auto* end = reinterpret_cast<const Multiboot2_Tag*>(reinterpret_cast<uintptr_t>(mbi) + mbi->total_size);
+    auto* tag = mbi->first_tag();
+    const auto* end = mbi->end_tag();
 
-    while (reinterpret_cast<uintptr_t>(tag) < reinterpret_cast<uintptr_t>(end)) {
-        const auto tag_type = static_cast<Multiboot2_Tag_Type>(tag->type);
-        if (tag_type == Multiboot2_Tag_Type::MEMORY_MAP) {
-            const auto* mmap_tag = reinterpret_cast<const Multiboot2_Memory_Map_Tag*>(tag);
-            const auto* entry = reinterpret_cast<const Multiboot2_Memory_Map_Entry*>(
-                reinterpret_cast<uintptr_t>(mmap_tag) + sizeof(Multiboot2_Memory_Map_Tag));
-            const auto* tag_end = reinterpret_cast<const Multiboot2_Memory_Map_Entry*>(
-                reinterpret_cast<uintptr_t>(mmap_tag) + mmap_tag->tag.size);
+    while (ptr_addr(tag) < ptr_addr(end)) {
+        if (tag->type == Multiboot2_Tag_Type::MEMORY_MAP) {
+            const auto* mmap_tag = tag->as<Multiboot2_Memory_Map_Tag>();
+            const auto* entry = mmap_tag->first_entry();
+            const auto* tag_end = mmap_tag->end_entry();
 
-            while (reinterpret_cast<uintptr_t>(entry) < reinterpret_cast<uintptr_t>(tag_end)) {
+            while (ptr_addr(entry) < ptr_addr(tag_end)) {
                 if (entry->type == MULTIBOOT_MMAP_USABLE) add_usable_region(regions, entry->addr, entry->len);
-                entry = reinterpret_cast<const Multiboot2_Memory_Map_Entry*>(
-                    reinterpret_cast<uintptr_t>(entry) + mmap_tag->entry_size);
+                entry = reinterpret_cast<const Multiboot2_Memory_Map_Entry*>(ptr_addr(entry) + mmap_tag->entry_size);
             }
         }
 
-        tag = reinterpret_cast<const Multiboot2_Tag*>(reinterpret_cast<uintptr_t>(tag) + align_up(tag->size, 8));
+        tag = tag->next();
     }
 }
 
 static auto reserve_multiboot2_data(Memory_Regions& regions, const Multiboot2_Info* mbi) -> void {
     reserve_range(regions, 0, PAGE_SIZE);
-    reserve_range(regions, reinterpret_cast<uintptr_t>(mbi), reinterpret_cast<uintptr_t>(mbi) + mbi->total_size);
-    reserve_range(regions, reinterpret_cast<uintptr_t>(&__kernel_start), reinterpret_cast<uintptr_t>(&__kernel_end));
+    reserve_range(regions, ptr_addr(mbi), ptr_addr(mbi) + mbi->total_size);
+    reserve_range(regions, ptr_addr(&__kernel_start), ptr_addr(&__kernel_end));
 
-    auto* tag = reinterpret_cast<const Multiboot2_Tag*>(reinterpret_cast<uintptr_t>(mbi) + sizeof(Multiboot2_Info));
-    const auto* end = reinterpret_cast<const Multiboot2_Tag*>(reinterpret_cast<uintptr_t>(mbi) + mbi->total_size);
+    auto* tag = mbi->first_tag();
+    const auto* end = mbi->end_tag();
 
-    while (reinterpret_cast<uintptr_t>(tag) < reinterpret_cast<uintptr_t>(end)) {
+    while (ptr_addr(tag) < ptr_addr(end)) {
         const auto tag_type = static_cast<Multiboot2_Tag_Type>(tag->type);
         if (tag_type == Multiboot2_Tag_Type::CMDLINE || tag_type == Multiboot2_Tag_Type::BOOT_LOADER_NAME) {
-            const auto* text = reinterpret_cast<const char*>(reinterpret_cast<uintptr_t>(tag) + sizeof(Multiboot2_Tag));
-            reserve_range(
-                regions, reinterpret_cast<uintptr_t>(text), reinterpret_cast<uintptr_t>(text) + strlen(text) + 1);
+            const auto* text = tag->payload_as<char>();
+            reserve_range(regions, ptr_addr(text), ptr_addr(text) + strlen(text) + 1);
         } else if (tag_type == Multiboot2_Tag_Type::MODULE) {
-            const auto* module = reinterpret_cast<const Multiboot2_Module_Tag*>(tag);
+            const auto* module = tag->as<Multiboot2_Module_Tag>();
             reserve_range(regions, module->mod_start, module->mod_end);
             if (module->string != 0) {
-                reserve_range(
-                    regions, module->string, module->string + strlen((const char*)(uintptr_t)module->string) + 1);
+                reserve_range(regions, module->string, module->string + strlen(module->string_ptr()) + 1);
             }
         }
 
-        tag = reinterpret_cast<const Multiboot2_Tag*>(reinterpret_cast<uintptr_t>(tag) + align_up(tag->size, 8));
+        tag = tag->next();
     }
 }
 
 auto find_multiboot2_framebuffer_tag(const Multiboot2_Info* mbi) -> const Multiboot2_Framebuffer_Tag* {
-    auto* tag = reinterpret_cast<const Multiboot2_Tag*>(reinterpret_cast<uintptr_t>(mbi) + sizeof(Multiboot2_Info));
-    const auto* end = reinterpret_cast<const Multiboot2_Tag*>(reinterpret_cast<uintptr_t>(mbi) + mbi->total_size);
+    auto* tag = mbi->first_tag();
+    const auto* end = mbi->end_tag();
 
-    while (reinterpret_cast<uintptr_t>(tag) < reinterpret_cast<uintptr_t>(end)) {
+    while (ptr_addr(tag) < ptr_addr(end)) {
         if (static_cast<Multiboot2_Tag_Type>(tag->type) == Multiboot2_Tag_Type::FRAMEBUFFER) {
-            return reinterpret_cast<const Multiboot2_Framebuffer_Tag*>(tag);
+            return tag->as<Multiboot2_Framebuffer_Tag>();
         }
 
-        tag = reinterpret_cast<const Multiboot2_Tag*>(reinterpret_cast<uintptr_t>(tag) + align_up(tag->size, 8));
+        tag = tag->next();
     }
 
     return nullptr;
@@ -282,7 +319,7 @@ struct Buddy_Allocator final : Allocator {
     }
 
     auto push_free_block(u64 base, usize order) -> void {
-        auto* block = reinterpret_cast<Free_Block*>((uintptr_t)base);
+        auto* block = reinterpret_cast<Free_Block*>(base);
         block->next = free_lists[order];
         free_lists[order] = block;
     }
@@ -290,7 +327,7 @@ struct Buddy_Allocator final : Allocator {
     auto remove_free_block(usize order, u64 base) -> bool {
         auto** link = &free_lists[order];
         while (*link != nullptr) {
-            if (reinterpret_cast<uintptr_t>(*link) == base) {
+            if (ptr_addr(*link) == base) {
                 *link = (*link)->next;
                 return true;
             }
@@ -344,7 +381,7 @@ struct Buddy_Allocator final : Allocator {
         while (order <= MAX_ORDER && free_lists[order] == nullptr) order++;
         if (order > MAX_ORDER) return nullptr;
 
-        u64 block_base = reinterpret_cast<uintptr_t>(free_lists[order]);
+        u64 block_base = ptr_addr(free_lists[order]);
         free_lists[order] = free_lists[order]->next;
 
         while (order > target_order) {
@@ -360,7 +397,7 @@ struct Buddy_Allocator final : Allocator {
             return nullptr;
         }
 
-        auto* header = reinterpret_cast<Allocation_Header*>((uintptr_t)(user_ptr - sizeof(Allocation_Header)));
+        auto* header = reinterpret_cast<Allocation_Header*>(user_ptr - sizeof(Allocation_Header));
         header->block_base = block_base;
         header->order = static_cast<u8>(order);
         header->reserved[0] = 0;
@@ -371,7 +408,7 @@ struct Buddy_Allocator final : Allocator {
         header->reserved[5] = 0;
         header->reserved[6] = 0;
 
-        return reinterpret_cast<void*>((uintptr_t)user_ptr);
+        return reinterpret_cast<void*>(user_ptr);
     }
 
     auto free(void* pointer, usize, usize alignment = alignof(std::max_align_t)) -> void override {
@@ -381,7 +418,7 @@ struct Buddy_Allocator final : Allocator {
         Allocation_Header header{};
         memcpy(
             &header,
-            reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(pointer) - sizeof(Allocation_Header)),
+            reinterpret_cast<void*>(ptr_addr(pointer) - sizeof(Allocation_Header)),
             sizeof(header));
 
         u64 block_base = header.block_base;
@@ -443,7 +480,7 @@ struct Arena_Allocator final : Allocator {
         if (alignment == 0) alignment = 1;
 
         auto* aligned_point =
-            reinterpret_cast<std::byte*>(align_up(reinterpret_cast<uintptr_t>(current_point), alignment));
+            reinterpret_cast<std::byte*>(align_up(ptr_addr(current_point), alignment));
         auto* new_point = aligned_point + size;
 
         assert(new_point <= address_limit);
