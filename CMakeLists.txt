@@ -30,7 +30,7 @@ target_link_options(gameos PRIVATE
 target_link_libraries(gameos PRIVATE gcc)
 
 add_custom_command(TARGET gameos POST_BUILD
-    COMMAND grub-file --is-x86-multiboot $<TARGET_FILE:gameos>
+    COMMAND grub-file --is-x86-multiboot2 $<TARGET_FILE:gameos>
     COMMAND_EXPAND_LISTS
 )
 

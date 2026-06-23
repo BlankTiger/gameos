@@ -5,7 +5,7 @@
 
 # Running
 
-    qemu-system-i386 -kernel build/gameos
+    qemu-system-i386 -cdrom build/gameos.iso
 
 # TODO:
 

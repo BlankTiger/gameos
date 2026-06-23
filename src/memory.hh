@@ -7,7 +7,14 @@
 
 namespace mem {
 
-static constexpr int MULTIBOOT_INFO_HAS_MMAP = 1u << 6;
+enum class Multiboot_Info_Flag : u32 {
+    HAS_MMAP = 1u << 6,
+    HAS_VBE = 1u << 11,
+    HAS_FRAMEBUFFER = 1u << 12,
+};
+
+constexpr u32 MULTIBOOT2_MAGIC = 0x36D76289;
+
 static constexpr int MULTIBOOT_MMAP_USABLE = 1u;
 static constexpr int PAGE_SIZE = 4096;
 static constexpr int MAX_MEMORY_REGIONS = 32;
@@ -19,8 +26,77 @@ struct Memory_Region {
 
 using Memory_Regions = Bounded_Array<Memory_Region, MAX_MEMORY_REGIONS>;
 
+struct Multiboot2_Info {
+    u32 total_size;
+    u32 reserved;
+} __attribute__((packed));
+
+struct Multiboot2_Tag {
+    u16 type;
+    u16 flags;
+    u32 size;
+} __attribute__((packed));
+
+enum class Multiboot2_Tag_Type : u16 {
+    END = 0,
+    CMDLINE = 1,
+    BOOT_LOADER_NAME = 2,
+    MODULE = 3,
+    BASIC_MEMINFO = 4,
+    BOOT_DEVICE = 5,
+    MEMORY_MAP = 6,
+    VBE = 7,
+    FRAMEBUFFER = 8,
+};
+
+struct Multiboot2_Memory_Map_Tag {
+    Multiboot2_Tag tag;
+    u32 entry_size;
+    u32 entry_version;
+} __attribute__((packed));
+
+struct Multiboot2_Memory_Map_Entry {
+    u64 addr;
+    u64 len;
+    u32 type;
+    u32 zero;
+} __attribute__((packed));
+
+struct Multiboot2_Module_Tag {
+    Multiboot2_Tag tag;
+    u32 mod_start;
+    u32 mod_end;
+    u32 string;
+    u32 reserved;
+} __attribute__((packed));
+
+struct Multiboot2_Framebuffer_Tag {
+    Multiboot2_Tag tag;
+    u64 framebuffer_addr;
+    u32 framebuffer_pitch;
+    u32 framebuffer_width;
+    u32 framebuffer_height;
+    u8 framebuffer_bpp;
+    u8 framebuffer_type;
+    u16 reserved;
+    union {
+        struct {
+            u32 framebuffer_palette_addr;
+            u16 framebuffer_palette_num_colors;
+        } palette;
+        struct {
+            u8 framebuffer_red_field_position;
+            u8 framebuffer_red_mask_size;
+            u8 framebuffer_green_field_position;
+            u8 framebuffer_green_mask_size;
+            u8 framebuffer_blue_field_position;
+            u8 framebuffer_blue_mask_size;
+        } direct_color;
+    } framebuffer_info;
+} __attribute__((packed));
+
 struct Multiboot_Info {
-    u32 flags;
+    Multiboot_Info_Flag flags;
     u32 mem_lower;
     u32 mem_upper;
     u32 boot_device;
@@ -30,6 +106,37 @@ struct Multiboot_Info {
     Static_Array<u32, 4> syms;
     u32 mmap_length;
     u32 mmap_addr;
+    u32 drives_length;
+    u32 drives_addr;
+    u32 config_table;
+    u32 boot_loader_name;
+    u32 apm_table;
+    u32 vbe_control_info;
+    u32 vbe_mode_info;
+    u16 vbe_mode;
+    u16 vbe_interface_seg;
+    u16 vbe_interface_off;
+    u16 vbe_interface_len;
+    u64 framebuffer_addr;
+    u32 framebuffer_pitch;
+    u32 framebuffer_width;
+    u32 framebuffer_height;
+    u8 framebuffer_bpp;
+    u8 framebuffer_type;
+    union {
+        struct {
+            u32 framebuffer_palette_addr;
+            u16 framebuffer_palette_num_colors;
+        } palette;
+        struct {
+            u8 framebuffer_red_field_position;
+            u8 framebuffer_red_mask_size;
+            u8 framebuffer_green_field_position;
+            u8 framebuffer_green_mask_size;
+            u8 framebuffer_blue_field_position;
+            u8 framebuffer_blue_mask_size;
+        } direct_color;
+    } framebuffer_info;
 } __attribute__((packed));
 
 struct Multiboot_MMAP_Entry {
@@ -105,46 +212,113 @@ static auto reserve_range(Memory_Regions& regions, u64 start, u64 end) -> void {
     }
 }
 
-static auto parse_multiboot_memory_map(Memory_Regions& regions, const Multiboot_Info* mbi) -> void {
-    if ((mbi->flags & MULTIBOOT_INFO_HAS_MMAP) == 0) return;
+// static auto parse_multiboot_memory_map(Memory_Regions& regions, const Multiboot_Info* mbi) -> void {
+//     if (!has_flag(mbi->flags, Multiboot_Info_Flag::HAS_MMAP)) return;
+//
+//     auto* entry = reinterpret_cast<const Multiboot_MMAP_Entry*>((uintptr_t)mbi->mmap_addr);
+//     const auto* end = reinterpret_cast<const Multiboot_MMAP_Entry*>((uintptr_t)mbi->mmap_addr + mbi->mmap_length);
+//
+//     while (reinterpret_cast<uintptr_t>(entry) < reinterpret_cast<uintptr_t>(end)) {
+//         const u64 entry_length = entry->len;
+//         if (entry->type == MULTIBOOT_MMAP_USABLE) add_usable_region(regions, entry->addr, entry_length);
+//
+//         entry = reinterpret_cast<const Multiboot_MMAP_Entry*>(
+//             reinterpret_cast<uintptr_t>(entry) + entry->size + sizeof(entry->size));
+//     }
+// }
 
-    auto* entry = reinterpret_cast<const Multiboot_MMAP_Entry*>((uintptr_t)mbi->mmap_addr);
-    const auto* end = reinterpret_cast<const Multiboot_MMAP_Entry*>((uintptr_t)mbi->mmap_addr + mbi->mmap_length);
+// static auto reserve_multiboot_data(Memory_Regions& regions, const Multiboot_Info* mbi) -> void {
+//     reserve_range(regions, 0, PAGE_SIZE);
+//     reserve_range(regions, reinterpret_cast<uintptr_t>(mbi), reinterpret_cast<uintptr_t>(mbi) + sizeof(Multiboot_Info));
+//     reserve_range(regions, reinterpret_cast<uintptr_t>(&__kernel_start), reinterpret_cast<uintptr_t>(&__kernel_end));
+//     reserve_range(regions, (uintptr_t)mbi->mmap_addr, (uintptr_t)mbi->mmap_addr + mbi->mmap_length);
+//
+//     if (mbi->cmdline != 0) {
+//         reserve_range(
+//             regions,
+//             (uintptr_t)mbi->cmdline,
+//             (uintptr_t)mbi->cmdline + strlen((const char*)(uintptr_t)mbi->cmdline) + 1);
+//     }
+//
+//     if (mbi->mods_count == 0 || mbi->mods_addr == 0) return;
+//
+//     auto* modules = reinterpret_cast<const Multiboot_Module*>((uintptr_t)mbi->mods_addr);
+//     reserve_range(regions, (uintptr_t)modules, (uintptr_t)modules + mbi->mods_count * sizeof(Multiboot_Module));
+//
+//     for (u32 i = 0; i < mbi->mods_count; i++) {
+//         reserve_range(regions, modules[i].mod_start, modules[i].mod_end);
+//         if (modules[i].string != 0) {
+//             reserve_range(
+//                 regions, modules[i].string, modules[i].string + strlen((const char*)(uintptr_t)modules[i].string) + 1);
+//         }
+//     }
+// }
 
-    while (reinterpret_cast<uintptr_t>(entry) < reinterpret_cast<uintptr_t>(end)) {
-        const u64 entry_length = entry->len;
-        if (entry->type == MULTIBOOT_MMAP_USABLE) add_usable_region(regions, entry->addr, entry_length);
+static auto parse_multiboot2_memory_map(Memory_Regions& regions, const Multiboot2_Info* mbi) -> void {
+    auto* tag = reinterpret_cast<const Multiboot2_Tag*>(reinterpret_cast<uintptr_t>(mbi) + sizeof(Multiboot2_Info));
+    const auto* end = reinterpret_cast<const Multiboot2_Tag*>(reinterpret_cast<uintptr_t>(mbi) + mbi->total_size);
 
-        entry = reinterpret_cast<const Multiboot_MMAP_Entry*>(
-            reinterpret_cast<uintptr_t>(entry) + entry->size + sizeof(entry->size));
+    while (reinterpret_cast<uintptr_t>(tag) < reinterpret_cast<uintptr_t>(end)) {
+        const auto tag_type = static_cast<Multiboot2_Tag_Type>(tag->type);
+        if (tag_type == Multiboot2_Tag_Type::MEMORY_MAP) {
+            const auto* mmap_tag = reinterpret_cast<const Multiboot2_Memory_Map_Tag*>(tag);
+            const auto* entry = reinterpret_cast<const Multiboot2_Memory_Map_Entry*>(
+                reinterpret_cast<uintptr_t>(mmap_tag) + sizeof(Multiboot2_Memory_Map_Tag));
+            const auto* tag_end = reinterpret_cast<const Multiboot2_Memory_Map_Entry*>(
+                reinterpret_cast<uintptr_t>(mmap_tag) + mmap_tag->tag.size);
+
+            while (reinterpret_cast<uintptr_t>(entry) < reinterpret_cast<uintptr_t>(tag_end)) {
+                if (entry->type == MULTIBOOT_MMAP_USABLE) add_usable_region(regions, entry->addr, entry->len);
+                entry = reinterpret_cast<const Multiboot2_Memory_Map_Entry*>(
+                    reinterpret_cast<uintptr_t>(entry) + mmap_tag->entry_size);
+            }
+        }
+
+        tag = reinterpret_cast<const Multiboot2_Tag*>(reinterpret_cast<uintptr_t>(tag) + align_up(tag->size, 8));
     }
 }
 
-static auto reserve_multiboot_data(Memory_Regions& regions, const Multiboot_Info* mbi) -> void {
+static auto reserve_multiboot2_data(Memory_Regions& regions, const Multiboot2_Info* mbi) -> void {
     reserve_range(regions, 0, PAGE_SIZE);
-    reserve_range(regions, reinterpret_cast<uintptr_t>(mbi), reinterpret_cast<uintptr_t>(mbi) + sizeof(Multiboot_Info));
+    reserve_range(regions, reinterpret_cast<uintptr_t>(mbi), reinterpret_cast<uintptr_t>(mbi) + mbi->total_size);
     reserve_range(regions, reinterpret_cast<uintptr_t>(&__kernel_start), reinterpret_cast<uintptr_t>(&__kernel_end));
-    reserve_range(regions, (uintptr_t)mbi->mmap_addr, (uintptr_t)mbi->mmap_addr + mbi->mmap_length);
 
-    if (mbi->cmdline != 0) {
-        reserve_range(
-            regions,
-            (uintptr_t)mbi->cmdline,
-            (uintptr_t)mbi->cmdline + strlen((const char*)(uintptr_t)mbi->cmdline) + 1);
-    }
+    auto* tag = reinterpret_cast<const Multiboot2_Tag*>(reinterpret_cast<uintptr_t>(mbi) + sizeof(Multiboot2_Info));
+    const auto* end = reinterpret_cast<const Multiboot2_Tag*>(reinterpret_cast<uintptr_t>(mbi) + mbi->total_size);
 
-    if (mbi->mods_count == 0 || mbi->mods_addr == 0) return;
-
-    auto* modules = reinterpret_cast<const Multiboot_Module*>((uintptr_t)mbi->mods_addr);
-    reserve_range(regions, (uintptr_t)modules, (uintptr_t)modules + mbi->mods_count * sizeof(Multiboot_Module));
-
-    for (u32 i = 0; i < mbi->mods_count; i++) {
-        reserve_range(regions, modules[i].mod_start, modules[i].mod_end);
-        if (modules[i].string != 0) {
-            reserve_range(
-                regions, modules[i].string, modules[i].string + strlen((const char*)(uintptr_t)modules[i].string) + 1);
+    while (reinterpret_cast<uintptr_t>(tag) < reinterpret_cast<uintptr_t>(end)) {
+        const auto tag_type = static_cast<Multiboot2_Tag_Type>(tag->type);
+        if (tag_type == Multiboot2_Tag_Type::CMDLINE || tag_type == Multiboot2_Tag_Type::BOOT_LOADER_NAME) {
+            const auto* text = reinterpret_cast<const char*>(reinterpret_cast<uintptr_t>(tag) + sizeof(Multiboot2_Tag));
+            reserve_range(regions, reinterpret_cast<uintptr_t>(text), reinterpret_cast<uintptr_t>(text) + strlen(text) + 1);
+        } else if (tag_type == Multiboot2_Tag_Type::MODULE) {
+            const auto* module = reinterpret_cast<const Multiboot2_Module_Tag*>(tag);
+            reserve_range(regions, module->mod_start, module->mod_end);
+            if (module->string != 0) {
+                reserve_range(
+                    regions,
+                    module->string,
+                    module->string + strlen((const char*)(uintptr_t)module->string) + 1);
+            }
         }
+
+        tag = reinterpret_cast<const Multiboot2_Tag*>(reinterpret_cast<uintptr_t>(tag) + align_up(tag->size, 8));
     }
+}
+
+auto find_multiboot2_framebuffer_tag(const Multiboot2_Info* mbi) -> const Multiboot2_Framebuffer_Tag* {
+    auto* tag = reinterpret_cast<const Multiboot2_Tag*>(reinterpret_cast<uintptr_t>(mbi) + sizeof(Multiboot2_Info));
+    const auto* end = reinterpret_cast<const Multiboot2_Tag*>(reinterpret_cast<uintptr_t>(mbi) + mbi->total_size);
+
+    while (reinterpret_cast<uintptr_t>(tag) < reinterpret_cast<uintptr_t>(end)) {
+        if (static_cast<Multiboot2_Tag_Type>(tag->type) == Multiboot2_Tag_Type::FRAMEBUFFER) {
+            return reinterpret_cast<const Multiboot2_Framebuffer_Tag*>(tag);
+        }
+
+        tag = reinterpret_cast<const Multiboot2_Tag*>(reinterpret_cast<uintptr_t>(tag) + align_up(tag->size, 8));
+    }
+
+    return nullptr;
 }
 
 auto floor_pow2(u64 n) -> u64 {
@@ -390,9 +564,9 @@ struct Arena_Allocator final : Allocator {
 mem::Allocator* __global_allocator;
 mem::Buddy_Allocator __buddy;
 
-auto memory_initialize(const Multiboot_Info* mbi) -> void {
-    parse_multiboot_memory_map(__regions, mbi);
-    reserve_multiboot_data(__regions, mbi);
+auto memory_initialize(const Multiboot2_Info* mbi) -> void {
+    parse_multiboot2_memory_map(__regions, mbi);
+    reserve_multiboot2_data(__regions, mbi);
 
     __buddy.init();
     __global_allocator = &__buddy;

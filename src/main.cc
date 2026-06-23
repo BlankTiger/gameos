@@ -1,3 +1,4 @@
+#include "framebuffer.hh"
 #include "kstd.hh"
 #include "vga.hh"
 
@@ -77,14 +78,24 @@ extern "C" auto run_global_destructors() -> void {
     __cxa_finalize(nullptr);
 }
 
-extern "C" auto kernel_main(uint32_t magic, const mem::Multiboot_Info* mbi) -> void {
+extern "C" auto kernel_main(u32 magic, const mem::Multiboot2_Info* mbi) -> void {
     vga::terminal_initialize();
 
-    if (magic != 0x2BADB002) {
-        vga::println("Bad multiboot magic");
+    if (magic != mem::MULTIBOOT2_MAGIC) {
+        vga::println("Bad multiboot2 magic");
         return;
     }
 
     vga::println("mem init");
     mem::memory_initialize(mbi);
+
+    const auto* framebuffer = mem::find_multiboot2_framebuffer_tag(mbi);
+    kstd::assert(framebuffer != nullptr);
+    fb::initialize(framebuffer);
+    fb::clear({255, 255, 255, 255});
+
+    vga::println("fb addr %", framebuffer->framebuffer_addr);
+    vga::println("fb pitch %", framebuffer->framebuffer_pitch);
+    vga::println("fb size %x x %x", framebuffer->framebuffer_width, framebuffer->framebuffer_height);
+    vga::println("fb bpp %", framebuffer->framebuffer_bpp);
 }
