@@ -3,6 +3,7 @@
 #include <bit>
 
 #include "kstd.hh"
+#include "multiboot2.hh"
 
 namespace fb {
 
