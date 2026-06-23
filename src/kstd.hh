@@ -2,9 +2,9 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <cstdarg>
 #include <new>
 #include <source_location>
+#include <type_traits>
 #include <utility>
 
 #if defined(__GNUC__) || defined(__clang__)
@@ -25,11 +25,11 @@ force_inline auto assert(
     const char* message = nullptr,
     const std::source_location& location = std::source_location::current()) -> void {
     if (!predicate) {
-        vga::printf("%s:%d:%d: assertion failed", location.file_name(), location.line(), location.column());
+        vga::print("%:%:%: assertion failed", location.file_name(), location.line(), location.column());
         if (message) {
-            vga::printf(": %s", message);
+            vga::print(": %", message);
         }
-        vga::printf("\n");
+        vga::print("\n");
 
         for (;;) asm volatile("hlt");
     }
@@ -50,10 +50,10 @@ force_inline auto debug_assert(
     const char* message,
     const std::source_location& location = std::source_location::current()) -> void {
     if (message != nullptr) {
-        vga::printf("%s\n", message);
+        vga::print("%\n", message);
     }
 
-    vga::printf("%s:%d:%d\n", location.file_name(), location.line(), location.column());
+    vga::print("%:%:%\n", location.file_name(), location.line(), location.column());
 
     for (;;) {
         asm volatile("hlt");

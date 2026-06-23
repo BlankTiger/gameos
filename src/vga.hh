@@ -197,7 +197,163 @@ auto terminal_writeint(s64 value) -> void {
     }
 }
 
-auto vprintf(const char* format, va_list args) -> int {
+static force_inline auto print_remaining(const char* format) -> int {
+    int written = 0;
+
+    for (const char* it = format; *it != '\0'; ++it) {
+        if (*it == '%' && it[1] == '%') {
+            terminal_putchar('%');
+            ++written;
+            ++it;
+            continue;
+        }
+
+        terminal_putchar((u8)*it);
+        ++written;
+    }
+
+    return written;
+}
+
+static force_inline auto print_value(bool value) -> int {
+    if (value) {
+        terminal_writestring("true");
+        return 4;
+    }
+
+    terminal_writestring("false");
+    return 5;
+}
+
+static force_inline auto print_value(char value) -> int {
+    terminal_putchar((u8)value);
+    return 1;
+}
+
+static force_inline auto print_value(const char* value) -> int {
+    if (value == nullptr) value = "(null)";
+    terminal_writestring(value);
+    return (int)strlen(value);
+}
+
+template <usize N>
+static force_inline auto print_value(const char (&value)[N]) -> int {
+    return print_value((const char*)value);
+}
+
+template <usize N>
+static force_inline auto print_value(char (&value)[N]) -> int {
+    return print_value((const char*)value);
+}
+
+static force_inline auto print_value(std::nullptr_t) -> int {
+    terminal_writestring("(null)");
+    return 6;
+}
+
+static force_inline auto print_value(s64 value) -> int {
+    terminal_writeint(value);
+    return terminal_count_signed(value);
+}
+
+static force_inline auto print_value(u64 value) -> int {
+    terminal_write_unsigned(value);
+    return terminal_count_unsigned(value);
+}
+
+static force_inline auto print_value(f64 value) -> int {
+    int written = 0;
+
+    if (value < 0) {
+        terminal_putchar('-');
+        ++written;
+        value = -value;
+    }
+
+    u64 whole = (u64)value;
+    f64 fractional = value - (f64)whole;
+    u64 scaled = (u64)(fractional * 1000000.0 + 0.5);
+    if (scaled == 1000000) {
+        scaled = 0;
+        ++whole;
+    }
+
+    terminal_write_unsigned(whole);
+    written += terminal_count_unsigned(whole);
+
+    terminal_putchar('.');
+    ++written;
+
+    char buffer[6];
+    for (usize i = 0; i < 6; ++i) {
+        buffer[5 - i] = (char)('0' + (scaled % 10));
+        scaled /= 10;
+    }
+    terminal_write(buffer, sizeof(buffer));
+    written += 6;
+
+    return written;
+}
+
+static force_inline auto print_value(const void* value) -> int {
+    terminal_write_pointer(value);
+    return 2 + terminal_count_hex_compact((u64)(usize)value);
+}
+
+template <typename T>
+static force_inline auto print_value(T&& value) -> int {
+    using U = std::remove_cvref_t<T>;
+
+    if constexpr (std::is_same_v<U, bool>) {
+        return print_value((bool)value);
+    } else if constexpr (std::is_same_v<U, char>) {
+        return print_value((char)value);
+    } else if constexpr (std::is_null_pointer_v<U>) {
+        return print_value(nullptr);
+    } else if constexpr (std::is_integral_v<U>) {
+        if constexpr (std::is_signed_v<U>) {
+            return print_value((s64)value);
+        } else {
+            return print_value((u64)value);
+        }
+    } else if constexpr (std::is_enum_v<U>) {
+        using Underlying = std::underlying_type_t<U>;
+        return print_value((Underlying)value);
+    } else if constexpr (std::is_floating_point_v<U>) {
+        return print_value((f64)value);
+    } else if constexpr (std::is_pointer_v<U>) {
+        if constexpr (std::is_same_v<std::remove_cv_t<std::remove_pointer_t<U>>, char>) {
+            return print_value((const char*)value);
+        } else {
+            return print_value((const void*)value);
+        }
+    } else if constexpr (std::is_array_v<U> && std::is_same_v<std::remove_extent_t<U>, char>) {
+        return print_value((const char*)value);
+    } else if constexpr (requires(const U& object) { object.c_str(); }) {
+        return print_value(value.c_str());
+    } else if constexpr (requires(const U& object) {
+                             object.data();
+                             object.size();
+                         }) {
+        if constexpr (std::is_convertible_v<decltype(value.data()), const char*>) {
+            const char* data = value.data();
+            usize size = (usize)value.size();
+            terminal_write(data, size);
+            return (int)size;
+        } else {
+            return print_value((const void*)&value);
+        }
+    } else {
+        return print_value((const void*)&value);
+    }
+}
+
+auto print(const char* format) -> int {
+    return print_remaining(format);
+}
+
+template <typename T, typename... Rest>
+auto print(const char* format, T&& value, Rest&&... rest) -> int {
     int written = 0;
 
     for (const char* it = format; *it != '\0'; ++it) {
@@ -207,139 +363,29 @@ auto vprintf(const char* format, va_list args) -> int {
             continue;
         }
 
-        ++it;
-        if (*it == '\0') break;
-
-        switch (*it) {
-            case '%':
-                terminal_putchar('%');
-                ++written;
-                break;
-            case 'c':
-                terminal_putchar((u8)va_arg(args, int));
-                ++written;
-                break;
-            case 's': {
-                const char* str = va_arg(args, const char*);
-                if (str == nullptr) str = "(null)";
-                terminal_writestring(str);
-                written += (int)strlen(str);
-                break;
-            }
-            case 'd':
-            case 'i': {
-                int value = va_arg(args, int);
-                terminal_writeint((s64)value);
-                written += terminal_count_signed((s64)value);
-            } break;
-            case 'u': {
-                unsigned int value = va_arg(args, unsigned int);
-                terminal_write_unsigned((u64)value);
-                written += terminal_count_unsigned((u64)value);
-            } break;
-            case 'x': {
-                unsigned int value = va_arg(args, unsigned int);
-                terminal_write_hex_compact((u64)value);
-                written += terminal_count_hex_compact((u64)value);
-            } break;
-            case 'X': {
-                unsigned int value = va_arg(args, unsigned int);
-                terminal_write_hex_compact((u64)value, true);
-                written += terminal_count_hex_compact((u64)value);
-            } break;
-            case 'p': {
-                void* value = va_arg(args, void*);
-                terminal_write_pointer(value);
-                written += 2 + terminal_count_hex_compact((u64)(usize)value);
-            } break;
-            case 'l': {
-                ++it;
-                if (*it == '\0') break;
-
-                if (*it == 'l') {
-                    ++it;
-                    if (*it == '\0') break;
-
-                    switch (*it) {
-                        case 'd':
-                        case 'i': {
-                            long long value = va_arg(args, long long);
-                            terminal_writeint((s64)value);
-                            written += terminal_count_signed((s64)value);
-                        } break;
-                        case 'u': {
-                            unsigned long long value = va_arg(args, unsigned long long);
-                            terminal_write_unsigned((u64)value);
-                            written += terminal_count_unsigned((u64)value);
-                        } break;
-                        case 'x': {
-                            unsigned long long value = va_arg(args, unsigned long long);
-                            terminal_write_hex_compact((u64)value);
-                            written += terminal_count_hex_compact((u64)value);
-                        } break;
-                        case 'X': {
-                            unsigned long long value = va_arg(args, unsigned long long);
-                            terminal_write_hex_compact((u64)value, true);
-                            written += terminal_count_hex_compact((u64)value);
-                        } break;
-                        default:
-                            terminal_putchar('%');
-                            terminal_putchar('l');
-                            terminal_putchar('l');
-                            terminal_putchar((u8)*it);
-                            written += 4;
-                            break;
-                    }
-                } else {
-                    switch (*it) {
-                        case 'd':
-                        case 'i': {
-                            long value = va_arg(args, long);
-                            terminal_writeint((s64)value);
-                            written += terminal_count_signed((s64)value);
-                        } break;
-                        case 'u': {
-                            unsigned long value = va_arg(args, unsigned long);
-                            terminal_write_unsigned((u64)value);
-                            written += terminal_count_unsigned((u64)value);
-                        } break;
-                        case 'x': {
-                            unsigned long value = va_arg(args, unsigned long);
-                            terminal_write_hex_compact((u64)value);
-                            written += terminal_count_hex_compact((u64)value);
-                        } break;
-                        case 'X': {
-                            unsigned long value = va_arg(args, unsigned long);
-                            terminal_write_hex_compact((u64)value, true);
-                            written += terminal_count_hex_compact((u64)value);
-                        } break;
-                        default:
-                            terminal_putchar('%');
-                            terminal_putchar('l');
-                            terminal_putchar((u8)*it);
-                            written += 3;
-                            break;
-                    }
-                }
-                break;
-            }
-            default:
-                terminal_putchar('%');
-                terminal_putchar((u8)*it);
-                written += 2;
-                break;
+        if (it[1] == '%') {
+            terminal_putchar('%');
+            ++written;
+            ++it;
+            continue;
         }
+
+        written += print_value(std::forward<T>(value));
+        return written + print(it + 1, std::forward<Rest>(rest)...);
     }
 
     return written;
 }
 
-auto printf(const char* format, ...) -> int {
-    va_list args;
-    va_start(args, format);
-    int written = vprintf(format, args);
-    va_end(args);
-    return written;
+force_inline auto println(const char* format) -> int {
+    return print("%\n", format);
+}
+
+template <typename T, typename... Rest>
+force_inline auto println(const char* format, T&& value, Rest&&... rest) -> int {
+    auto a = print(format, std::forward<T>(value), std::forward<Rest>(rest)...);
+    auto b = print("\n");
+    return a + b;
 }
 
 }  // namespace vga

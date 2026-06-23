@@ -81,10 +81,10 @@ extern "C" auto kernel_main(uint32_t magic, const mem::Multiboot_Info* mbi) -> v
     vga::terminal_initialize();
 
     if (magic != 0x2BADB002) {
-        vga::printf("Bad multiboot magic\n");
+        vga::println("Bad multiboot magic");
         return;
     }
 
-    vga::printf("mem init\n");
+    vga::println("mem init");
     mem::memory_initialize(mbi);
 }
