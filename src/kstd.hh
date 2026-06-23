@@ -61,6 +61,18 @@ force_inline auto debug_assert(
     }
 }
 
+template <typename Enum, typename... Flags>
+    requires(std::is_enum_v<Enum> && (std::is_same_v<Enum, Flags> && ...))
+force_inline auto has_flag(Enum value, Flags... flags) -> bool {
+    if constexpr (sizeof...(Flags) == 0) {
+        return false;
+    }
+
+    using Underlying = std::underlying_type_t<Enum>;
+    const Underlying mask = (static_cast<Underlying>(flags) | ...);
+    return (static_cast<Underlying>(value) & mask) == mask;
+}
+
 template <typename T, usize N>
 struct Static_Array {
     static constexpr auto size = N;
@@ -71,6 +83,8 @@ struct Static_Array {
         return data[index];
     }
 
+    // @TODO: move iterator definitions for array types into a separate file
+    //        cause they are identical.
     struct iterator {
         T* ptr;
         iterator(T* p)
