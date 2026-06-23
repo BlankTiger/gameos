@@ -33,16 +33,16 @@ static auto initialize(const kstd::mem::Multiboot2_Framebuffer_Tag* tag) -> bool
 }
 
 struct Color {
-    u8 r, g, b, w;
+    u8 b, g, r, w;
 };
 
 static_assert(sizeof(Color) == sizeof(u32));
 
 constexpr Color BLACK{0, 0, 0, 255};
 constexpr Color WHITE{255, 255, 255, 255};
-constexpr Color RED{255, 0, 0, 255};
+constexpr Color RED{0, 0, 255, 255};
 constexpr Color GREEN{0, 255, 0, 255};
-constexpr Color BLUE{0, 0, 255, 255};
+constexpr Color BLUE{255, 0, 0, 255};
 
 auto set_pixel(u32 x, u32 y, Color color) -> void {
     kstd::debug_assert(current.pixels != nullptr);

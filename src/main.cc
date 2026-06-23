@@ -94,10 +94,10 @@ extern "C" auto kernel_main(u32 magic, const mem::Multiboot2_Info* mbi) -> void 
     const auto* framebuffer = mem::find_multiboot2_framebuffer_tag(mbi);
     const auto framebuffer_initialized = fb::initialize(framebuffer);
     if (framebuffer_initialized) {
-        fb::clear({0, 0, 0, 0});
+        fb::clear(fb::BLACK);
         for (int i = 500; i < 900; i++) {
             for (int j = 200; j < 400; j++) {
-                fb::set_pixel(i, j, {255, 0, 0, 255});
+                fb::set_pixel(i, j, fb::BLUE);
             }
         }
     } else {
