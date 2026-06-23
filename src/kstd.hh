@@ -6,19 +6,20 @@
 #include <source_location>
 #include <utility>
 
+#if defined(__GNUC__) || defined(__clang__)
+#define force_inline inline __attribute__((always_inline))
+#else
+#define force_inline inline
+#endif
+
+#include "cstring.hh"
 #include "int.hh"
 
 namespace kstd {
 
-auto strlen(const char* str) -> usize {
-    usize len = 0;
-    while (str[len]) len++;
-    return len;
-}
-
 #include "terminal.hh"
 
-auto assert(
+force_inline auto assert(
     bool predicate,
     const char* message = nullptr,
     const std::source_location& location = std::source_location::current()) -> void {
@@ -40,7 +41,7 @@ auto assert(
     }
 }
 
-inline auto debug_assert(
+force_inline auto debug_assert(
     bool predicate,
     const char* message = nullptr,
     const std::source_location& location = std::source_location::current()) -> void {

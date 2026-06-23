@@ -1,4 +1,5 @@
 #pragma once
+
 namespace term {
 
 /* Hardware text mode color constants. */
@@ -21,11 +22,11 @@ enum vga_color {
     VGA_COLOR_WHITE = 15,
 };
 
-static inline auto vga_entry_color(enum vga_color fg, enum vga_color bg) -> u8 {
+static force_inline auto vga_entry_color(enum vga_color fg, enum vga_color bg) -> u8 {
     return fg | bg << 4;
 }
 
-static inline auto vga_entry(u8 uc, u8 color) -> u16 {
+static force_inline auto vga_entry(u8 uc, u8 color) -> u16 {
     return (u16)uc | (u16)color << 8;
 }
 

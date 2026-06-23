@@ -306,7 +306,7 @@ struct Buddy_Allocator final : Allocator {
         if (pointer == nullptr) return;
 
         Allocation_Header header{};
-        __builtin_memcpy(
+        memcpy(
             &header,
             reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(pointer) - sizeof(Allocation_Header)),
             sizeof(header));
@@ -357,7 +357,7 @@ struct Arena_Allocator final : Allocator {
     auto reset() -> void {
         if constexpr (DEBUG) {
             const auto STAMP = 0xCC;
-            __builtin_memset(memory_base, STAMP, current_point - memory_base);
+            memset(memory_base, STAMP, current_point - memory_base);
             // std::memset(memory_base, STAMP, current_point - memory_base);
         }
         current_point = memory_base;
