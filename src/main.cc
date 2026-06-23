@@ -79,23 +79,33 @@ extern "C" auto run_global_destructors() -> void {
 }
 
 extern "C" auto kernel_main(u32 magic, const mem::Multiboot2_Info* mbi) -> void {
-    vga::terminal_initialize();
-
     if (magic != mem::MULTIBOOT2_MAGIC) {
+        //
+        // @TODO: Get rid of vga completely after fully implementing framebuffer.
+        //
+        // Not multiboot2 but try anyway to show anything if possible...
+        //
+        vga::terminal_initialize();
         vga::println("Bad multiboot2 magic");
         return;
     }
 
-    vga::println("mem init");
     mem::memory_initialize(mbi);
-
     const auto* framebuffer = mem::find_multiboot2_framebuffer_tag(mbi);
-    kstd::assert(framebuffer != nullptr);
-    fb::initialize(framebuffer);
-    fb::clear({255, 255, 255, 255});
-
-    vga::println("fb addr %", framebuffer->framebuffer_addr);
-    vga::println("fb pitch %", framebuffer->framebuffer_pitch);
-    vga::println("fb size %x x %x", framebuffer->framebuffer_width, framebuffer->framebuffer_height);
-    vga::println("fb bpp %", framebuffer->framebuffer_bpp);
+    const auto framebuffer_initialized = fb::initialize(framebuffer);
+    if (framebuffer_initialized) {
+        fb::clear({0, 0, 0, 0});
+        for (int i = 500; i < 900; i++) {
+            for (int j = 200; j < 400; j++) {
+                fb::set_pixel(i, j, {255, 0, 0, 255});
+            }
+        }
+    } else {
+        vga::terminal_initialize();
+        vga::println("framebuffer couldn't be initialized");
+        vga::println("framebuffer addr %", framebuffer->framebuffer_addr);
+        vga::println("framebuffer pitch %", framebuffer->framebuffer_pitch);
+        vga::println("framebuffer size %x x %x", framebuffer->framebuffer_width, framebuffer->framebuffer_height);
+        vga::println("framebuffer bpp %", framebuffer->framebuffer_bpp);
+    }
 }
