@@ -377,15 +377,22 @@ auto print(const char* format, T&& value, Rest&&... rest) -> int {
     return written;
 }
 
-force_inline auto println(const char* format) -> int {
-    return print("%\n", format);
+auto println(const char* format) -> int {
+    int written = print(format);
+    terminal_putchar('\n');
+    return written + 1;
+}
+
+auto println() -> int {
+    terminal_putchar('\n');
+    return 1;
 }
 
 template <typename T, typename... Rest>
-force_inline auto println(const char* format, T&& value, Rest&&... rest) -> int {
-    auto a = print(format, std::forward<T>(value), std::forward<Rest>(rest)...);
-    auto b = print("\n");
-    return a + b;
+auto println(const char* format, T&& value, Rest&&... rest) -> int {
+    int written = print(format, std::forward<T>(value), std::forward<Rest>(rest)...);
+    terminal_putchar('\n');
+    return written + 1;
 }
 
 }  // namespace vga

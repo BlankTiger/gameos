@@ -25,11 +25,12 @@ force_inline auto assert(
     const char* message = nullptr,
     const std::source_location& location = std::source_location::current()) -> void {
     if (!predicate) {
-        vga::print("%:%:%: assertion failed", location.file_name(), location.line(), location.column());
         if (message) {
-            vga::print(": %", message);
+            vga::println(
+                "%:%:%: assertion failed: %", location.file_name(), location.line(), location.column(), message);
+        } else {
+            vga::println("%:%:%: assertion failed", location.file_name(), location.line(), location.column());
         }
-        vga::print("\n");
 
         for (;;) asm volatile("hlt");
     }
@@ -50,10 +51,10 @@ force_inline auto debug_assert(
     const char* message,
     const std::source_location& location = std::source_location::current()) -> void {
     if (message != nullptr) {
-        vga::print("%\n", message);
+        vga::println("%", message);
     }
 
-    vga::print("%:%:%\n", location.file_name(), location.line(), location.column());
+    vga::println("%:%:%", location.file_name(), location.line(), location.column());
 
     for (;;) {
         asm volatile("hlt");
