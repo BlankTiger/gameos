@@ -3,7 +3,7 @@
 #include <cstddef>
 
 #include "int.hh"
-#include "terminal.hh"
+#include "vga.hh"
 
 namespace mem {
 

@@ -1,5 +1,5 @@
 #include "kstd.hh"
-#include "terminal.hh"
+#include "vga.hh"
 
 /* Check if the compiler thinks you are targeting the wrong operating system. */
 #if defined(__linux__)
@@ -11,7 +11,7 @@
 #error "This tutorial needs to be compiled with a ix86-elf compiler"
 #endif
 
-namespace term = kstd::term;
+namespace vga = kstd::vga;
 namespace mem = kstd::mem;
 
 using Init_Function = void (*)();
@@ -78,13 +78,13 @@ extern "C" auto run_global_destructors() -> void {
 }
 
 extern "C" auto kernel_main(uint32_t magic, const mem::Multiboot_Info* mbi) -> void {
-    term::terminal_initialize();
+    vga::terminal_initialize();
 
     if (magic != 0x2BADB002) {
-        term::terminal_writestring("Bad multiboot magic\n");
+        vga::printf("Bad multiboot magic\n");
         return;
     }
 
-    term::terminal_writestring("mem init\n");
+    vga::printf("mem init\n");
     mem::memory_initialize(mbi);
 }
