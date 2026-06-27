@@ -16,6 +16,7 @@
 #include "kstd/enum_flags.hh"
 #include "kstd/array.hh"
 #include "kstd/memory.hh"
+#include "kstd/format.hh"
 #include "kstd/framebuffer.hh"
 #include "kstd/vga.hh"
 #include "operator_new.hh"

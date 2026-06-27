@@ -32,8 +32,12 @@ extern "C" auto kernel_main(u32 magic, const mem::Multiboot2_Info* mbi) -> void 
         fb::clear(fb::BLACK);
 
         term::println("Hello from GameOS!");
-        term::println("Bitmap font rendering works. Newlines work too..Newlines work too..Newlines work too..Newlines work too..Newlines work too..Newlines work too..Newlines work too..");
-        term::println("Bitmap font rendering works. Newlines work too..Newlines work too..Newlines work too..Newlines work too..Newlines work too..Newlines work too..Newlines work too..");
+        term::println(
+            "Bitmap font rendering works. Newlines work too..Newlines work too..Newlines work too..Newlines work "
+            "too..Newlines work too..Newlines work too..Newlines work too.. %", 5);
+        term::println(
+            "Bitmap font rendering works. Newlines work too..Newlines work too..Newlines work too..Newlines work "
+            "too..Newlines work too..Newlines work too..Newlines work too..");
 
         for (int i = 500; i < 900; i++) {
             for (int j = 200; j < 400; j++) {
