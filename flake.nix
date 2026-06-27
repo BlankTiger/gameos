@@ -19,6 +19,7 @@
           default = pkgs.mkShell {
             nativeBuildInputs =
               with pkgs; [
+                cmake
                 pkgsCross.i686-embedded.buildPackages.gcc
                 fish
                 grub2
