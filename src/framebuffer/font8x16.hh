@@ -2,7 +2,7 @@
 
 #include <climits>
 
-#include "kstd.hh"
+#include "../kstd.hh"
 
 namespace font {
 
