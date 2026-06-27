@@ -73,8 +73,15 @@ force_inline auto clear(Color color) -> void {
 }
 
 // struct Sprite {};
-//
-// auto draw_rect(u32 x, u32 y, u32 w, u32 h) -> void {}
+
+auto draw_rect(u32 x, u32 y, u32 w, u32 h, Color color) -> void {
+    for (u32 _y = y; _y < y + h; ++_y) {
+        for (u32 _x = x; _x < x + w; ++_x) {
+            set_pixel(_x, _y, color);
+        }
+    }
+}
+
 // auto draw_sprite(u32 x, u32 y, const Sprite sprite) -> void {}
 
 auto draw_char(u32 x, u32 y, char c, Color fg, Color bg) -> void {

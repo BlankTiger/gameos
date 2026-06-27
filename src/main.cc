@@ -39,10 +39,9 @@ extern "C" auto kernel_main(u32 magic, const mem::Multiboot2_Info* mbi) -> void 
             "Bitmap font rendering works. Newlines work too..Newlines work too..Newlines work too..Newlines work "
             "too..Newlines work too..Newlines work too..Newlines work too..");
 
-        for (int i = 500; i < 900; i++) {
-            for (int j = 200; j < 400; j++) {
-                fb::set_pixel(i, j, fb::BLUE);
-            }
-        }
+        fb::draw_rect(250, 250, 100, 100, fb::RED);
+        fb::draw_rect(400, 250, 100, 100, fb::BLUE);
+        fb::draw_rect(550, 250, 100, 100, fb::GREEN);
+        fb::draw_rect(700, 250, 100, 100, fb::WHITE);
     }
 }
