@@ -337,7 +337,8 @@ static force_inline auto print_value(T&& value) -> int {
 
 namespace term {
 
-[[nodiscard]] auto initialize() -> bool {
+[[nodiscard]] auto initialize(const mem::Multiboot2_Info* mbi) -> bool {
+    (void)mbi;
     terminal_row = 0;
     terminal_column = 0;
     terminal_color = vga_entry_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK);
