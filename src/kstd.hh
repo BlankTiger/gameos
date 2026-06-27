@@ -20,7 +20,7 @@ namespace kstd {
 
 #include "vga.hh"
 
-force_inline auto assert(
+constexpr force_inline auto assert(
     bool predicate,
     const char* message = nullptr,
     const std::source_location& location = std::source_location::current()) -> void {
@@ -36,7 +36,7 @@ force_inline auto assert(
     }
 }
 
-force_inline auto debug_assert(
+constexpr force_inline auto debug_assert(
     bool predicate,
     const char* message = nullptr,
     const std::source_location& location = std::source_location::current()) -> void {
@@ -79,6 +79,12 @@ struct Static_Array {
     T data[N];
 
     auto operator[](u64 index, const std::source_location& location = std::source_location::current()) -> T& {
+        assert(index < size, "index out of bounds", location);
+        return data[index];
+    }
+
+    constexpr auto operator[](u64 index, const std::source_location& location = std::source_location::current()) const
+        -> const T& {
         assert(index < size, "index out of bounds", location);
         return data[index];
     }
@@ -126,6 +132,13 @@ struct Static_Array {
     }
     auto end() -> iterator {
         return iterator(data + size);
+    }
+
+    auto begin() const noexcept -> const_iterator {
+        return const_iterator(data);
+    }
+    auto end() const noexcept -> const_iterator {
+        return const_iterator(data + size);
     }
 
     auto cbegin() const noexcept -> const_iterator {
