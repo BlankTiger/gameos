@@ -3,8 +3,6 @@
 #include <bit>
 
 #include "font8x16.hh"
-#include "../kstd.hh"
-#include "../multiboot2.hh"
 
 namespace fb {
 
@@ -19,7 +17,7 @@ struct Framebuffer {
 
 static Framebuffer __current_frame;
 
-static auto initialize(const kstd::mem::Multiboot2_Framebuffer_Tag* tag) -> bool {
+static auto initialize(const mem::Multiboot2_Framebuffer_Tag* tag) -> bool {
     if (tag->framebuffer_addr == 0) return false;
 
     __current_frame.pixels = reinterpret_cast<u32*>((uintptr_t)tag->framebuffer_addr);
@@ -28,7 +26,7 @@ static auto initialize(const kstd::mem::Multiboot2_Framebuffer_Tag* tag) -> bool
     __current_frame.height = tag->framebuffer_height;
     __current_frame.bits_per_pixel = tag->framebuffer_bpp;
     __current_frame.type = tag->framebuffer_type;
-    kstd::assert(__current_frame.bits_per_pixel == 32, "Only 32BPP supported.");
+    assert(__current_frame.bits_per_pixel == 32, "Only 32BPP supported.");
 
     return true;
 }
@@ -46,14 +44,14 @@ constexpr Color GREEN{0, 255, 0, 255};
 constexpr Color BLUE{255, 0, 0, 255};
 
 auto set_pixel(u32 x, u32 y, Color color) -> void {
-    kstd::debug_assert(__current_frame.pixels != nullptr);
+    debug_assert(__current_frame.pixels != nullptr);
 
     const usize stride = __current_frame.pitch / sizeof(u32);
     __current_frame.pixels[y * stride + x] = std::bit_cast<u32>(color);
 }
 
 auto clear(u32 color) -> void {
-    kstd::debug_assert(__current_frame.pixels != nullptr);
+    debug_assert(__current_frame.pixels != nullptr);
 
     const usize stride = __current_frame.pitch / sizeof(u32);
 

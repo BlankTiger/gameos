@@ -1,7 +1,5 @@
 #pragma once
 
-#include "int.hh"
-
 namespace mem {
 
 enum class Multiboot_Info_Flag : u32 {

@@ -2,9 +2,6 @@
 
 #include <cstddef>
 
-#include "int.hh"
-#include "vga.hh"
-
 template <typename T>
 inline auto ptr_addr(const T* pointer) -> uintptr_t {
     return reinterpret_cast<uintptr_t>(pointer);

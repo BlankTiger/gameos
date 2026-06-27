@@ -15,40 +15,8 @@
 
 #include "cstring.hh"
 #include "int.hh"
-
-#include "vga.hh"
-namespace term = vga::term;
-
-namespace kstd {
-
-
-
-constexpr force_inline auto assert(
-    bool predicate,
-    const char* message = nullptr,
-    const std::source_location& location = std::source_location::current()) -> void {
-    if (!predicate) {
-        if (message) {
-            term::println(
-                "%:%:%: assertion failed: %", location.file_name(), location.line(), location.column(), message);
-        } else {
-            term::println("%:%:%: assertion failed", location.file_name(), location.line(), location.column());
-        }
-
-        for (;;) asm volatile("hlt");
-    }
-}
-
-constexpr force_inline auto debug_assert(
-    bool predicate,
-    const char* message = nullptr,
-    const std::source_location& location = std::source_location::current()) -> void {
-#ifdef NDEBUG
-    return;
-#else
-    assert(predicate, message, location);
-#endif
-}
+#include "kstd/term.hh"
+#include "kstd/assert.hh"
 
 [[noreturn]] static auto halt_forever(
     const char* message,
@@ -317,8 +285,9 @@ struct Array {
     }
 };
 
-#include "memory.hh"
-
-}  // namespace kstd
-
+// clang-format off
+#include "kstd/memory.hh"
+#include "kstd/framebuffer.hh"
+#include "kstd/vga.hh"
 #include "operator_new.hh"
+// clang-format on
