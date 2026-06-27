@@ -367,7 +367,7 @@ struct Arena_Allocator final : Allocator {
 mem::Allocator* __global_allocator;
 mem::Buddy_Allocator __buddy;
 
-auto memory_initialize(const Multiboot2_Info* mbi) -> void {
+auto initialize(const Multiboot2_Info* mbi) -> void {
     parse_multiboot2_memory_map(__regions, mbi);
     reserve_multiboot2_data(__regions, mbi);
 

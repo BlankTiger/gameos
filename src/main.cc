@@ -87,7 +87,7 @@ extern "C" auto kernel_main(u32 magic, const mem::Multiboot2_Info* mbi) -> void 
         return;
     }
 
-    mem::memory_initialize(mbi);
+    mem::initialize(mbi);
     const auto* framebuffer = mem::find_multiboot2_framebuffer_tag(mbi);
     const auto framebuffer_initialized = fb::initialize(framebuffer);
     if (framebuffer_initialized) {
