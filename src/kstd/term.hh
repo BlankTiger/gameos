@@ -3,6 +3,7 @@
 // Forward declarations.
 namespace vga {
 namespace term {
+
 // Initializes all state necessary for operating the interface correctly.
 auto initialize() -> void;
 
@@ -22,6 +23,7 @@ auto println(const char* format) -> int;
 // Prints any formatted string and moves cursor onto the next line.
 template <typename T, typename... Rest>
 auto println(const char* format, T&& value, Rest&&... rest) -> int;
+
 }  // namespace term
 }  // namespace vga
 
