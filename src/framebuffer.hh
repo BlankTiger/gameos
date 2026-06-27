@@ -2,6 +2,7 @@
 
 #include <bit>
 
+#include "font8x16.hh"
 #include "kstd.hh"
 #include "multiboot2.hh"
 
@@ -65,6 +66,51 @@ auto clear(u32 color) -> void {
 
 force_inline auto clear(Color color) -> void {
     clear(std::bit_cast<u32>(color));
+}
+
+auto draw_char(u32 x, u32 y, char c, Color fg, Color bg) -> void {
+    const auto index = static_cast<u8>(c);
+    const auto& glyph = font::DATA[index];
+
+    for (u32 row = 0; row < font::GLYPH_HEIGHT; ++row) {
+        const u32 py = y + row;
+        if (py >= current.height) break;
+
+        const font::Glyph_Width bits = glyph[row];
+        for (u32 col = 0; col < font::GLYPH_WIDTH; ++col) {
+            const u32 px = x + col;
+            if (px >= current.width) break;
+
+            //
+            // @TODO: Maybe we should consider doing transparency by default for the bg color.
+            //
+            const auto color = bits & (0b1000'0000 >> col) ? fg : bg;
+            set_pixel(px, py, color);
+        }
+    }
+}
+
+auto draw_text(u32 x, u32 y, const char* text, Color fg = WHITE, Color bg = BLACK) -> void {
+    u32 cx = x;
+    u32 cy = y;
+
+    for (; *text; ++text) {
+        if (*text == '\n') {
+            cx = x;
+            cy += font::GLYPH_HEIGHT;
+            continue;
+        }
+
+        if (cx + font::GLYPH_WIDTH > current.width) {
+            cx = x;
+            cy += font::GLYPH_HEIGHT;
+        }
+
+        if (cy + font::GLYPH_HEIGHT > current.height) break;
+
+        draw_char(cx, cy, *text, fg, bg);
+        cx += font::GLYPH_WIDTH;
+    }
 }
 
 }  // namespace fb
