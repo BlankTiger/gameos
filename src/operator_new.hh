@@ -1,5 +1,7 @@
 #pragma once
 
+#include <new>
+
 auto operator new(usize size) -> void* {
     if (void* ptr = mem::__global_allocator->alloc(size)) return ptr;
     halt_forever("new failed");
