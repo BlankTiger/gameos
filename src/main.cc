@@ -30,8 +30,11 @@ extern "C" auto kernel_main(u32 magic, const mem::Multiboot2_Info* mbi) -> void 
         // @TODO: Timers, calculate dt, run at constant framerate.
         // while (true) {}
         fb::clear(fb::BLACK);
-        fb::draw_text(10, 10, "Hello from GameOS!");
-        fb::draw_text(10, 30, "Bitmap font rendering works.\nNewlines work too..", fb::GREEN);
+
+        term::println("Hello from GameOS!");
+        term::println("Bitmap font rendering works. Newlines work too..Newlines work too..Newlines work too..Newlines work too..Newlines work too..Newlines work too..Newlines work too..");
+        term::println("Bitmap font rendering works. Newlines work too..Newlines work too..Newlines work too..Newlines work too..Newlines work too..Newlines work too..Newlines work too..");
+
         for (int i = 500; i < 900; i++) {
             for (int j = 200; j < 400; j++) {
                 fb::set_pixel(i, j, fb::BLUE);

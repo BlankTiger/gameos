@@ -16,8 +16,11 @@ struct Framebuffer {
 };
 
 static Framebuffer __current_frame;
+static bool __framebuffer_initialized;
 
 static auto initialize(const mem::Multiboot2_Info* mbi) -> bool {
+    if (__framebuffer_initialized) return true;
+
     const auto* framebuffer_tag = mem::find_multiboot2_framebuffer_tag(mbi);
     if (framebuffer_tag->framebuffer_addr == 0) return false;
 
@@ -29,6 +32,7 @@ static auto initialize(const mem::Multiboot2_Info* mbi) -> bool {
     __current_frame.type = framebuffer_tag->framebuffer_type;
     assert(__current_frame.bits_per_pixel == 32, "Only 32BPP supported.");
 
+    __framebuffer_initialized = true;
     return true;
 }
 
@@ -43,6 +47,7 @@ constexpr Color WHITE{255, 255, 255, 255};
 constexpr Color RED{0, 0, 255, 255};
 constexpr Color GREEN{0, 255, 0, 255};
 constexpr Color BLUE{255, 0, 0, 255};
+constexpr Color TRANSPARENT{0, 0, 0, 0};
 
 auto set_pixel(u32 x, u32 y, Color color) -> void {
     debug_assert(__current_frame.pixels != nullptr);
