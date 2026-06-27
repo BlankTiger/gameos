@@ -3,8 +3,6 @@ set timeout=0
 
 menuentry "gameos" {
 	insmod all_video
-	terminal_output gfxterm
-	set gfxmode=1024x768x32
-	set gfxpayload=keep
+@GRUB_GFX_SETTINGS@
 	multiboot2 /boot/gameos
 }

@@ -1,8 +1,5 @@
 #pragma once
 
-// Graphics types and constants.
-// Backend-specific functions are provided in kstd.hh after the backend is selected.
-
 namespace gfx {
 
 struct Color {

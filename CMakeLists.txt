@@ -8,7 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 add_executable(gameos
-    src/boot.s
+    src/boot.S
     src/main.cc
 )
 
@@ -39,10 +39,18 @@ if(NOT USE_VGA_BACKEND AND NOT USE_FB_BACKEND)
 endif()
 
 if(USE_VGA_BACKEND)
-    target_compile_definitions(gameos PRIVATE $<$<COMPILE_LANGUAGE:C,CXX>:USE_VGA_BACKEND>)
+    target_compile_definitions(gameos PRIVATE USE_VGA_BACKEND)
 else()
-    target_compile_definitions(gameos PRIVATE $<$<COMPILE_LANGUAGE:C,CXX>:USE_FB_BACKEND>)
+    target_compile_definitions(gameos PRIVATE USE_FB_BACKEND)
 endif()
+
+if(USE_VGA_BACKEND)
+    set(GRUB_GFX_SETTINGS "\tset gfxpayload=text")
+else()
+    set(GRUB_GFX_SETTINGS "\tterminal_output gfxterm\n\tset gfxmode=1024x768x32\n\tset gfxpayload=keep")
+endif()
+
+configure_file(${CMAKE_SOURCE_DIR}/grub.cfg.in ${CMAKE_BINARY_DIR}/grub.cfg @ONLY)
 
 target_link_libraries(gameos PRIVATE gcc)
 
@@ -54,7 +62,7 @@ add_custom_command(TARGET gameos POST_BUILD
 add_custom_target(iso ALL
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/isodir/boot/grub
     COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:gameos> ${CMAKE_BINARY_DIR}/isodir/boot/gameos
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/grub.cfg ${CMAKE_BINARY_DIR}/isodir/boot/grub/grub.cfg
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/grub.cfg ${CMAKE_BINARY_DIR}/isodir/boot/grub/grub.cfg
     COMMAND grub-mkrescue -o ${CMAKE_BINARY_DIR}/gameos.iso ${CMAKE_BINARY_DIR}/isodir
     DEPENDS gameos
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}

@@ -5,7 +5,12 @@ struct Multiboot2_Info;
 }
 
 // Forward declarations.
+#if defined(USE_FB_BACKEND)
 namespace fb {
+#elif defined(USE_VGA_BACKEND)
+namespace vga {
+#endif
+
 namespace term {
 
 // Initializes all state necessary for operating the interface correctly.
@@ -29,7 +34,8 @@ template <typename T, typename... Rest>
 auto println(const char* format, T&& value, Rest&&... rest) -> int;
 
 }  // namespace term
-}  // namespace fb
+
+}  // namespace vga/fb
 
 #if defined(USE_VGA_BACKEND)
 namespace term = vga::term;
