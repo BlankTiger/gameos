@@ -12,7 +12,6 @@
 #error "This tutorial needs to be compiled with a ix86-elf compiler"
 #endif
 
-namespace vga = kstd::vga;
 namespace mem = kstd::mem;
 
 using Init_Function = void (*)();
@@ -81,12 +80,10 @@ extern "C" auto run_global_destructors() -> void {
 extern "C" auto kernel_main(u32 magic, const mem::Multiboot2_Info* mbi) -> void {
     if (magic != mem::MULTIBOOT2_MAGIC) {
         //
-        // @TODO: Get rid of vga completely after fully implementing framebuffer.
+        // Not multiboot2 but try to show anything anyway if possible...
         //
-        // Not multiboot2 but try anyway to show anything if possible...
-        //
-        vga::terminal_initialize();
-        vga::println("Bad multiboot2 magic");
+        term::initialize();
+        term::println("Bad multiboot2 magic");
         return;
     }
 
@@ -100,12 +97,5 @@ extern "C" auto kernel_main(u32 magic, const mem::Multiboot2_Info* mbi) -> void 
                 fb::set_pixel(i, j, fb::BLUE);
             }
         }
-    } else {
-        vga::terminal_initialize();
-        vga::println("framebuffer couldn't be initialized");
-        vga::println("framebuffer addr %", framebuffer->framebuffer_addr);
-        vga::println("framebuffer pitch %", framebuffer->framebuffer_pitch);
-        vga::println("framebuffer size %x x %x", framebuffer->framebuffer_width, framebuffer->framebuffer_height);
-        vga::println("framebuffer bpp %", framebuffer->framebuffer_bpp);
     }
 }

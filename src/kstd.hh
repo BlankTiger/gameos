@@ -16,9 +16,12 @@
 #include "cstring.hh"
 #include "int.hh"
 
+#include "vga.hh"
+namespace term = vga::term;
+
 namespace kstd {
 
-#include "vga.hh"
+
 
 constexpr force_inline auto assert(
     bool predicate,
@@ -26,10 +29,10 @@ constexpr force_inline auto assert(
     const std::source_location& location = std::source_location::current()) -> void {
     if (!predicate) {
         if (message) {
-            vga::println(
+            term::println(
                 "%:%:%: assertion failed: %", location.file_name(), location.line(), location.column(), message);
         } else {
-            vga::println("%:%:%: assertion failed", location.file_name(), location.line(), location.column());
+            term::println("%:%:%: assertion failed", location.file_name(), location.line(), location.column());
         }
 
         for (;;) asm volatile("hlt");
@@ -51,10 +54,10 @@ constexpr force_inline auto debug_assert(
     const char* message,
     const std::source_location& location = std::source_location::current()) -> void {
     if (message != nullptr) {
-        vga::println("%", message);
+        term::println("%", message);
     }
 
-    vga::println("%:%:%", location.file_name(), location.line(), location.column());
+    term::println("%:%:%", location.file_name(), location.line(), location.column());
 
     for (;;) {
         asm volatile("hlt");

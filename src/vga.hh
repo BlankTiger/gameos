@@ -39,19 +39,6 @@ usize terminal_column;
 u8 terminal_color;
 u16* terminal_buffer = (u16*)VGA_MEMORY;
 
-auto terminal_initialize() -> void {
-    terminal_row = 0;
-    terminal_column = 0;
-    terminal_color = vga_entry_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK);
-
-    for (usize y = 0; y < VGA_HEIGHT; y++) {
-        for (usize x = 0; x < VGA_WIDTH; x++) {
-            const usize index = y * VGA_WIDTH + x;
-            terminal_buffer[index] = vga_entry(' ', terminal_color);
-        }
-    }
-}
-
 auto terminal_setcolor(u8 color) -> void {
     terminal_color = color;
 }
@@ -348,6 +335,21 @@ static force_inline auto print_value(T&& value) -> int {
     }
 }
 
+namespace term {
+
+auto initialize() -> void {
+    terminal_row = 0;
+    terminal_column = 0;
+    terminal_color = vga_entry_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK);
+
+    for (usize y = 0; y < VGA_HEIGHT; y++) {
+        for (usize x = 0; x < VGA_WIDTH; x++) {
+            const usize index = y * VGA_WIDTH + x;
+            terminal_buffer[index] = vga_entry(' ', terminal_color);
+        }
+    }
+}
+
 auto print(const char* format) -> int {
     return print_remaining(format);
 }
@@ -394,5 +396,7 @@ auto println(const char* format, T&& value, Rest&&... rest) -> int {
     terminal_putchar('\n');
     return written + 1;
 }
+
+}  // namespace term
 
 }  // namespace vga
