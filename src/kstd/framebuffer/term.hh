@@ -32,7 +32,7 @@ struct Backend {
         }
         u32 x = DEFAULT_PADDING + __state.current_col * font::GLYPH_WIDTH;
         u32 y = DEFAULT_PADDING + __state.current_row * font::GLYPH_HEIGHT;
-        fb::draw_char(x, y, c, WHITE, TRANSPARENT);
+        fb::draw_char(x, y, c, gfx::WHITE, gfx::TRANSPARENT);
         __state.current_col++;
     }
 
@@ -45,7 +45,7 @@ struct Backend {
 
 [[nodiscard]] auto initialize(const mem::Multiboot2_Info* mbi) -> bool {
     __state = {0, 0};
-    return fb::initialize(mbi);
+    return fb::Gfx_Backend::initialize(mbi);
 }
 
 auto print(const char* format) -> int {

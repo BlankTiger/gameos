@@ -27,6 +27,23 @@ target_link_options(gameos PRIVATE
     -nostdlib
 )
 
+option(USE_VGA_BACKEND "Use VGA text mode backend" OFF)
+option(USE_FB_BACKEND "Use framebuffer backend" OFF)
+
+if(USE_VGA_BACKEND AND USE_FB_BACKEND)
+    message(FATAL_ERROR "USE_VGA_BACKEND and USE_FB_BACKEND are mutually exclusive. Specify only one.")
+endif()
+
+if(NOT USE_VGA_BACKEND AND NOT USE_FB_BACKEND)
+    set(USE_FB_BACKEND ON)
+endif()
+
+if(USE_VGA_BACKEND)
+    target_compile_definitions(gameos PRIVATE $<$<COMPILE_LANGUAGE:C,CXX>:USE_VGA_BACKEND>)
+else()
+    target_compile_definitions(gameos PRIVATE $<$<COMPILE_LANGUAGE:C,CXX>:USE_FB_BACKEND>)
+endif()
+
 target_link_libraries(gameos PRIVATE gcc)
 
 add_custom_command(TARGET gameos POST_BUILD

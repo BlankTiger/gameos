@@ -1,4 +1,4 @@
 #pragma once
 
-#include "framebuffer/buffer.hh"
+#include "framebuffer/framebuffer.hh"
 #include "framebuffer/term.hh"

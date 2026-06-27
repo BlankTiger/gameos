@@ -17,7 +17,6 @@
 #include "kstd/array.hh"
 #include "kstd/memory.hh"
 #include "kstd/format.hh"
-#include "kstd/framebuffer.hh"
-#include "kstd/vga.hh"
+#include "kstd/gfx.hh"
 #include "operator_new.hh"
 // clang-format on

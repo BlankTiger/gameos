@@ -31,4 +31,8 @@ auto println(const char* format, T&& value, Rest&&... rest) -> int;
 }  // namespace term
 }  // namespace fb
 
+#if defined(USE_VGA_BACKEND)
+namespace term = vga::term;
+#elif defined(USE_FB_BACKEND)
 namespace term = fb::term;
+#endif

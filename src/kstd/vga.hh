@@ -72,6 +72,16 @@ auto terminal_writestring(const char* data) -> void {
     terminal_write(data, strlen(data));
 }
 
+struct Gfx_Backend {
+    [[nodiscard]] static auto initialize(const mem::Multiboot2_Info*) -> bool {
+        return true;
+    }
+
+    static auto set_pixel(u32, u32, Color) -> void {}
+    static auto width() -> u32 { return 0; }
+    static auto height() -> u32 { return 0; }
+};
+
 struct Backend {
     static auto put_char(char c) -> void {
         terminal_putchar((u8)c);

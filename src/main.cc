@@ -25,23 +25,25 @@ extern "C" auto kernel_main(u32 magic, const mem::Multiboot2_Info* mbi) -> void 
 
     mem::initialize(mbi);
     const auto term_initialized = term::initialize(mbi);
-    const auto framebuffer_initialized = fb::initialize(mbi);
-    if (framebuffer_initialized) {
+    const auto gfx_initialized = gfx::initialize(mbi);
+
+    if (gfx_initialized) {
         // @TODO: Timers, calculate dt, run at constant framerate.
         // while (true) {}
-        fb::clear(fb::BLACK);
+        gfx::clear(gfx::BLACK);
 
         term::println("Hello from GameOS!");
         term::println(
             "Bitmap font rendering works. Newlines work too..Newlines work too..Newlines work too..Newlines work "
-            "too..Newlines work too..Newlines work too..Newlines work too.. %", 5);
+            "too..Newlines work too..Newlines work too..Newlines work too.. %",
+            5);
         term::println(
             "Bitmap font rendering works. Newlines work too..Newlines work too..Newlines work too..Newlines work "
             "too..Newlines work too..Newlines work too..Newlines work too..");
 
-        fb::draw_rect(250, 250, 100, 100, fb::RED);
-        fb::draw_rect(400, 250, 100, 100, fb::BLUE);
-        fb::draw_rect(550, 250, 100, 100, fb::GREEN);
-        fb::draw_rect(700, 250, 100, 100, fb::WHITE);
+        gfx::draw_rect(250, 250, 100, 100, gfx::RED);
+        gfx::draw_rect(400, 250, 100, 100, gfx::BLUE);
+        gfx::draw_rect(550, 250, 100, 100, gfx::GREEN);
+        gfx::draw_rect(700, 250, 100, 100, gfx::WHITE);
     }
 }
