@@ -17,15 +17,16 @@ struct Framebuffer {
 
 static Framebuffer __current_frame;
 
-static auto initialize(const mem::Multiboot2_Framebuffer_Tag* tag) -> bool {
-    if (tag->framebuffer_addr == 0) return false;
+static auto initialize(const mem::Multiboot2_Info* mbi) -> bool {
+    const auto* framebuffer_tag = mem::find_multiboot2_framebuffer_tag(mbi);
+    if (framebuffer_tag->framebuffer_addr == 0) return false;
 
-    __current_frame.pixels = reinterpret_cast<u32*>((uintptr_t)tag->framebuffer_addr);
-    __current_frame.pitch = tag->framebuffer_pitch;
-    __current_frame.width = tag->framebuffer_width;
-    __current_frame.height = tag->framebuffer_height;
-    __current_frame.bits_per_pixel = tag->framebuffer_bpp;
-    __current_frame.type = tag->framebuffer_type;
+    __current_frame.pixels = reinterpret_cast<u32*>((uintptr_t)framebuffer_tag->framebuffer_addr);
+    __current_frame.pitch = framebuffer_tag->framebuffer_pitch;
+    __current_frame.width = framebuffer_tag->framebuffer_width;
+    __current_frame.height = framebuffer_tag->framebuffer_height;
+    __current_frame.bits_per_pixel = framebuffer_tag->framebuffer_bpp;
+    __current_frame.type = framebuffer_tag->framebuffer_type;
     assert(__current_frame.bits_per_pixel == 32, "Only 32BPP supported.");
 
     return true;

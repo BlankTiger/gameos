@@ -337,7 +337,7 @@ static force_inline auto print_value(T&& value) -> int {
 
 namespace term {
 
-auto initialize() -> void {
+[[nodiscard]] auto initialize() -> bool {
     terminal_row = 0;
     terminal_column = 0;
     terminal_color = vga_entry_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK);
@@ -348,6 +348,8 @@ auto initialize() -> void {
             terminal_buffer[index] = vga_entry(' ', terminal_color);
         }
     }
+
+    return true;
 }
 
 auto print(const char* format) -> int {

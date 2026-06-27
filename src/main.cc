@@ -15,15 +15,17 @@ extern "C" auto kernel_main(u32 magic, const mem::Multiboot2_Info* mbi) -> void 
     if (magic != mem::MULTIBOOT2_MAGIC) {
         //
         // Not multiboot2 but try to show anything anyway if possible...
+        // This might not work completely or might(?) be dangerous depending on the term backend.
         //
-        term::initialize();
+        const auto ok = term::initialize(mbi);
+        (void)ok;
         term::println("Bad multiboot2 magic");
         return;
     }
 
     mem::initialize(mbi);
-    const auto* framebuffer = mem::find_multiboot2_framebuffer_tag(mbi);
-    const auto framebuffer_initialized = fb::initialize(framebuffer);
+    const auto term_initialized = term::initialize(mbi);
+    const auto framebuffer_initialized = fb::initialize(mbi);
     if (framebuffer_initialized) {
         // @TODO: Timers, calculate dt, run at constant framerate.
         // while (true) {}

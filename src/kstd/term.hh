@@ -1,11 +1,15 @@
 #pragma once
 
+namespace mem {
+struct Multiboot2_Info;
+}
+
 // Forward declarations.
 namespace vga {
 namespace term {
 
 // Initializes all state necessary for operating the interface correctly.
-auto initialize() -> void;
+[[nodiscard]] auto initialize(const mem::Multiboot2_Info* mbi) -> bool;
 
 // Prints a string.
 auto print(const char* format) -> int;
