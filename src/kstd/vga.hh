@@ -77,6 +77,7 @@ struct Gfx_Backend {
         return true;
     }
 
+    static auto get_pixel(u32, u32) -> gfx::Color { return {}; };
     static auto set_pixel(u32, u32, gfx::Color) -> void {}
     static auto width() -> u32 { return 0; }
     static auto height() -> u32 { return 0; }
