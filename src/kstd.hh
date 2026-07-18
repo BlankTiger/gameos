@@ -19,5 +19,6 @@
 #include "kstd/array.hh"
 #include "kstd/memory.hh"
 #include "kstd/gfx.hh"
+#include "kstd/interrupts.hh"
 #include "operator_new.hh"
 // clang-format on
