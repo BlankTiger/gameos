@@ -1,5 +1,8 @@
 #pragma once
 
+#include "low_level_io.hh"
+#include "programmable_interrupt_controller.hh"
+
 namespace idt {
 
 union Gate_Type_Attributes {

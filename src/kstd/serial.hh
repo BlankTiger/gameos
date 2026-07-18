@@ -29,29 +29,24 @@ constexpr u8 LSR_THR_EMPTY = 0b0010'0000;
 
 constexpr u16 BAUD_DIVISOR_38400 = 3;  // 115200 / divisor = baud rate
 
-force_inline auto outb(u16 port, u8 value) -> void {
-    asm volatile("outb %0, %1" : : "a"(value), "Nd"(port));
-}
-
 force_inline auto transmit_empty() -> bool {
-    u8 status;
-    asm volatile("inb %1, %0" : "=a"(status) : "Nd"((u16)(COM1 + REG_LSR)));
+    auto status = low_level_io::inb(COM1 + REG_LSR);
     return (status & LSR_THR_EMPTY) != 0;
 }
 
 auto initialize() -> void {
-    outb(COM1 + REG_IER, 0x00);
-    outb(COM1 + REG_LCR, LCR_DLAB);
-    outb(COM1 + REG_DIVISOR_LOW,  BAUD_DIVISOR_38400 & 0xFF);
-    outb(COM1 + REG_DIVISOR_HIGH, BAUD_DIVISOR_38400 >> 8);
-    outb(COM1 + REG_LCR, LCR_DATA_BITS_8);
-    outb(COM1 + REG_FCR, FCR_ENABLE | FCR_CLEAR_RX | FCR_CLEAR_TX | FCR_TRIGGER_14);
-    outb(COM1 + REG_MCR, MCR_DTR | MCR_RTS | MCR_OUT2);
+    low_level_io::outb(COM1 + REG_IER, 0x00);
+    low_level_io::outb(COM1 + REG_LCR, LCR_DLAB);
+    low_level_io::outb(COM1 + REG_DIVISOR_LOW,  BAUD_DIVISOR_38400 & 0xFF);
+    low_level_io::outb(COM1 + REG_DIVISOR_HIGH, BAUD_DIVISOR_38400 >> 8);
+    low_level_io::outb(COM1 + REG_LCR, LCR_DATA_BITS_8);
+    low_level_io::outb(COM1 + REG_FCR, FCR_ENABLE | FCR_CLEAR_RX | FCR_CLEAR_TX | FCR_TRIGGER_14);
+    low_level_io::outb(COM1 + REG_MCR, MCR_DTR | MCR_RTS | MCR_OUT2);
 }
 
 auto put_char(char c) -> void {
     while (!transmit_empty()) {}
-    outb(COM1, (u8)c);
+    low_level_io::outb(COM1, (u8)c);
 }
 
 struct Backend {
