@@ -82,7 +82,7 @@ auto draw_circle(u32 x, u32 y, u32 r, Color color) -> void {
     if (y2 < y) y2 = Gfx_Backend::height();
 
     u32 color_alpha = color.w;
-    for (u32 i = 0; i <= AA_RES_POW2; ++i) {
+    for (usize i = 0; i < colors_table.size; ++i) {
         colors_table[i] = Color{
             .b = color.b,
             .g = color.g,

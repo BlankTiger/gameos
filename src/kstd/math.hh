@@ -11,7 +11,6 @@ struct Rect {
     u32 y1, y2;
 
     static force_inline auto create(u32 x, u32 y, u32 w, u32 h) -> Rect {
-        if (w == 0 || h == 0) return {};
         return {
             .x1 = x,
             .x2 = x + w,
