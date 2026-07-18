@@ -6,8 +6,13 @@
 
 namespace fb {
 
+union Pixel {
+    u32 value;
+    gfx::Color color;
+};
+
 struct Framebuffer {
-    u32* pixels;
+    Pixel* pixels;
     u32 pitch;
     u32 width;
     u32 height;
@@ -18,11 +23,18 @@ struct Framebuffer {
 static Framebuffer __current_frame;
 static bool __framebuffer_initialized;
 
+static auto get_pixel(u32 x, u32 y) -> gfx::Color {
+    debug_assert(__current_frame.pixels != nullptr);
+
+    const usize stride = __current_frame.pitch / sizeof(u32);
+    return __current_frame.pixels[y * stride + x].color;
+}
+
 static auto set_pixel(u32 x, u32 y, gfx::Color color) -> void {
     debug_assert(__current_frame.pixels != nullptr);
 
     const usize stride = __current_frame.pitch / sizeof(u32);
-    __current_frame.pixels[y * stride + x] = std::bit_cast<u32>(color);
+    __current_frame.pixels[y * stride + x].color = color;
 }
 
 struct Gfx_Backend {
@@ -32,7 +44,7 @@ struct Gfx_Backend {
         const auto* framebuffer_tag = mem::find_multiboot2_framebuffer_tag(mbi);
         if (framebuffer_tag->framebuffer_addr == 0) return false;
 
-        __current_frame.pixels = reinterpret_cast<u32*>((uintptr_t)framebuffer_tag->framebuffer_addr);
+        __current_frame.pixels = reinterpret_cast<Pixel*>((uintptr_t)framebuffer_tag->framebuffer_addr);
         __current_frame.pitch = framebuffer_tag->framebuffer_pitch;
         __current_frame.width = framebuffer_tag->framebuffer_width;
         __current_frame.height = framebuffer_tag->framebuffer_height;
@@ -42,6 +54,10 @@ struct Gfx_Backend {
 
         __framebuffer_initialized = true;
         return true;
+    }
+
+    static auto get_pixel(u32 x, u32 y) -> gfx::Color {
+        return fb::get_pixel(x, y);
     }
 
     static auto set_pixel(u32 x, u32 y, gfx::Color color) -> void {
