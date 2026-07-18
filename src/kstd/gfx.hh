@@ -7,8 +7,7 @@ namespace gfx {
 struct Color {
     u8 b, g, r, w;
 
-    force_inline auto blend(Color bg) const -> Color
-    {
+    force_inline auto blend(Color bg) const -> Color {
         return {
             .b = math::lerp(bg.b, b, w, 255),
             .g = math::lerp(bg.g, g, w, 255),
@@ -66,9 +65,10 @@ auto draw_rect(u32 x, u32 y, u32 w, u32 h, Color color) -> void {
 #define AA_RES 8
 #endif
 
-constexpr static u32 AA_RES_POW2 = (AA_RES * AA_RES);
-constexpr static u32 AA_RES1 = (AA_RES + 1);
-constexpr static u32 AA_RES1_POW2 = (AA_RES1 * AA_RES1);
+constexpr static u32 AA_RES_POW2 = AA_RES * AA_RES;
+constexpr static u32 AA_RES1 = AA_RES + 1;
+constexpr static u32 AA_RES1_POW2 = AA_RES1 * AA_RES1;
+static Static_Array<Color, AA_RES_POW2 + 1> colors_table;
 
 // TODO: Can we make generic AA?
 auto draw_circle(u32 x, u32 y, u32 r, Color color) -> void {
@@ -81,7 +81,6 @@ auto draw_circle(u32 x, u32 y, u32 r, Color color) -> void {
     if (x2 < x) x2 = Gfx_Backend::width();
     if (y2 < y) y2 = Gfx_Backend::height();
 
-    Color colors_table[AA_RES_POW2 + 1];
     u32 color_alpha = color.w;
     for (u32 i = 0; i <= AA_RES_POW2; ++i) {
         colors_table[i] = Color{
