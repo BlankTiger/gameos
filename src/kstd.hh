@@ -11,6 +11,7 @@
 
 // clang-format off
 #include "kstd/format.hh"
+#include "kstd/low_level_io.hh"
 #include "kstd/serial.hh"
 #include "kstd/halt.hh"
 #include "kstd/assert.hh"
