@@ -27,30 +27,7 @@ target_link_options(gameos PRIVATE
     -nostdlib
 )
 
-option(USE_VGA_BACKEND "Use VGA text mode backend" OFF)
-option(USE_FB_BACKEND "Use framebuffer backend" OFF)
-
-if(USE_VGA_BACKEND AND USE_FB_BACKEND)
-    message(FATAL_ERROR "USE_VGA_BACKEND and USE_FB_BACKEND are mutually exclusive. Specify only one.")
-endif()
-
-if(NOT USE_VGA_BACKEND AND NOT USE_FB_BACKEND)
-    set(USE_FB_BACKEND ON)
-endif()
-
-if(USE_VGA_BACKEND)
-    target_compile_definitions(gameos PRIVATE USE_VGA_BACKEND)
-else()
-    target_compile_definitions(gameos PRIVATE USE_FB_BACKEND)
-endif()
-
-if(USE_VGA_BACKEND)
-    set(GRUB_GFX_SETTINGS "\tset gfxpayload=text")
-else()
-    set(GRUB_GFX_SETTINGS "\tterminal_output gfxterm\n\tset gfxmode=1024x768x32\n\tset gfxpayload=keep")
-endif()
-
-configure_file(${CMAKE_SOURCE_DIR}/grub.cfg.in ${CMAKE_BINARY_DIR}/grub.cfg @ONLY)
+configure_file(${CMAKE_SOURCE_DIR}/grub.cfg ${CMAKE_BINARY_DIR}/grub.cfg COPYONLY)
 
 target_link_libraries(gameos PRIVATE gcc)
 

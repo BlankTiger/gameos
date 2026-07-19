@@ -26,17 +26,8 @@ halt_set_term_ready() -> void {
         auto println(const char* format, T&& value, Rest&&... rest) -> int; \
     }
 
-#if defined(USE_FB_BACKEND)
-
 namespace fb { DECLARATIONS() }
 namespace term = fb::term;
-
-#elif defined(USE_VGA_BACKEND)
-
-namespace vga { DECLARATIONS() }
-namespace term = vga::term;
-
-#endif
 
 [[noreturn]] static auto 
 halt_forever(const char* message, const std::source_location& location = std::source_location::current()) -> void {

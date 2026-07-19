@@ -26,41 +26,31 @@ constexpr Color TRANSPARENT{0, 0, 0, 0};
 
 }  // namespace gfx
 
-#if defined(USE_VGA_BACKEND)
-
-#include "vga.hh"
-using Gfx_Backend = vga::Gfx_Backend;
-
-#elif defined(USE_FB_BACKEND)
-
-#include "framebuffer.hh"
-using Gfx_Backend = fb::Gfx_Backend;
-
-// @TODO: #else #error (in fmt namespace too when switching on the backend)
-#endif
+#include "framebuffer/framebuffer.hh"
+#include "framebuffer/term.hh"
 
 namespace gfx {
 
 [[nodiscard]] static auto initialize(const mem::Multiboot2_Info* mbi) -> bool {
-    return Gfx_Backend::initialize(mbi);
+    return fb::initialize(mbi);
 }
 
 auto is_initialized() -> bool {
-    return Gfx_Backend::is_initialized();
+    return fb::is_initialized();
 }
 
 auto clear(Color color) -> void {
-    for (u32 y = 0; y < Gfx_Backend::height(); ++y) {
-        for (u32 x = 0; x < Gfx_Backend::width(); ++x) {
-            Gfx_Backend::set_pixel(x, y, color);
+    for (u32 y = 0; y < fb::height(); ++y) {
+        for (u32 x = 0; x < fb::width(); ++x) {
+            fb::set_pixel(x, y, color);
         }
     }
 }
 
 auto draw_rect(u32 x, u32 y, u32 w, u32 h, Color color) -> void {
-    for (u32 _y = y; _y < y + h && _y < Gfx_Backend::height(); ++_y) {
-        for (u32 _x = x; _x < x + w && _x < Gfx_Backend::width(); ++_x) {
-            Gfx_Backend::set_pixel(_x, _y, color);
+    for (u32 _y = y; _y < y + h && _y < fb::height(); ++_y) {
+        for (u32 _x = x; _x < x + w && _x < fb::width(); ++_x) {
+            fb::set_pixel(_x, _y, color);
         }
     }
 }
@@ -82,8 +72,8 @@ auto draw_circle(u32 x, u32 y, u32 r, Color color) -> void {
     u32 y2 = y + r + 1;
 
     // Overflows
-    if (x2 < x) x2 = Gfx_Backend::width();
-    if (y2 < y) y2 = Gfx_Backend::height();
+    if (x2 < x) x2 = fb::width();
+    if (y2 < y) y2 = fb::height();
 
     u32 color_alpha = color.w;
     for (usize i = 0; i < colors_table.size; ++i) {
@@ -98,14 +88,14 @@ auto draw_circle(u32 x, u32 y, u32 r, Color color) -> void {
     u32 inner_r = (r > 1) ? (r - 1) * (r - 1) : 0;
     u32 outer_r = (r + 1) * (r + 1);
 
-    for (u32 py = y1; py < y2 && py < Gfx_Backend::height(); ++py) {
-        for (u32 px = x1; px < x2 && px < Gfx_Backend::width(); ++px) {
+    for (u32 py = y1; py < y2 && py < fb::height(); ++py) {
+        for (u32 px = x1; px < x2 && px < fb::width(); ++px) {
             u32 dx = (px > x) ? px - x : x - px;
             u32 dy = (py > y) ? py - y : y - py;
             u32 d2 = dx * dx + dy * dy;
 
             if (d2 <= inner_r) {
-                Gfx_Backend::set_pixel(px, py, color);
+                fb::set_pixel(px, py, color);
             }
             else if (d2 >= outer_r) {
                 continue;
@@ -125,8 +115,8 @@ auto draw_circle(u32 x, u32 y, u32 r, Color color) -> void {
                         if (dx * dx + dy * dy <= r * r * AA_RES1_POW2 * 4) in_circle += 1;
                     }
                 }
-                const Color blended_color = colors_table[in_circle].blend(Gfx_Backend::get_pixel(px, py));
-                Gfx_Backend::set_pixel(px, py, blended_color);
+                const Color blended_color = colors_table[in_circle].blend(fb::get_pixel(px, py));
+                fb::set_pixel(px, py, blended_color);
             }
         }
     }

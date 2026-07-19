@@ -41,12 +41,9 @@ struct Backend {
     }
 };
 
-// -- public API --
-
-[[nodiscard]] auto initialize(const mem::Multiboot2_Info* mbi) -> bool {
-    (void)mbi;
+[[nodiscard]] auto initialize() -> bool {
     __state = {0, 0};
-    return fb::Gfx_Backend::is_initialized();
+    return fb::is_initialized();
 }
 
 auto print(const char* format) -> int {

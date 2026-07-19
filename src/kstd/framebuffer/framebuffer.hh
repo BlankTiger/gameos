@@ -37,45 +37,35 @@ static auto set_pixel(u32 x, u32 y, gfx::Color color) -> void {
     __current_frame.pixels[y * stride + x].color = color;
 }
 
-struct Gfx_Backend {
-    [[nodiscard]] static auto initialize(const mem::Multiboot2_Info* mbi) -> bool {
-        if (__framebuffer_initialized) return true;
+[[nodiscard]] auto initialize(const mem::Multiboot2_Info* mbi) -> bool {
+    if (__framebuffer_initialized) return true;
 
-        const auto* framebuffer_tag = mem::find_multiboot2_framebuffer_tag(mbi);
-        if (framebuffer_tag == nullptr || framebuffer_tag->framebuffer_addr == 0) return false;
+    const auto* framebuffer_tag = mem::find_multiboot2_framebuffer_tag(mbi);
+    if (framebuffer_tag == nullptr || framebuffer_tag->framebuffer_addr == 0) return false;
 
-        __current_frame.pixels = reinterpret_cast<Pixel*>((uintptr_t)framebuffer_tag->framebuffer_addr);
-        __current_frame.pitch = framebuffer_tag->framebuffer_pitch;
-        __current_frame.width = framebuffer_tag->framebuffer_width;
-        __current_frame.height = framebuffer_tag->framebuffer_height;
-        __current_frame.bits_per_pixel = framebuffer_tag->framebuffer_bpp;
-        __current_frame.type = framebuffer_tag->framebuffer_type;
-        assert(__current_frame.bits_per_pixel == 32, "Only 32BPP supported.");
+    __current_frame.pixels = reinterpret_cast<Pixel*>((uintptr_t)framebuffer_tag->framebuffer_addr);
+    __current_frame.pitch = framebuffer_tag->framebuffer_pitch;
+    __current_frame.width = framebuffer_tag->framebuffer_width;
+    __current_frame.height = framebuffer_tag->framebuffer_height;
+    __current_frame.bits_per_pixel = framebuffer_tag->framebuffer_bpp;
+    __current_frame.type = framebuffer_tag->framebuffer_type;
+    assert(__current_frame.bits_per_pixel == 32, "Only 32BPP supported.");
 
-        __framebuffer_initialized = true;
-        return true;
-    }
+    __framebuffer_initialized = true;
+    return true;
+}
 
-    static auto is_initialized() -> bool {
-        return __framebuffer_initialized;
-    }
+auto is_initialized() -> bool {
+    return __framebuffer_initialized;
+}
 
-    static auto get_pixel(u32 x, u32 y) -> gfx::Color {
-        return fb::get_pixel(x, y);
-    }
+auto width() -> u32 {
+    return __current_frame.width;
+}
 
-    static auto set_pixel(u32 x, u32 y, gfx::Color color) -> void {
-        fb::set_pixel(x, y, color);
-    }
-
-    static auto width() -> u32 {
-        return __current_frame.width;
-    }
-
-    static auto height() -> u32 {
-        return __current_frame.height;
-    }
-};
+auto height() -> u32 {
+    return __current_frame.height;
+}
 
 // struct Sprite {};
 
