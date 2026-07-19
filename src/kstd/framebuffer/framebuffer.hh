@@ -34,7 +34,7 @@ static auto set_pixel(u32 x, u32 y, gfx::Color color) -> void {
     debug_assert(__current_frame.pixels != nullptr);
 
     const usize stride = __current_frame.pitch / sizeof(u32);
-    __current_frame.pixels[y * stride + x].color = color;
+    __current_frame.pixels[y * stride + x].color.blend_with(color);
 }
 
 [[nodiscard]] auto initialize(const boot::Multiboot2_Info* mbi) -> bool {

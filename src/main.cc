@@ -35,16 +35,16 @@ extern "C" auto kernel_main(u32 magic, const boot::Multiboot2_Info* mbi) -> void
     term::println("Hello from GameOS!");
 
     gfx::draw_rect(250, 250, 100, 100, gfx::BLUE);
-    gfx::draw_rect(300, 300, 80, 80, gfx::Color{255, 0, 0, 128}.blend(gfx::BLACK));
+    gfx::draw_rect(300, 300, 80, 80, gfx::Color{200, 0, 0, 128});
 
     gfx::draw_rect(400, 250, 100, 100, gfx::GREEN);
-    gfx::draw_rect(450, 300, 80, 80, gfx::Color{0, 255, 0, 128}.blend(gfx::BLACK));
+    gfx::draw_rect(450, 300, 80, 80, gfx::Color{0, 200, 0, 128});
 
     gfx::draw_rect(550, 250, 100, 100, gfx::RED);
-    gfx::draw_rect(600, 300, 80, 80, gfx::Color{0, 0, 255, 128}.blend(gfx::BLACK));
+    gfx::draw_rect(600, 300, 80, 80, gfx::Color{0, 0, 200, 128});
 
     gfx::draw_rect(700, 250, 100, 100, gfx::WHITE);
-    gfx::draw_rect(750, 300, 80, 80, gfx::Color{255, 255, 255, 128}.blend(gfx::BLACK));
+    gfx::draw_rect(750, 300, 80, 80, gfx::Color{230, 230, 230, 128});
 
     gfx::draw_rect(250, 400, 550, 300, gfx::WHITE);
     gfx::draw_circle(525, 550, 100, gfx::RED);

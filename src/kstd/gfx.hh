@@ -5,15 +5,13 @@
 namespace gfx {
 
 struct Color {
-    u8 b, g, r, w;
+    u8 b, g, r, a;
 
-    force_inline auto blend(Color bg) const -> Color {
-        return {
-            .b = math::lerp(bg.b, b, w, 255),
-            .g = math::lerp(bg.g, g, w, 255),
-            .r = math::lerp(bg.r, r, w, 255),
-            .w = 255,
-        };
+    force_inline void blend_with(Color fg) {
+        b = math::lerp(b, fg.b, fg.a, 255);
+        g = math::lerp(g, fg.g, fg.a, 255);
+        r = math::lerp(r, fg.r, fg.a, 255);
+        a = 255;
     }
 };
 
@@ -56,7 +54,7 @@ auto draw_rect(u32 x, u32 y, u32 w, u32 h, Color color) -> void {
 }
 
 #ifndef AA_RES
-#define AA_RES 8
+#define AA_RES 4
 #endif
 
 constexpr static u32 AA_RES_POW2 = AA_RES * AA_RES;
@@ -75,13 +73,13 @@ auto draw_circle(u32 x, u32 y, u32 r, Color color) -> void {
     if (x2 < x) x2 = fb::width();
     if (y2 < y) y2 = fb::height();
 
-    u32 color_alpha = color.w;
+    u32 color_alpha = color.a;
     for (usize i = 0; i < colors_table.size; ++i) {
         colors_table[i] = Color{
             .b = color.b,
             .g = color.g,
             .r = color.r,
-            .w = (u8) ((color_alpha * i / AA_RES_POW2) & 0x000000FF),
+            .a = (u8) ((color_alpha * i / AA_RES_POW2) & 0x000000FF),
         };
     }
 
@@ -115,8 +113,7 @@ auto draw_circle(u32 x, u32 y, u32 r, Color color) -> void {
                         if (dx * dx + dy * dy <= r * r * AA_RES1_POW2 * 4) in_circle += 1;
                     }
                 }
-                const Color blended_color = colors_table[in_circle].blend(fb::get_pixel(px, py));
-                fb::set_pixel(px, py, blended_color);
+                fb::set_pixel(px, py, colors_table[in_circle]);
             }
         }
     }
