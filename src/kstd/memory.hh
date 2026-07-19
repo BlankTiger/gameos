@@ -81,19 +81,19 @@ static auto reserve_range(Memory_Regions& regions, u64 start, u64 end) -> void {
     }
 }
 
-static auto parse_multiboot2_memory_map(Memory_Regions& regions, const Multiboot2_Info* mbi) -> void {
+static auto parse_multiboot2_memory_map(Memory_Regions& regions, const boot::Multiboot2_Info* mbi) -> void {
     auto* tag = mbi->first_tag();
     const auto* end = mbi->end_tag();
 
     while (ptr_addr(tag) < ptr_addr(end)) {
-        if (tag->type == Multiboot2_Tag_Type::MEMORY_MAP) {
-            const auto* mmap_tag = tag->as<Multiboot2_Memory_Map_Tag>();
+        if (tag->type == boot::Multiboot2_Tag_Type::MEMORY_MAP) {
+            const auto* mmap_tag = tag->as<boot::Multiboot2_Memory_Map_Tag>();
             const auto* entry = mmap_tag->first_entry();
             const auto* tag_end = mmap_tag->end_entry();
 
             while (ptr_addr(entry) < ptr_addr(tag_end)) {
                 if (entry->type == MULTIBOOT_MMAP_USABLE) add_usable_region(regions, entry->addr, entry->len);
-                entry = reinterpret_cast<const Multiboot2_Memory_Map_Entry*>(ptr_addr(entry) + mmap_tag->entry_size);
+                entry = reinterpret_cast<const boot::Multiboot2_Memory_Map_Entry*>(ptr_addr(entry) + mmap_tag->entry_size);
             }
         }
 
@@ -101,7 +101,7 @@ static auto parse_multiboot2_memory_map(Memory_Regions& regions, const Multiboot
     }
 }
 
-static auto reserve_multiboot2_data(Memory_Regions& regions, const Multiboot2_Info* mbi) -> void {
+static auto reserve_multiboot2_data(Memory_Regions& regions, const boot::Multiboot2_Info* mbi) -> void {
     reserve_range(regions, 0, PAGE_SIZE);
     reserve_range(regions, ptr_addr(mbi), ptr_addr(mbi) + mbi->total_size);
     reserve_range(regions, ptr_addr(&__kernel_start), ptr_addr(&__kernel_end));
@@ -110,12 +110,12 @@ static auto reserve_multiboot2_data(Memory_Regions& regions, const Multiboot2_In
     const auto* end = mbi->end_tag();
 
     while (ptr_addr(tag) < ptr_addr(end)) {
-        const auto tag_type = static_cast<Multiboot2_Tag_Type>(tag->type);
-        if (tag_type == Multiboot2_Tag_Type::CMDLINE || tag_type == Multiboot2_Tag_Type::BOOT_LOADER_NAME) {
+        const auto tag_type = static_cast<boot::Multiboot2_Tag_Type>(tag->type);
+        if (tag_type == boot::Multiboot2_Tag_Type::CMDLINE || tag_type == boot::Multiboot2_Tag_Type::BOOT_LOADER_NAME) {
             const auto* text = tag->payload_as<char>();
             reserve_range(regions, ptr_addr(text), ptr_addr(text) + strlen(text) + 1);
-        } else if (tag_type == Multiboot2_Tag_Type::MODULE) {
-            const auto* module = tag->as<Multiboot2_Module_Tag>();
+        } else if (tag_type == boot::Multiboot2_Tag_Type::MODULE) {
+            const auto* module = tag->as<boot::Multiboot2_Module_Tag>();
             reserve_range(regions, module->mod_start, module->mod_end);
             if (module->string != 0) {
                 reserve_range(regions, module->string, module->string + strlen(module->string_ptr()) + 1);
@@ -364,7 +364,7 @@ struct Arena_Allocator final : Allocator {
 mem::Allocator* __global_allocator;
 mem::Buddy_Allocator __buddy;
 
-auto initialize(const Multiboot2_Info* mbi) -> void {
+auto initialize(const boot::Multiboot2_Info* mbi) -> void {
     parse_multiboot2_memory_map(__regions, mbi);
     reserve_multiboot2_data(__regions, mbi);
 

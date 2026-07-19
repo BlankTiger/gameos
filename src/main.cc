@@ -11,10 +11,10 @@
 #error "This tutorial needs to be compiled with a ix86-elf compiler"
 #endif
 
-extern "C" auto kernel_main(u32 magic, const mem::Multiboot2_Info* mbi) -> void {
+extern "C" auto kernel_main(u32 magic, const boot::Multiboot2_Info* mbi) -> void {
     serial::initialize();
 
-    assert(magic == mem::MULTIBOOT2_MAGIC, "bad multiboot2 magic");
+    assert(magic == boot::MULTIBOOT2_MAGIC, "bad multiboot2 magic");
 
     const auto gfx_initialized  = gfx::initialize(mbi);
     assert(gfx_initialized);
