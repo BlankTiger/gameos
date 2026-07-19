@@ -11,7 +11,7 @@ Framebuffer mode is the default one, if you want VGA you can do:
 
 # Running
 
-    qemu-system-i386 -cdrom build/gameos.iso
+    qemu-system-i386 -serial stdio -cdrom build/gameos.iso
 
 # Terminal interface (switched by using a different namespace)
 
