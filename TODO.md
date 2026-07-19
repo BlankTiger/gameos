@@ -18,11 +18,14 @@ base layer:
 - [ ] timers
 - [ ] interrupts
 - [ ] PIC
+- [ ] APIC instead of PIC if available later on
 - [ ] keyboard handling
 - [ ] mouse handling
 - [ ] multicore
 - [x] serial
 - [x] fix early asserts (term must be initialized for asserts to output anything currently and we have asserts that are before the term::initialize)
+- [ ] move all __variables to .cc files
+- [ ] implement cpuid (https://wiki.osdev.org/CPUID)
 
 utils:
 - [ ] todo list generator (gather notes from source code and generate a stable

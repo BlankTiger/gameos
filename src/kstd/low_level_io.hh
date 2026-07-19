@@ -18,4 +18,9 @@ force_inline auto wait() -> void {
     outb(UNUSED_PORT, 0); // Write to an unused port (takes time which gives the chip time to react).
 }
 
+force_inline auto outb_with_delay(u16 port, u8 value) -> void {
+    outb(port, value);
+    wait();
+}
+
 }

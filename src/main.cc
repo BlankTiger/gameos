@@ -24,6 +24,9 @@ extern "C" auto kernel_main(u32 magic, const mem::Multiboot2_Info* mbi) -> void 
 
     mem::initialize(mbi);
 
+    idt::initialize();
+    pic::initialize();
+
     // @TODO: Timers, calculate dt, run at constant framerate.
     // while (true) {}
     gfx::clear(gfx::BLACK);
