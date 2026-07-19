@@ -56,6 +56,10 @@ struct Gfx_Backend {
         return true;
     }
 
+    static auto is_initialized() -> bool {
+        return __framebuffer_initialized;
+    }
+
     static auto get_pixel(u32 x, u32 y) -> gfx::Color {
         return fb::get_pixel(x, y);
     }

@@ -54,13 +54,36 @@ auto put_char(char c) -> void {
     outb(COM1, (u8)c);
 }
 
-force_inline auto print(const char* message) -> void {
-    while (*message) put_char(*message++);
+struct Backend {
+    static auto put_char(char c) -> void {
+        serial::put_char(c);
+    }
+
+    static auto new_line() -> void {
+        serial::put_char('\n');
+    }
+};
+
+auto print(const char* format) -> int {
+    return fmt::print<Backend>(format);
 }
 
-force_inline auto println(const char* message) -> void {
-    print(message);
-    put_char('\n');
+template <typename T, typename... Rest>
+auto print(const char* format, T&& value, Rest&&... rest) -> int {
+    return fmt::print<Backend>(format, std::forward<T>(value), std::forward<Rest>(rest)...);
+}
+
+auto println() -> int {
+    return fmt::println<Backend>();
+}
+
+auto println(const char* format) -> int {
+    return fmt::println<Backend>(format);
+}
+
+template <typename T, typename... Rest>
+auto println(const char* format, T&& value, Rest&&... rest) -> int {
+    return fmt::println<Backend>(format, std::forward<T>(value), std::forward<Rest>(rest)...);
 }
 
 }

@@ -14,6 +14,11 @@ halt_set_term_ready() -> void {
 // Forward declarations of term::print functions.
 #define DECLARATIONS()                                                      \
     namespace term {                                                        \
+        auto print(const char* format) -> int;                              \
+                                                                            \
+        template <typename T, typename... Rest>                             \
+        auto print(const char* format, T&& value, Rest&&... rest) -> int;   \
+                                                                            \
         auto println() -> int;                                              \
         auto println(const char* format) -> int;                            \
                                                                             \
@@ -41,15 +46,13 @@ halt_forever(const char* message, const std::source_location& location = std::so
     __panicking = true;
 
     // Always safe: no dependency on mem/gfx/term.
-    serial::print(message != nullptr ? message : "(no message)");
-    serial::put_char('\n');
-    serial::print(location.file_name());
-    serial::put_char('\n');
+    serial::print("%:%:%", location.file_name(), location.line(), location.column());
+    if (message != nullptr) serial::println(": %", message);
 
     // Only safe once term has actually confirmed init succeeded.
     if (__term_ready) {
-        if (message != nullptr) term::println("%", message);
-        term::println("%:%:%", location.file_name(), location.line(), location.column());
+        term::print("%:%:%", location.file_name(), location.line(), location.column());
+        if (message != nullptr) term::println(": %", message);
     }
 
     for (;;) asm volatile("hlt");

@@ -1,5 +1,8 @@
 #pragma once
 
+#include <type_traits>
+#include <utility>
+
 // Backend-agnostic formatting utilities.
 //
 // Backend must provide:
