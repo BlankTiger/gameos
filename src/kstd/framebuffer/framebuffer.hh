@@ -42,7 +42,7 @@ struct Gfx_Backend {
         if (__framebuffer_initialized) return true;
 
         const auto* framebuffer_tag = mem::find_multiboot2_framebuffer_tag(mbi);
-        if (framebuffer_tag->framebuffer_addr == 0) return false;
+        if (framebuffer_tag == nullptr || framebuffer_tag->framebuffer_addr == 0) return false;
 
         __current_frame.pixels = reinterpret_cast<Pixel*>((uintptr_t)framebuffer_tag->framebuffer_addr);
         __current_frame.pitch = framebuffer_tag->framebuffer_pitch;

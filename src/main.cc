@@ -12,36 +12,23 @@
 #endif
 
 extern "C" auto kernel_main(u32 magic, const mem::Multiboot2_Info* mbi) -> void {
-    if (magic != mem::MULTIBOOT2_MAGIC) {
-        //
-        // Not multiboot2 but try to show anything anyway if possible...
-        // This might not work completely or might(?) be dangerous depending on the term backend.
-        //
-        const auto ok = term::initialize(mbi);
-        (void)ok;
-        term::println("Bad multiboot2 magic");
-        return;
-    }
+    serial::initialize();
 
-    mem::initialize(mbi);
+    assert(magic == mem::MULTIBOOT2_MAGIC, "bad multiboot2 magic");
+
+    const auto gfx_initialized  = gfx::initialize(mbi);
+    assert(gfx_initialized);
+
     const auto term_initialized = term::initialize(mbi);
     assert(term_initialized);
 
-    const auto gfx_initialized = gfx::initialize(mbi);
-    assert(gfx_initialized);
+    mem::initialize(mbi);
 
     // @TODO: Timers, calculate dt, run at constant framerate.
     // while (true) {}
     gfx::clear(gfx::BLACK);
 
     term::println("Hello from GameOS!");
-    term::println(
-        "Bitmap font rendering works. Newlines work too..Newlines work too..Newlines work too..Newlines work "
-        "too..Newlines work too..Newlines work too..Newlines work too.. %",
-        5);
-    term::println(
-        "Bitmap font rendering works. Newlines work too..Newlines work too..Newlines work too..Newlines work "
-        "too..Newlines work too..Newlines work too..Newlines work too..");
 
     gfx::draw_rect(250, 250, 100, 100, gfx::BLUE);
     gfx::draw_rect(300, 300, 80, 80, gfx::Color{255, 0, 0, 128}.blend(gfx::BLACK));
