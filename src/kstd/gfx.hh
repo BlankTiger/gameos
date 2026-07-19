@@ -45,6 +45,10 @@ namespace gfx {
     return Gfx_Backend::initialize(mbi);
 }
 
+auto is_initialized() -> bool {
+    return Gfx_Backend::is_initialized();
+}
+
 auto clear(Color color) -> void {
     for (u32 y = 0; y < Gfx_Backend::height(); ++y) {
         for (u32 x = 0; x < Gfx_Backend::width(); ++x) {
