@@ -10,9 +10,10 @@
 #include "int.hh"
 
 // clang-format off
-#include "kstd/term.hh"
-#include "kstd/assert.hh"
+#include "kstd/serial.hh"
 #include "kstd/halt.hh"
+#include "kstd/assert.hh"
+#include "kstd/term.hh"
 #include "kstd/enum_flags.hh"
 #include "kstd/array.hh"
 #include "kstd/memory.hh"

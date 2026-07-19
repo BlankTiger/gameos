@@ -23,7 +23,7 @@ struct Rect {
         x1 = (x1 >= screen_width) ? screen_width - 1 : x1;
         x2 = (x2 >= screen_width) ? screen_width - 1 : x2;
         y1 = (y1 >= screen_height) ? screen_height - 1 : y1;
-        y2 = (y2 >= screen_height) ? screen_height - 1 : x2;
+        y2 = (y2 >= screen_height) ? screen_height - 1 : y2;
     }
 };
 

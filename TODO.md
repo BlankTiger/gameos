@@ -21,6 +21,8 @@ base layer:
 - [ ] keyboard handling
 - [ ] mouse handling
 - [ ] multicore
+- [x] serial
+- [x] fix early asserts (term must be initialized for asserts to output anything currently and we have asserts that are before the term::initialize)
 
 utils:
 - [ ] todo list generator (gather notes from source code and generate a stable
