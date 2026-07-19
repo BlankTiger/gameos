@@ -3,15 +3,9 @@
     nix develop -c fish
     cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=cmake/Toolchain-i686-elf.cmake && cmake --build build
 
-# VGA mode
-
-Framebuffer mode is the default one, if you want VGA you can do:
-
-    cmake -S . -B build -DUSE_VGA_BACKEND=ON -DCMAKE_TOOLCHAIN_FILE=cmake/Toolchain-i686-elf.cmake && cmake --build build
-
 # Running
 
-    qemu-system-i386 -cdrom build/gameos.iso
+    qemu-system-i386 -serial stdio -cdrom build/gameos.iso
 
 # Terminal interface (switched by using a different namespace)
 
