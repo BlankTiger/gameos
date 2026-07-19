@@ -33,7 +33,6 @@ header_start:
     .long header_end - header_start                      /* total header length in bytes */
     .long -(MAGIC + ARCH + (header_end - header_start))  /* checksum                     */
 
-#ifdef USE_FB_BACKEND
     /*
      * Framebuffer tag (type 5) - asks the bootloader to set up a linear
      * framebuffer instead of (or in addition to) VGA text mode.
@@ -53,7 +52,6 @@ header_start:
     .long  1024                         /* requested width  (pixels)          */
     .long  768                          /* requested height (pixels)          */
     .long  32                           /* requested depth  (bpp)             */
-#endif
 
     /*
      * End tag (type 0) - signals the end of the multiboot2 header tag list.

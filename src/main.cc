@@ -19,7 +19,7 @@ extern "C" auto kernel_main(u32 magic, const mem::Multiboot2_Info* mbi) -> void 
     const auto gfx_initialized  = gfx::initialize(mbi);
     assert(gfx_initialized);
 
-    const auto term_initialized = term::initialize(mbi);
+    const auto term_initialized = term::initialize();
     assert(term_initialized);
 
     mem::initialize(mbi);
