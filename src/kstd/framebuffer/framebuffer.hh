@@ -37,10 +37,10 @@ static auto set_pixel(u32 x, u32 y, gfx::Color color) -> void {
     __current_frame.pixels[y * stride + x].color = color;
 }
 
-[[nodiscard]] auto initialize(const mem::Multiboot2_Info* mbi) -> bool {
+[[nodiscard]] auto initialize(const boot::Multiboot2_Info* mbi) -> bool {
     if (__framebuffer_initialized) return true;
 
-    const auto* framebuffer_tag = mem::find_multiboot2_framebuffer_tag(mbi);
+    const auto* framebuffer_tag = boot::find_multiboot2_framebuffer_tag(mbi);
     if (framebuffer_tag == nullptr || framebuffer_tag->framebuffer_addr == 0) return false;
 
     __current_frame.pixels = reinterpret_cast<Pixel*>((uintptr_t)framebuffer_tag->framebuffer_addr);

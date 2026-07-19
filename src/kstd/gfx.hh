@@ -31,7 +31,7 @@ constexpr Color TRANSPARENT{0, 0, 0, 0};
 
 namespace gfx {
 
-[[nodiscard]] static auto initialize(const mem::Multiboot2_Info* mbi) -> bool {
+[[nodiscard]] static auto initialize(const boot::Multiboot2_Info* mbi) -> bool {
     return fb::initialize(mbi);
 }
 

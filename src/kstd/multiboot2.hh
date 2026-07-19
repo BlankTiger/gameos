@@ -1,6 +1,6 @@
 #pragma once
 
-namespace mem {
+namespace boot {
 
 enum class Multiboot_Info_Flag : u32 {
     HAS_MMAP = 1u << 6,
@@ -132,4 +132,4 @@ auto find_multiboot2_framebuffer_tag(const Multiboot2_Info* mbi) -> const Multib
     return nullptr;
 }
 
-}  // namespace mem
+}  // namespace boot
