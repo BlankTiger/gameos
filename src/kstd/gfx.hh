@@ -83,7 +83,7 @@ auto draw_circle(u32 x, u32 y, u32 r, Color color) -> void {
             .b = color.b,
             .g = color.g,
             .r = color.r,
-            .a = (u8) ((color_alpha * i / AA_RES_POW2) & 0x000000FF),
+            .a = static_cast<u8>((color_alpha * i / AA_RES_POW2) & 0x00000100),
         };
     }
 
