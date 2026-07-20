@@ -66,13 +66,7 @@ force_inline auto height() -> u32 {
     return front_buffer.height;
 }
 
-static auto get_pixel(u32 x, u32 y) -> gfx::Color {
-    debug_assert(front_buffer.pixels != nullptr);
-    return back_buffer[y * front_buffer.stride + x].color;
-}
-
 static auto set_pixel(u32 x, u32 y, gfx::Color color) -> void {
-    debug_assert(front_buffer.pixels != nullptr);
     back_buffer[y * front_buffer.stride + x].color.blend_with(color);
 }
 
