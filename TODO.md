@@ -7,7 +7,7 @@ graphics:
 - [ ] sprite embedding
 - [ ] sprite drawing
 - [ ] move draw\_char draw\_text to other location
-- [ ] draw_text_immediate for asserts and term::print
+- [x] draw_text_immediate for asserts and term::print
 
 fonts:
 - [ ] embedding ttfs
@@ -17,9 +17,9 @@ sound:
 - [ ] figure out what to actually do here
 
 base layer:
-- [ ] timers
-- [ ] interrupts
-- [ ] PIC
+- [x] timers
+- [x] interrupts
+- [x] PIC
 - [ ] APIC instead of PIC if available later on
 - [ ] keyboard handling
 - [ ] mouse handling
