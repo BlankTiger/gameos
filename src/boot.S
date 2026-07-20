@@ -124,12 +124,7 @@ _start:
 
     /*
      * 3. Call into the C++ runtime and kernel.
-     *
-     *    run_global_constructors - invokes all global/static C++ constructors
-     *    kernel_main             - the high-level kernel entry point
-     *    run_global_destructors  - invokes all global/static C++ destructors
      */
-    call run_global_constructors
     call kernel_main
     call run_global_destructors
 
