@@ -197,10 +197,18 @@ static force_inline auto print_value(T&& value) -> int {
         return print_value<Backend>((const char*)value);
     } else if constexpr (requires(const U& object) { object.c_str(); }) {
         return print_value<Backend>(value.c_str());
-    } else if constexpr (requires(const U& object) {
-                             object.data();
-                             object.size();
-                         }) {
+    } else if constexpr (requires(const U& object) { object.data(); object.size; }) {
+        if constexpr (std::is_convertible_v<decltype(value.data()), const char*>) {
+            const char* data = value.data();
+            usize size = (usize)value.size;
+            for (usize i = 0; i < size; ++i) {
+                Backend::put_char(data[i]);
+            }
+            return (int)size;
+        } else {
+            return print_value<Backend>((const void*)&value);
+        }
+    } else if constexpr (requires(const U& object) { object.data(); object.size(); }) {
         if constexpr (std::is_convertible_v<decltype(value.data()), const char*>) {
             const char* data = value.data();
             usize size = (usize)value.size();
