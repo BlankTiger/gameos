@@ -1,29 +1,70 @@
 #pragma once
 
-// Forward declarations.
-namespace fb {
 namespace term {
 
-// Initializes all state necessary for operating the interface correctly.
-[[nodiscard]] auto initialize() -> bool;
+constexpr u32 DEFAULT_PADDING = 10;
 
-// Prints a string.
-auto print(const char* format) -> int;
+struct Terminal_State {
+    u32 current_col;
+    u32 current_row;
+};
 
-// Prints any formatted string.
+static Terminal_State __state;
+
+static auto next_line() -> void {
+    __state.current_row += 1;
+    __state.current_col = 0;
+}
+
+static auto max_cols() -> u32 {
+    return (gfx::width() - 2 * DEFAULT_PADDING) / font::GLYPH_WIDTH;
+}
+
+struct Backend {
+    static auto put_char(char c) -> void {
+        if (c == '\n') {
+            next_line();
+            return;
+        }
+        if (__state.current_col >= max_cols()) {
+            next_line();
+        }
+        u32 x = DEFAULT_PADDING + __state.current_col * font::GLYPH_WIDTH;
+        u32 y = DEFAULT_PADDING + __state.current_row * font::GLYPH_HEIGHT;
+        gfx::draw_char(x, y, c, gfx::WHITE, gfx::TRANSPARENT);
+        __state.current_col++;
+    }
+
+    static auto new_line() -> void {
+        next_line();
+    }
+};
+
+[[nodiscard]] auto initialize() -> bool {
+    __state = {0, 0};
+    return gfx::is_initialized();
+}
+
+auto print(const char* format) -> int {
+    return fmt::print<Backend>(format);
+}
+
 template <typename T, typename... Rest>
-auto print(const char* format, T&& value, Rest&&... rest) -> int;
+auto print(const char* format, T&& value, Rest&&... rest) -> int {
+    return fmt::print<Backend>(format, std::forward<T>(value), std::forward<Rest>(rest)...);
+}
 
-// Moves cursor onto the next line.
-auto println() -> int;
+auto println() -> int {
+    return fmt::println<Backend>();
+}
 
-// Prints a string and moves cursor onto the next line.
-auto println(const char* format) -> int;
+auto println(const char* format) -> int {
+    return fmt::println<Backend>(format);
+}
 
-// Prints any formatted string and moves cursor onto the next line.
 template <typename T, typename... Rest>
-auto println(const char* format, T&& value, Rest&&... rest) -> int;
+auto println(const char* format, T&& value, Rest&&... rest) -> int {
+    return fmt::println<Backend>(format, std::forward<T>(value), std::forward<Rest>(rest)...);
+}
 
 }  // namespace term
-}  // namespace fb
-
