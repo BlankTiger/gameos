@@ -85,11 +85,19 @@ force_inline auto height() -> u32 {
     return front_buffer.height;
 }
 
-static auto set_pixel(u32 x, u32 y, Color color) -> void {
-    back_buffer[y * front_buffer.stride + x].color.blend_with(color);
+template <bool IMMEDIATE = false>
+static force_inline auto set_pixel(u32 x, u32 y, Color color) -> void {
+    auto index = y * front_buffer.stride + x;
+    if constexpr(IMMEDIATE) {
+        front_buffer.pixels[index].color.blend_with(color);
+        back_buffer[index].color.blend_with(color);
+    } else {
+        back_buffer[index].color.blend_with(color);
+    }
 }
 
-auto draw_char(u32 x, u32 y, char c, Color fg, Color bg) -> void {
+template <bool IMMEDIATE>
+auto inner_draw_char(u32 x, u32 y, char c, Color fg, Color bg) -> void {
     const auto index = static_cast<u8>(c);
     const auto& glyph = font::DATA[index];
 
@@ -103,9 +111,19 @@ auto draw_char(u32 x, u32 y, char c, Color fg, Color bg) -> void {
             if (px >= front_buffer.width) break;
 
             const auto color = bits & (0b1000'0000 >> col) ? fg : bg;
-            set_pixel(px, py, color);
+            set_pixel<IMMEDIATE>(px, py, color);
         }
     }
+}
+
+template <typename... Args>
+auto draw_char(Args&&... args) -> void {
+    inner_draw_char<false>(std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+auto draw_char_immediate(Args&&... args) -> void {
+    inner_draw_char<true>(std::forward<Args>(args)...);
 }
 
 auto draw_text(u32 x, u32 y, const char* text, Color fg = WHITE, Color bg = BLACK) -> void {

@@ -59,12 +59,10 @@ extern "C" auto kernel_main(u32 magic, const boot::Multiboot2_Info* mbi) -> void
     auto seconds = 1;
     while (true) {
         term::println("%", seconds);
-        gfx::draw_frame();
         time::sleep_ms(1000);
         if (seconds == 10) break;
         ++seconds;
     }
 
     term::println("OWARIDA");
-    gfx::draw_frame();
 }

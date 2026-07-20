@@ -31,7 +31,7 @@ struct Backend {
         }
         u32 x = DEFAULT_PADDING + __state.current_col * font::GLYPH_WIDTH;
         u32 y = DEFAULT_PADDING + __state.current_row * font::GLYPH_HEIGHT;
-        gfx::draw_char(x, y, c, gfx::WHITE, gfx::TRANSPARENT);
+        gfx::draw_char_immediate(x, y, c, gfx::WHITE, gfx::TRANSPARENT);
         __state.current_col++;
     }
 
@@ -42,7 +42,9 @@ struct Backend {
 
 [[nodiscard]] auto initialize() -> bool {
     __state = {0, 0};
-    return gfx::is_initialized();
+    auto is_initialized = gfx::is_initialized();
+    if (is_initialized) halt_set_term_ready();
+    return is_initialized;
 }
 
 auto print(const char* format) -> int {
