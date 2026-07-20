@@ -17,3 +17,6 @@ using f32 = std::float32_t;
 using f64 = std::float64_t;
 
 using usize = std::size_t;
+using psize = std::uintptr_t;
+
+static_assert(sizeof(psize) == sizeof(u32) && "FOR NOW");
