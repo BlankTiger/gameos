@@ -26,9 +26,9 @@ extern "C" auto kernel_main(u32 magic, const boot::Multiboot2_Info* mbi) -> void
 
     idt::initialize();
     pic::initialize();
+    time::initialize();
+    asm volatile("sti");
 
-    // @TODO: Timers, calculate dt, run at constant framerate.
-    // while (true) {}
     gfx::clear(gfx::BLACK);
 
     term::println("Hello from GameOS!");
@@ -47,4 +47,16 @@ extern "C" auto kernel_main(u32 magic, const boot::Multiboot2_Info* mbi) -> void
 
     gfx::draw_rect(250, 400, 550, 300, gfx::WHITE);
     gfx::draw_circle(525, 550, 100, gfx::RED);
+
+    term::println("ZA WARUDO");
+
+    auto seconds = 1;
+    while (true) {
+        term::println("%", seconds);
+        time::sleep_ms(1000);
+        if (seconds == 10) break;
+        ++seconds;
+    }
+
+    term::println("OWARIDA");
 }

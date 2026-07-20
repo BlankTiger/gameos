@@ -129,9 +129,11 @@ auto initialize() -> void {
     outb_with_delay(PIC_DATA_PORT_MASTER, CPU_MODE_DATA.raw);
     outb_with_delay(PIC_DATA_PORT_SLAVE,  CPU_MODE_DATA.raw);
 
-    // Write the IMRs back as we got them for now (is this correct?).
-    outb_with_delay(PIC_DATA_PORT_MASTER, mask1);
-    outb_with_delay(PIC_DATA_PORT_SLAVE,  mask2);
+    // Mask everything except IRQ0 (PIT timer).
+    (void)mask1;
+    (void)mask2;
+    outb_with_delay(PIC_DATA_PORT_MASTER, 0b11111110); // unmask IRQ0 only
+    outb_with_delay(PIC_DATA_PORT_SLAVE,  0xFF);       // mask all slave IRQs
 }
 
 auto disable() -> void {

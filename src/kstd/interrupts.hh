@@ -33,8 +33,8 @@ struct Gate {
 static_assert(sizeof(Gate) == 8);
 
 struct Interrupt_Descriptor_Table_Register {
-    u16 limit;
-    u32 base;
+    u16   limit;
+    psize base;
 } __attribute__((packed));
 
 static_assert(sizeof(Interrupt_Descriptor_Table_Register) == 6);
@@ -96,8 +96,6 @@ enum struct Interrupt_Vector_Type : u8 {
     PRIMARY_ATA                   = 46,
     SECONDARY_ATA                 = 47,
 };
-
-auto initialize() -> void {}
 
 #define ISR_NO_ERROR_CODE(NAME, NUMBER)                                                                         \
     __attribute__((naked)) auto _isr_handle_##NAME() -> void {                                                  \
@@ -185,7 +183,7 @@ ISR_NO_ERROR_CODE (primary_ata,     46)  // IRQ14
 ISR_NO_ERROR_CODE (secondary_ata,   47)  // IRQ15
 
 auto isr_unimplemented_handler(Interrupt_Vector_Type type, u32 error) -> void {
-    term::println("Tell me why (%): %", type, error);
+    serial::println("Tell me why (%): %", type, error);
     halt_forever("Unimplemented interrupt fired.");
 }
 
@@ -194,8 +192,12 @@ auto isr_handle_divide_error() -> void {
 }
 
 auto isr_handle_double_fault(u32 error) -> void {
-    term::println("Double fault, caused by IDT entry: %", error);
+    serial::println("Double fault, caused by IDT entry: %", error);
     halt_forever("");
+}
+
+auto isr_handle_timer() -> void {
+    time::on_tick();
 }
 
 extern "C" auto isr_dispatch(u32* registers_pointer) -> void {
@@ -209,20 +211,88 @@ extern "C" auto isr_dispatch(u32* registers_pointer) -> void {
     switch (type) {
         case DIVIDE_ERROR: isr_handle_divide_error();      break;
         case DOUBLE_FAULT: isr_handle_double_fault(error); break;
+        case PIT_TIMER:    isr_handle_timer();             break;
 
         default: isr_unimplemented_handler(type, error); break;
     }
+
+     if (static_cast<u8>(type) >= 32) {
+         pic::send_eoi(static_cast<u8>(type));
+     }
+
 }
 
-
-auto set_gate(Interrupt_Vector_Type vector_type, u32 handler_address) -> void {
+auto set_gate(Interrupt_Vector_Type vector_type, void(*handler_function)()) -> void {
     auto& gate = table[static_cast<u8>(vector_type)];
     debug_assert(gate.selector == KERNEL_CODE_SEGMENT);
     debug_assert(gate.zero     == 0);
     debug_assert(gate.type.raw == GATE_PRESENT_RING0_INT32.raw);
 
+    auto handler_address = reinterpret_cast<psize>(handler_function);
     gate.handler_address_low  = static_cast<u16>(0xFFFF & (handler_address >> 0));
     gate.handler_address_high = static_cast<u16>(0xFFFF & (handler_address >> 16));
+}
+
+auto initialize() -> void {
+    {
+        using enum Interrupt_Vector_Type;
+
+        // CPU exceptions (vectors 0–31)
+        set_gate(DIVIDE_ERROR,                  _isr_handle_divide_error);
+        set_gate(DEBUG,                         _isr_handle_debug);
+        set_gate(NON_MASKABLE_INTERRUPT,        _isr_handle_non_maskable_interrupt);
+        set_gate(BREAKPOINT,                    _isr_handle_breakpoint);
+        set_gate(OVERFLOW,                      _isr_handle_overflow);
+        set_gate(BOUND_RANGE_EXCEEDED,          _isr_handle_bound_range_exceeded);
+        set_gate(INVALID_OPCODE,                _isr_handle_invalid_opcode);
+        set_gate(DEVICE_NOT_AVAILABLE,          _isr_handle_device_not_available);
+        set_gate(DOUBLE_FAULT,                  _isr_handle_double_fault);
+        set_gate(COPROCESSOR_SEGMENT_OVERRUN,   _isr_handle_coprocessor_segment_overrun);
+        set_gate(INVALID_TSS,                   _isr_handle_invalid_tss);
+        set_gate(SEGMENT_NOT_PRESENT,           _isr_handle_segment_not_present);
+        set_gate(STACK_SEGMENT_FAULT,           _isr_handle_stack_segment_fault);
+        set_gate(GENERAL_PROTECTION_FAULT,      _isr_handle_general_protection_fault);
+        set_gate(PAGE_FAULT,                    _isr_handle_page_fault);
+        set_gate(RESERVED_15,                   _isr_handle_reserved_15);
+        set_gate(X87_FLOATING_POINT_EXCEPTION,  _isr_handle_x87_floating_point_exception);
+        set_gate(ALIGNMENT_CHECK,               _isr_handle_alignment_check);
+        set_gate(MACHINE_CHECK,                 _isr_handle_machine_check);
+        set_gate(SIMD_FLOATING_POINT_EXCEPTION, _isr_handle_simd_floating_point_exception);
+        set_gate(VIRTUALISATION_EXCEPTION,      _isr_handle_virtualisation_exception);
+        set_gate(CONTROL_PROTECTION_EXCEPTION,  _isr_handle_control_protection_exception);
+        set_gate(RESERVED_22,                   _isr_handle_reserved_22);
+        set_gate(RESERVED_23,                   _isr_handle_reserved_23);
+        set_gate(RESERVED_24,                   _isr_handle_reserved_24);
+        set_gate(RESERVED_25,                   _isr_handle_reserved_25);
+        set_gate(RESERVED_26,                   _isr_handle_reserved_26);
+        set_gate(RESERVED_27,                   _isr_handle_reserved_27);
+        set_gate(HYPERVISOR_INJECTION,          _isr_handle_hypervisor_injection);
+        set_gate(VMM_COMMUNICATION,             _isr_handle_vmm_communication);
+        set_gate(SECURITY_EXCEPTION,            _isr_handle_security_exception);
+        set_gate(RESERVED_31,                   _isr_handle_reserved_31);
+
+        // Hardware IRQs (vectors 32–47)
+        set_gate(PIT_TIMER,                     _isr_handle_pit_timer);
+        set_gate(PS2_KEYBOARD,                  _isr_handle_ps2_keyboard);
+        set_gate(CASCADE,                       _isr_handle_cascade);
+        set_gate(COM2,                          _isr_handle_com2);
+        set_gate(COM1,                          _isr_handle_com1);
+        set_gate(LPT2,                          _isr_handle_lpt2);
+        set_gate(FLOPPY,                        _isr_handle_floppy);
+        set_gate(LPT1_SPURIOUS,                 _isr_handle_lpt1_spurious);
+        set_gate(RTC,                           _isr_handle_rtc);
+        set_gate(ACPI,                          _isr_handle_acpi);
+        set_gate(FREE_IRQ10,                    _isr_handle_free_irq10);
+        set_gate(FREE_IRQ11,                    _isr_handle_free_irq11);
+        set_gate(PS2_MOUSE,                     _isr_handle_ps2_mouse);
+        set_gate(FPU,                           _isr_handle_fpu);
+        set_gate(PRIMARY_ATA,                   _isr_handle_primary_ata);
+        set_gate(SECONDARY_ATA,                 _isr_handle_secondary_ata);
+    }
+
+    interrupt_descriptor_table_register.limit = table.size * sizeof(Gate) - 1;
+    interrupt_descriptor_table_register.base  = reinterpret_cast<psize>(&table[0]);
+    asm volatile("lidt %0" : : "m"(interrupt_descriptor_table_register));
 }
 
 } // namespace idt
