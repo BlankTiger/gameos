@@ -13,10 +13,10 @@ inline volatile u64 tick_counter = 0;
 
 union Command {
     struct {
-        u8 format         : 1;  // bit  [0]   - 0 = binary
-        u8 operating_mode : 3;  // bits [3:1]
-        u8 access_mode    : 2;  // bits [5:4]
-        u8 channel_select : 2;  // bits [7:6]
+        u8 format         : 1;
+        u8 operating_mode : 3;
+        u8 access_mode    : 2;
+        u8 channel_select : 2;
     };
     u8 raw;
 } __attribute__((packed));
@@ -32,8 +32,11 @@ auto initialize() -> void {
     using namespace low_level_io;
 
     tick_counter = 0;
-    outb(PIT_CMD_REGISTER,       INIT_CMD.raw);
+    outb(PIT_CMD_REGISTER, INIT_CMD.raw);
+
+    // low bytes
     outb(PIT_CHANNEL0_DATA_PORT, TICK_RATE_DIVISOR & 0xFF);
+    // high bytes
     outb(PIT_CHANNEL0_DATA_PORT, (TICK_RATE_DIVISOR >> 8) & 0xFF);
 }
 

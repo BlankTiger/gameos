@@ -295,4 +295,8 @@ auto initialize() -> void {
     asm volatile("lidt %0" : : "m"(interrupt_descriptor_table_register));
 }
 
+force_inline auto enable_interrupts() -> void {
+    asm volatile("sti");
+}
+
 } // namespace idt

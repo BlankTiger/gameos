@@ -1,5 +1,6 @@
 #include "global_constructor_handling.hh"
 #include "kstd.hh"
+#include "kstd/interrupts.hh"
 
 /* Check if the compiler thinks you are targeting the wrong operating system. */
 #if defined(__linux__)
@@ -27,7 +28,7 @@ extern "C" auto kernel_main(u32 magic, const boot::Multiboot2_Info* mbi) -> void
     idt::initialize();
     pic::initialize();
     time::initialize();
-    asm volatile("sti");
+    idt::enable_interrupts();
 
     gfx::clear(gfx::BLACK);
 
