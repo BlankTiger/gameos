@@ -17,12 +17,15 @@ extern "C" auto kernel_main(u32 magic, const boot::Multiboot2_Info* mbi) -> void
 
     assert(magic == boot::MULTIBOOT2_MAGIC, "bad multiboot2 magic");
 
+    serial::println("Initializing gfx");
     const auto gfx_initialized  = gfx::initialize(mbi);
     assert(gfx_initialized);
 
+    serial::println("Initializing term");
     const auto term_initialized = term::initialize();
     assert(term_initialized);
 
+    serial::println("Initializing mem");
     mem::initialize(mbi);
 
     idt::initialize();
@@ -35,29 +38,33 @@ extern "C" auto kernel_main(u32 magic, const boot::Multiboot2_Info* mbi) -> void
     term::println("Hello from GameOS!");
 
     gfx::draw_rect(250, 250, 100, 100, gfx::BLUE);
-    gfx::draw_rect(300, 300, 80, 80, gfx::Color{255, 0, 0, 128}.blend(gfx::BLACK));
+    gfx::draw_rect(300, 300, 80, 80, gfx::Color{200, 0, 0, 128});
 
     gfx::draw_rect(400, 250, 100, 100, gfx::GREEN);
-    gfx::draw_rect(450, 300, 80, 80, gfx::Color{0, 255, 0, 128}.blend(gfx::BLACK));
+    gfx::draw_rect(450, 300, 80, 80, gfx::Color{0, 200, 0, 128});
 
     gfx::draw_rect(550, 250, 100, 100, gfx::RED);
-    gfx::draw_rect(600, 300, 80, 80, gfx::Color{0, 0, 255, 128}.blend(gfx::BLACK));
+    gfx::draw_rect(600, 300, 80, 80, gfx::Color{0, 0, 200, 128});
 
     gfx::draw_rect(700, 250, 100, 100, gfx::WHITE);
-    gfx::draw_rect(750, 300, 80, 80, gfx::Color{255, 255, 255, 128}.blend(gfx::BLACK));
+    gfx::draw_rect(750, 300, 80, 80, gfx::Color{230, 230, 230, 128});
 
     gfx::draw_rect(250, 400, 550, 300, gfx::WHITE);
     gfx::draw_circle(525, 550, 100, gfx::RED);
 
     term::println("ZA WARUDO");
 
+    gfx::draw_frame();
+
     auto seconds = 1;
     while (true) {
         term::println("%", seconds);
+        gfx::draw_frame();
         time::sleep_ms(1000);
         if (seconds == 10) break;
         ++seconds;
     }
 
     term::println("OWARIDA");
+    gfx::draw_frame();
 }

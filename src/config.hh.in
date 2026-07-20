@@ -1,0 +1,5 @@
+#pragma once
+
+#define GFX_WIDTH @GFX_WIDTH@
+#define GFX_HEIGHT @GFX_HEIGHT@
+#define GFX_PIXEL_COUNT GFX_WIDTH * GFX_HEIGHT

@@ -1,11 +1,12 @@
 graphics:
-- [ ] double buffering
-- [ ] transparency
-- [ ] blending
-- [ ] circles
+- [x] double buffering
+- [x] transparency
+- [x] blending
+- [x] circles
 - [ ] lines
 - [ ] sprite embedding
 - [ ] sprite drawing
+- [ ] move draw\_char draw\_text to other location
 
 fonts:
 - [ ] embedding ttfs
