@@ -17,16 +17,21 @@ extern "C" auto kernel_main(u32 magic, const boot::Multiboot2_Info* mbi) -> void
 
     assert(magic == boot::MULTIBOOT2_MAGIC, "bad multiboot2 magic");
 
+    serial::println("Initializing mem");
+    mem::initialize(mbi);
+
+    // Global constructors are called here, after the allocator is live, so any
+    // constructor that calls operator new has a valid global_allocator (must
+    // be called after mem::initialize).
+    run_global_constructors();
+
     serial::println("Initializing gfx");
-    const auto gfx_initialized  = gfx::initialize(mbi);
+    const auto gfx_initialized = gfx::initialize(mbi);
     assert(gfx_initialized);
 
     serial::println("Initializing term");
     const auto term_initialized = term::initialize();
     assert(term_initialized);
-
-    serial::println("Initializing mem");
-    mem::initialize(mbi);
 
     idt::initialize();
     pic::initialize();
