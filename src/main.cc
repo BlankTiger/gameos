@@ -12,7 +12,7 @@
 #error "This tutorial needs to be compiled with a ix86-elf compiler"
 #endif
 
-extern "C" auto kernel_main(u32 magic, const boot::Multiboot2_Info* mbi) -> void {
+auto kernel_init(u32 magic, const boot::Multiboot2_Info* mbi) -> void {
     serial::initialize();
 
     assert(magic == boot::MULTIBOOT2_MAGIC, "bad multiboot2 magic");
@@ -37,7 +37,9 @@ extern "C" auto kernel_main(u32 magic, const boot::Multiboot2_Info* mbi) -> void
     pic::initialize();
     time::initialize();
     idt::enable_interrupts();
+}
 
+auto main() -> void {
     gfx::clear(gfx::BLACK);
 
     term::println("Hello from GameOS!");
@@ -70,4 +72,9 @@ extern "C" auto kernel_main(u32 magic, const boot::Multiboot2_Info* mbi) -> void
     }
 
     term::println("OWARIDA");
+}
+
+extern "C" auto kernel_main(u32 magic, const boot::Multiboot2_Info* mbi) -> void {
+    kernel_init(magic, mbi);
+    main();
 }
