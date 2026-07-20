@@ -122,7 +122,7 @@ auto find_multiboot2_framebuffer_tag(const Multiboot2_Info* mbi) -> const Multib
     const auto* end = mbi->end_tag();
 
     while (ptr_addr(tag) < ptr_addr(end)) {
-        if (static_cast<Multiboot2_Tag_Type>(tag->type) == Multiboot2_Tag_Type::FRAMEBUFFER) {
+        if (tag->type == Multiboot2_Tag_Type::FRAMEBUFFER) {
             return tag->as<Multiboot2_Framebuffer_Tag>();
         }
 

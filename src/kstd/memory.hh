@@ -348,7 +348,7 @@ struct Arena_Allocator final : Allocator {
         auto* aligned_point = reinterpret_cast<std::byte*>(align_up(ptr_addr(current_point), alignment));
         auto* new_point = aligned_point + size;
 
-        assert(new_point <= address_limit);
+        if (new_point > address_limit) return nullptr;
         current_point = new_point;
 
         return static_cast<void*>(aligned_point);
