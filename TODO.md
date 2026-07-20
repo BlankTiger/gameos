@@ -7,6 +7,7 @@ graphics:
 - [ ] sprite embedding
 - [ ] sprite drawing
 - [ ] move draw\_char draw\_text to other location
+- [ ] draw_text_immediate for asserts and term::print
 
 fonts:
 - [ ] embedding ttfs
