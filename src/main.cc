@@ -52,17 +52,19 @@ extern "C" auto kernel_main(u32 magic, const boot::Multiboot2_Info* mbi) -> void
     gfx::draw_rect(250, 400, 550, 300, gfx::WHITE);
     gfx::draw_circle(525, 550, 100, gfx::RED);
 
-    gfx::draw_frame();
-
     term::println("ZA WARUDO");
+
+    gfx::draw_frame();
 
     auto seconds = 1;
     while (true) {
         term::println("%", seconds);
+        gfx::draw_frame();
         time::sleep_ms(1000);
         if (seconds == 10) break;
         ++seconds;
     }
 
     term::println("OWARIDA");
+    gfx::draw_frame();
 }

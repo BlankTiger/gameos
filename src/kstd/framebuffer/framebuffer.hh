@@ -38,7 +38,7 @@ force_inline auto swap_buffers() -> void {
     const auto* framebuffer_tag = boot::find_multiboot2_framebuffer_tag(mbi);
     if (framebuffer_tag == nullptr || framebuffer_tag->framebuffer_addr == 0) return false;
 
-    front_buffer.pixels = reinterpret_cast<Pixel*>((uintptr_t)framebuffer_tag->framebuffer_addr);
+    front_buffer.pixels = reinterpret_cast<Pixel*>(framebuffer_tag->framebuffer_addr);
     front_buffer.pitch = framebuffer_tag->framebuffer_pitch;
     front_buffer.width = framebuffer_tag->framebuffer_width;
     front_buffer.height = framebuffer_tag->framebuffer_height;
