@@ -1,6 +1,10 @@
 #pragma once
 
+#include <bit>
+
 #include "math.hh"
+#include "config.hh"
+#include "font8x16.hh"
 
 namespace gfx {
 
@@ -22,37 +26,129 @@ constexpr Color GREEN{0, 255, 0, 255};
 constexpr Color BLUE{255, 0, 0, 255};
 constexpr Color TRANSPARENT{0, 0, 0, 0};
 
-}  // namespace gfx
+union Pixel {
+    u32 value;
+    Color color;
+};
 
-#include "framebuffer/framebuffer.hh"
-#include "framebuffer/term.hh"
+struct Framebuffer {
+    Pixel* pixels;
+    u32 pitch;
+    u32 width;
+    u32 height;
+    u8 bits_per_pixel;
+    u8 type;
+    usize stride;
+};
 
-namespace gfx {
+static Framebuffer front_buffer;
+static Pixel back_buffer[GFX_PIXEL_COUNT];
+constexpr usize BUFFER_SIZE = GFX_PIXEL_COUNT * sizeof(Pixel);
+static bool __framebuffer_initialized;
 
-[[nodiscard]] static auto initialize(const boot::Multiboot2_Info* mbi) -> bool {
-    return fb::initialize(mbi);
+force_inline auto swap_buffers() -> void {
+    debug_assert(front_buffer.pixels != nullptr);
+    memcpy(front_buffer.pixels, back_buffer, BUFFER_SIZE);
 }
 
-auto is_initialized() -> bool {
-    return fb::is_initialized();
+[[nodiscard]] auto initialize(const boot::Multiboot2_Info* mbi) -> bool {
+    if (__framebuffer_initialized) return true;
+
+    const auto* framebuffer_tag = boot::find_multiboot2_framebuffer_tag(mbi);
+    if (framebuffer_tag == nullptr || framebuffer_tag->framebuffer_addr == 0) return false;
+
+    front_buffer.pixels = reinterpret_cast<Pixel*>(framebuffer_tag->framebuffer_addr);
+    front_buffer.pitch = framebuffer_tag->framebuffer_pitch;
+    front_buffer.width = framebuffer_tag->framebuffer_width;
+    front_buffer.height = framebuffer_tag->framebuffer_height;
+    front_buffer.bits_per_pixel = framebuffer_tag->framebuffer_bpp;
+    front_buffer.type = framebuffer_tag->framebuffer_type;
+    front_buffer.stride = front_buffer.pitch / sizeof(u32);
+    assert(front_buffer.bits_per_pixel == 32, "Only 32BPP supported.");
+
+    memset(back_buffer, 0, BUFFER_SIZE);
+    swap_buffers();
+
+    __framebuffer_initialized = true;
+    return true;
+}
+
+force_inline auto is_initialized() -> bool {
+    return __framebuffer_initialized;
+}
+
+force_inline auto width() -> u32 {
+    return front_buffer.width;
+}
+
+force_inline auto height() -> u32 {
+    return front_buffer.height;
+}
+
+static auto set_pixel(u32 x, u32 y, Color color) -> void {
+    back_buffer[y * front_buffer.stride + x].color.blend_with(color);
+}
+
+auto draw_char(u32 x, u32 y, char c, Color fg, Color bg) -> void {
+    const auto index = static_cast<u8>(c);
+    const auto& glyph = font::DATA[index];
+
+    for (u32 row = 0; row < font::GLYPH_HEIGHT; ++row) {
+        const u32 py = y + row;
+        if (py >= front_buffer.height) break;
+
+        const font::Glyph_Width bits = glyph[row];
+        for (u32 col = 0; col < font::GLYPH_WIDTH; ++col) {
+            const u32 px = x + col;
+            if (px >= front_buffer.width) break;
+
+            const auto color = bits & (0b1000'0000 >> col) ? fg : bg;
+            set_pixel(px, py, color);
+        }
+    }
+}
+
+auto draw_text(u32 x, u32 y, const char* text, Color fg = WHITE, Color bg = BLACK) -> void {
+    u32 cx = x;
+    u32 cy = y;
+    u32 frame_width = front_buffer.width;
+    u32 frame_height = front_buffer.height;
+
+    for (; *text; ++text) {
+        if (*text == '\n') {
+            cx = x;
+            cy += font::GLYPH_HEIGHT;
+            continue;
+        }
+
+        if (cx + font::GLYPH_WIDTH > frame_width) {
+            cx = x;
+            cy += font::GLYPH_HEIGHT;
+        }
+
+        if (cy + font::GLYPH_HEIGHT > frame_height) break;
+
+        draw_char(cx, cy, *text, fg, bg);
+        cx += font::GLYPH_WIDTH;
+    }
 }
 
 auto clear(Color color) -> void {
-    for (u32 y = 0; y < fb::height(); ++y) {
-        for (u32 x = 0; x < fb::width(); ++x) {
-            fb::set_pixel(x, y, color);
+    for (u32 y = 0; y < height(); ++y) {
+        for (u32 x = 0; x < width(); ++x) {
+            set_pixel(x, y, color);
         }
     }
 }
 
 auto draw_frame() -> void {
-    fb::swap_buffers();
+    swap_buffers();
 }
 
 auto draw_rect(u32 x, u32 y, u32 w, u32 h, Color color) -> void {
-    for (u32 _y = y; _y < y + h && _y < fb::height(); ++_y) {
-        for (u32 _x = x; _x < x + w && _x < fb::width(); ++_x) {
-            fb::set_pixel(_x, _y, color);
+    for (u32 _y = y; _y < y + h && _y < height(); ++_y) {
+        for (u32 _x = x; _x < x + w && _x < width(); ++_x) {
+            set_pixel(_x, _y, color);
         }
     }
 }
@@ -74,8 +170,8 @@ auto draw_circle(u32 x, u32 y, u32 r, Color color) -> void {
     u32 y2 = y + r + 1;
 
     // Overflows
-    if (x2 < x) x2 = fb::width();
-    if (y2 < y) y2 = fb::height();
+    if (x2 < x) x2 = width();
+    if (y2 < y) y2 = height();
 
     u32 color_alpha = color.a;
     for (usize i = 0; i < colors_table.size; ++i) {
@@ -90,14 +186,14 @@ auto draw_circle(u32 x, u32 y, u32 r, Color color) -> void {
     u32 inner_r = (r > 1) ? (r - 1) * (r - 1) : 0;
     u32 outer_r = (r + 1) * (r + 1);
 
-    for (u32 py = y1; py < y2 && py < fb::height(); ++py) {
-        for (u32 px = x1; px < x2 && px < fb::width(); ++px) {
+    for (u32 py = y1; py < y2 && py < height(); ++py) {
+        for (u32 px = x1; px < x2 && px < width(); ++px) {
             u32 dx = (px > x) ? px - x : x - px;
             u32 dy = (py > y) ? py - y : y - py;
             u32 d2 = dx * dx + dy * dy;
 
             if (d2 <= inner_r) {
-                fb::set_pixel(px, py, color);
+                set_pixel(px, py, color);
             }
             else if (d2 >= outer_r) {
                 continue;
@@ -117,7 +213,7 @@ auto draw_circle(u32 x, u32 y, u32 r, Color color) -> void {
                         if (dx * dx + dy * dy <= r * r * AA_RES1_POW2 * 4) in_circle += 1;
                     }
                 }
-                fb::set_pixel(px, py, colors_table[in_circle]);
+                set_pixel(px, py, colors_table[in_circle]);
             }
         }
     }

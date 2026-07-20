@@ -11,8 +11,7 @@ halt_set_term_ready() -> void {
     __term_ready = true;
 }
 
-// Forward declarations of term::print functions.
-#define DECLARATIONS()                                                      \
+#define TERM_FORWARD_DECLARATIONS()                                         \
     namespace term {                                                        \
         auto print(const char* format) -> int;                              \
                                                                             \
@@ -26,8 +25,7 @@ halt_set_term_ready() -> void {
         auto println(const char* format, T&& value, Rest&&... rest) -> int; \
     }
 
-namespace fb { DECLARATIONS() }
-namespace term = fb::term;
+TERM_FORWARD_DECLARATIONS()
 
 [[noreturn]] static auto 
 halt_forever(const char* message, const std::source_location& location = std::source_location::current()) -> void {
