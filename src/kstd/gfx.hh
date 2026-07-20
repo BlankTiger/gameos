@@ -45,6 +45,10 @@ auto clear(Color color) -> void {
     }
 }
 
+auto draw_frame() -> void {
+    fb::swap_buffers();
+}
+
 auto draw_rect(u32 x, u32 y, u32 w, u32 h, Color color) -> void {
     for (u32 _y = y; _y < y + h && _y < fb::height(); ++_y) {
         for (u32 _x = x; _x < x + w && _x < fb::width(); ++_x) {

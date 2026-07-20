@@ -18,7 +18,7 @@ static auto next_line() -> void {
 }
 
 static auto max_cols() -> u32 {
-    return (__current_frame.width - 2 * DEFAULT_PADDING) / font::GLYPH_WIDTH;
+    return (fb::width() - 2 * DEFAULT_PADDING) / font::GLYPH_WIDTH;
 }
 
 struct Backend {

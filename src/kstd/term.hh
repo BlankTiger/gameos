@@ -27,4 +27,3 @@ auto println(const char* format, T&& value, Rest&&... rest) -> int;
 }  // namespace term
 }  // namespace fb
 
-namespace term = fb::term;

@@ -17,12 +17,15 @@ extern "C" auto kernel_main(u32 magic, const boot::Multiboot2_Info* mbi) -> void
 
     assert(magic == boot::MULTIBOOT2_MAGIC, "bad multiboot2 magic");
 
+    serial::println("Initializing gfx");
     const auto gfx_initialized  = gfx::initialize(mbi);
     assert(gfx_initialized);
 
+    serial::println("Initializing term");
     const auto term_initialized = term::initialize();
     assert(term_initialized);
 
+    serial::println("Initializing mem");
     mem::initialize(mbi);
 
     idt::initialize();
@@ -48,6 +51,8 @@ extern "C" auto kernel_main(u32 magic, const boot::Multiboot2_Info* mbi) -> void
 
     gfx::draw_rect(250, 400, 550, 300, gfx::WHITE);
     gfx::draw_circle(525, 550, 100, gfx::RED);
+
+    gfx::draw_frame();
 
     term::println("ZA WARUDO");
 

@@ -7,10 +7,21 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
+# Graphics settings
+set(GFX_WIDTH 1024)
+set(GFX_HEIGHT 768)
+
+# Configure configuration header
+configure_file(${CMAKE_SOURCE_DIR}/src/config.hh.in ${CMAKE_BINARY_DIR}/config.hh @ONLY)
+# Configure GRUB
+configure_file(${CMAKE_SOURCE_DIR}/grub.cfg.in ${CMAKE_BINARY_DIR}/grub.cfg @ONLY)
+
 add_executable(gameos
     src/boot.S
     src/main.cc
 )
+
+target_include_directories(gameos PRIVATE ${CMAKE_BINARY_DIR})
 
 target_compile_options(gameos PRIVATE
     $<$<COMPILE_LANGUAGE:C,CXX>:-ffreestanding>
@@ -27,7 +38,6 @@ target_link_options(gameos PRIVATE
     -nostdlib
 )
 
-configure_file(${CMAKE_SOURCE_DIR}/grub.cfg ${CMAKE_BINARY_DIR}/grub.cfg COPYONLY)
 
 target_link_libraries(gameos PRIVATE gcc)
 

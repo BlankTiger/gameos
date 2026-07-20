@@ -2,6 +2,10 @@
 
 namespace math {
 
+force_inline auto abs(u32 x) {
+    return (x ^ (x >> 31)) - (x >> 31);
+}
+
 force_inline auto lerp(u8 a, u8 b, int pos, int max) -> u8 {
     return a + ((b - a) * pos) / max;
 }
