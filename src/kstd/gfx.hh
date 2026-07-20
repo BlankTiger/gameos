@@ -87,6 +87,9 @@ force_inline auto height() -> u32 {
 
 template <bool IMMEDIATE = false>
 static force_inline auto set_pixel(u32 x, u32 y, Color color) -> void {
+    debug_assert(x < width());
+    debug_assert(y < height());
+
     auto index = y * front_buffer.stride + x;
     if constexpr(IMMEDIATE) {
         front_buffer.pixels[index].color.blend_with(color);
