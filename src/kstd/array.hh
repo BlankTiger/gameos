@@ -4,6 +4,7 @@
 #include <type_traits>
 #include <utility>
 #include <source_location>
+#include <iterator>
 
 #include "../basic.hh"
 #include "assert.hh"
