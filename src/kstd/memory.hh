@@ -265,14 +265,9 @@ struct Buddy_Allocator final : Allocator {
         auto* header = reinterpret_cast<Allocation_Header*>(user_ptr - sizeof(Allocation_Header));
         header->block_base = block_base;
         header->order = static_cast<u8>(order);
-        header->reserved[0] = 0;
-        header->reserved[1] = 0;
-        header->reserved[2] = 0;
-        header->reserved[3] = 0;
-        header->reserved[4] = 0;
-        header->reserved[5] = 0;
-        header->reserved[6] = 0;
-
+        for (auto& reserved : header->reserved) {
+            reserved = 0;
+        }
         return reinterpret_cast<void*>(user_ptr);
     }
 
