@@ -9,9 +9,6 @@ constexpr auto PIT_FREQUENCY_HZ  = 1'193'182;
 constexpr auto TICK_RATE         = 1000;
 constexpr auto TICK_RATE_DIVISOR = PIT_FREQUENCY_HZ / TICK_RATE;
 
-constexpr u16 PIT_CHANNEL0_DATA_PORT = 0x40;
-constexpr u16 PIT_CMD_REGISTER       = 0x43;
-
 inline volatile u64 tick_counter = 0;
 
 union Command {

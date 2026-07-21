@@ -2,8 +2,11 @@
 
 #include "../basic.hh"
 #include "array.hh"
+#include "low_level_io.hh"
 #include "time.hh"
 #include "programmable_interrupt_controller.hh"
+#include "term.hh"
+#include "ps2.hh"
 
 namespace idt {
 
@@ -216,6 +219,8 @@ extern "C" auto isr_dispatch(u32* registers_pointer) -> void {
     switch (type) {
         case DIVIDE_ERROR: isr_handle_divide_error();      break;
         case DOUBLE_FAULT: isr_handle_double_fault(error); break;
+        case PS2_KEYBOARD: ps2::isr_handle_ps2_keyboard(); break;
+        case PS2_MOUSE:    ps2::isr_handle_ps2_mouse();    break;
         case PIT_TIMER:    isr_handle_timer();             break;
 
         default: isr_unimplemented_handler(type, error); break;
