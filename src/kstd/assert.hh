@@ -2,6 +2,9 @@
 
 #include <source_location>
 
+#include "../basic.hh"
+#include "halt.hh"
+
 constexpr force_inline auto assert(
     bool predicate,
     const char* message = nullptr,

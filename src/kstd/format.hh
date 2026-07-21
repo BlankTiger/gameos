@@ -3,6 +3,9 @@
 #include <type_traits>
 #include <utility>
 
+#include "../basic.hh"
+#include "../cstring.hh"
+
 // Backend-agnostic formatting utilities.
 //
 // Backend must provide:

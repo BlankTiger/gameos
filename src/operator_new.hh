@@ -2,6 +2,9 @@
 
 #include <new>
 
+#include "kstd/halt.hh"
+#include "kstd/memory.hh"
+
 auto operator new(usize size) -> void* {
     if (void* ptr = mem::__global_allocator->alloc(size)) return ptr;
     halt_forever("new failed");

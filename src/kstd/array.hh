@@ -1,8 +1,12 @@
 #pragma once
 
+#include <new>
 #include <type_traits>
 #include <utility>
+#include <source_location>
 
+#include "../basic.hh"
+#include "assert.hh"
 #include "array_iterator.hh"
 
 template <typename T, usize N>

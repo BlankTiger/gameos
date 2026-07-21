@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../basic.hh"
+
 namespace math {
 
 force_inline auto abs(u32 x) -> u32 {

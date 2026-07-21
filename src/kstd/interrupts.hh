@@ -1,5 +1,10 @@
 #pragma once
 
+#include "../basic.hh"
+#include "array.hh"
+#include "time.hh"
+#include "programmable_interrupt_controller.hh"
+
 namespace idt {
 
 union Gate_Type_Attributes {
