@@ -58,13 +58,13 @@ force_inline auto swap_buffers() -> void {
     const auto* framebuffer_tag = boot::find_multiboot2_framebuffer_tag(mbi);
     if (framebuffer_tag == nullptr || framebuffer_tag->framebuffer_addr == 0) return false;
 
-    front_buffer.pixels = reinterpret_cast<Pixel*>(framebuffer_tag->framebuffer_addr);
-    front_buffer.pitch = framebuffer_tag->framebuffer_pitch;
-    front_buffer.width = framebuffer_tag->framebuffer_width;
-    front_buffer.height = framebuffer_tag->framebuffer_height;
+    front_buffer.pixels         = reinterpret_cast<Pixel*>(framebuffer_tag->framebuffer_addr);
+    front_buffer.pitch          = framebuffer_tag->framebuffer_pitch;
+    front_buffer.width          = framebuffer_tag->framebuffer_width;
+    front_buffer.height         = framebuffer_tag->framebuffer_height;
     front_buffer.bits_per_pixel = framebuffer_tag->framebuffer_bpp;
-    front_buffer.type = framebuffer_tag->framebuffer_type;
-    front_buffer.stride = front_buffer.pitch / sizeof(u32);
+    front_buffer.type           = framebuffer_tag->framebuffer_type;
+    front_buffer.stride         = front_buffer.pitch / sizeof(u32);
     assert(front_buffer.bits_per_pixel == 32, "Only 32BPP supported.");
 
     memset(back_buffer, 0, BUFFER_SIZE);

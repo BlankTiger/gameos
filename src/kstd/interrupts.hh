@@ -221,9 +221,9 @@ extern "C" auto isr_dispatch(u32* registers_pointer) -> void {
         default: isr_unimplemented_handler(type, error); break;
     }
 
-     if (static_cast<u8>(type) >= 32) {
-         pic::send_eoi(static_cast<u8>(type));
-     }
+    if (static_cast<u8>(type) >= 32) {
+        pic::send_eoi(static_cast<u8>(type));
+    }
 
 }
 
