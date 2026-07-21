@@ -72,7 +72,7 @@ header_end:
  * The multiboot standard does not define the value of the stack pointer
  * register (esp) and it is up to the kernel to provide a stack.
  *
- * We allocate 16 KiB in a dedicated .bootstrap_stack section marked "nobits"
+ * We allocate 8 MiB in a dedicated .bootstrap_stack section marked "nobits"
  * so the kernel binary stays small (the section occupies no space on disk -
  * only in memory once loaded).
  *
