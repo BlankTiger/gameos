@@ -28,7 +28,7 @@ base layer:
 - [x] fix early asserts (term must be initialized for asserts to output anything currently and we have asserts that are before the term::initialize)
 - [ ] move all __variables to .cc files
 - [ ] implement cpuid (https://wiki.osdev.org/CPUID)
-- [ ] remove term declarations in halt.hh instead of that do a function pointer for term::print, that would decouple the two systems completely (could even do something like a list of print function pointers that would get called after halt fires)
+- [x] remove term declarations in halt.hh instead of that do a function pointer for term::print, that would decouple the two systems completely (could even do something like a list of print function pointers that would get called after halt fires)
 
 utils:
 - [ ] todo list generator (gather notes from source code and generate a stable

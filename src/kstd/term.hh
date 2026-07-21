@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../basic.hh"
+#include "halt.hh"
 #include "gfx.hh"
 
 namespace term {
@@ -43,13 +44,6 @@ struct Backend {
     }
 };
 
-[[nodiscard]] auto initialize() -> bool {
-    __state = {0, 0};
-    auto is_initialized = gfx::is_initialized();
-    if (is_initialized) halt_set_term_ready();
-    return is_initialized;
-}
-
 auto print(const char* format) -> int {
     return fmt::print<Backend>(format);
 }
@@ -70,6 +64,18 @@ auto println(const char* format) -> int {
 template <typename T, typename... Rest>
 auto println(const char* format, T&& value, Rest&&... rest) -> int {
     return fmt::println<Backend>(format, std::forward<T>(value), std::forward<Rest>(rest)...);
+}
+
+[[nodiscard]] auto initialize() -> bool {
+    __state = {0, 0};
+    auto is_initialized = gfx::is_initialized();
+    if (is_initialized) {
+        halt_set_print(+[](const char* file, u32 line, u32 col, const char* message) {
+            print("%:%:%", file, line, col);
+            if (message != nullptr) println(": %", message);
+        });
+    }
+    return is_initialized;
 }
 
 }  // namespace term
