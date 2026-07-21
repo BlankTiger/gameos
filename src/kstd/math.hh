@@ -4,7 +4,7 @@
 
 namespace math {
 
-force_inline auto abs(u32 x) -> u32 {
+force_inline auto abs(s32 x) -> s32 {
     return (x ^ (x >> 31)) - (x >> 31);
 }
 
