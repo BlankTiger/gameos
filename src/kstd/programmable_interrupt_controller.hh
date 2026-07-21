@@ -1,6 +1,8 @@
 #pragma once
 
 #include "low_level_io.hh"
+#include "assert.hh"
+
 namespace pic {
 
 union ICW1 {

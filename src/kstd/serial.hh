@@ -1,5 +1,8 @@
 #pragma once
 
+#include "low_level_io.hh"
+#include "format.hh"
+
 namespace serial {
 
 constexpr u16 COM1 = 0x3F8;

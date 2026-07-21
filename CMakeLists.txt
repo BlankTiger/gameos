@@ -21,6 +21,32 @@ add_executable(gameos
     src/main.cc
 )
 
+# Compiles every header standalone, so none of them can quietly depend
+# on an include that some other header happened to pull in first.
+file(GLOB_RECURSE all_headers CONFIGURE_DEPENDS src/*.hh)
+
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/header_checks)
+
+foreach(header ${all_headers})
+    file(RELATIVE_PATH header_rel ${CMAKE_SOURCE_DIR}/src ${header})
+    string(REPLACE "/" "_" header_flat ${header_rel})
+    set(stamp ${CMAKE_BINARY_DIR}/header_checks/${header_flat}.stamp)
+    add_custom_command(
+        OUTPUT ${stamp}
+        COMMAND ${CMAKE_CXX_COMPILER}
+                -std=c++23 -ffreestanding -fno-exceptions -fno-rtti
+                -Wno-pragma-once-outside-header
+                -I ${CMAKE_SOURCE_DIR}/src -I ${CMAKE_BINARY_DIR}
+                -fsyntax-only ${header}
+        COMMAND ${CMAKE_COMMAND} -E touch ${stamp}
+        DEPENDS ${header}
+    )
+    list(APPEND header_stamps ${stamp})
+endforeach()
+
+add_custom_target(check_headers ALL DEPENDS ${header_stamps})
+
+
 target_include_directories(gameos PRIVATE ${CMAKE_BINARY_DIR})
 
 target_compile_options(gameos PRIVATE
@@ -37,7 +63,6 @@ target_link_options(gameos PRIVATE
     -ffreestanding
     -nostdlib
 )
-
 
 target_link_libraries(gameos PRIVATE gcc)
 

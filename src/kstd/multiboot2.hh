@@ -1,5 +1,8 @@
 #pragma once
 
+#include "../basic.hh"
+#include "../pointer_utils.hh"
+
 namespace boot {
 
 enum class Multiboot_Info_Flag : u32 {

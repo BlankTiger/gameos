@@ -2,6 +2,9 @@
 
 #include <climits>
 
+#include "../basic.hh"
+#include "array.hh"
+
 namespace font {
 
 using Glyph_Width = u8;

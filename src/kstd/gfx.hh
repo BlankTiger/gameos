@@ -5,6 +5,7 @@
 #include "math.hh"
 #include "config.hh"
 #include "font8x16.hh"
+#include "multiboot2.hh"
 
 namespace gfx {
 

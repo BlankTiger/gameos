@@ -1,5 +1,8 @@
 #pragma once
 
+#include "../basic.hh"
+#include "low_level_io.hh"
+
 namespace time {
 
 constexpr auto PIT_FREQUENCY_HZ  = 1'193'182;

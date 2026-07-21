@@ -2,8 +2,10 @@
 
 #include <source_location>
 
+#include "serial.hh"
+
 static bool __panicking = false;
-static bool __term_ready = false;  
+static bool __term_ready = false;
 
 // Must only be called after term::initialize() succeeds.
 force_inline auto

@@ -1,5 +1,8 @@
 #pragma once
 
+#include "../basic.hh"
+#include "gfx.hh"
+
 namespace term {
 
 constexpr u32 DEFAULT_PADDING = 10;

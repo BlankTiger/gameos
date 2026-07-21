@@ -3,7 +3,7 @@
 // This contains only the definitions
 #include <cstring>
 
-#include "int.hh"
+#include "basic.hh"
 
 auto strlen(const char* str) -> usize {
     usize len = 0;

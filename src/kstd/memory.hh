@@ -2,11 +2,7 @@
 
 #include <cstddef>
 
-template <typename T>
-inline auto ptr_addr(const T* pointer) -> uintptr_t {
-    return reinterpret_cast<uintptr_t>(pointer);
-}
-
+#include "array.hh"
 #include "multiboot2.hh"
 
 namespace mem {
