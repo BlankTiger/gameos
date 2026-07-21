@@ -7,48 +7,48 @@ namespace pic {
 
 union ICW1 {
     struct {
-	u8 icw4_needed : 1;  // 1 = ICW4 will follow
-	u8 single_mode : 1;  // 0 = cascade mode (two PICs)
-	u8 interval4   : 1;  // 0 = 8-byte interrupt vectors (unused on x86)
-	u8 level_trig  : 1;  // 0 = edge triggered
-	u8 init        : 1;  // must be 1 — tells chip this is ICW1
-	u8 _reserved   : 3;
+        u8 icw4_needed : 1;  // 1 = ICW4 will follow
+        u8 single_mode : 1;  // 0 = cascade mode (two PICs)
+        u8 interval4   : 1;  // 0 = 8-byte interrupt vectors (unused on x86)
+        u8 level_trig  : 1;  // 0 = edge triggered
+        u8 init        : 1;  // must be 1 — tells chip this is ICW1
+        u8 _reserved   : 3;
     };
     u8 raw;
 } __attribute__((packed));
 
 union ICW2 {
     struct {
-	u8 _unused : 3;  // must be 0 — low 3 bits are set by the PIC itself
-	u8 vector  : 5;  // upper 5 bits of base vector (32 >> 3 = 4, 40 >> 3 = 5)
+        u8 _unused : 3;  // must be 0 — low 3 bits are set by the PIC itself
+        u8 vector  : 5;  // upper 5 bits of base vector (32 >> 3 = 4, 40 >> 3 = 5)
     };
     u8 raw;
 } __attribute__((packed));
 
 union ICW3_Master {
     struct {
-	// @TODO: Maybe expand to single bits.
-	u8 slave_irq : 8;  // bitmask — bit N = IRQ N has a slave attached
+    // @TODO: Maybe expand to single bits.
+        u8 slave_irq : 8;  // bitmask — bit N = IRQ N has a slave attached
     };
     u8 raw;
 } __attribute__((packed));
 
 union ICW3_Slave {
     struct {
-	u8 slave_id  : 3;  // which IRQ line on the master we're connected to
-	u8 _reserved : 5;
+        u8 slave_id  : 3;  // which IRQ line on the master we're connected to
+        u8 _reserved : 5;
     };
     u8 raw;
 } __attribute__((packed));
 
 union ICW4 {
     struct {
-	u8 mode_8086  : 1;  // 1 = 8086 mode
-	u8 auto_eoi   : 1;  // 0 = manual EOI
-	u8 buf_slave  : 1;  // buffered mode — 0 for non-buffered
-	u8 buf_enable : 1;  // buffered mode — 0 for non-buffered
-	u8 sfnm       : 1;  // special fully nested mode — 0 normally
-	u8 _reserved  : 3;
+        u8 mode_8086  : 1;  // 1 = 8086 mode
+        u8 auto_eoi   : 1;  // 0 = manual EOI
+        u8 buf_slave  : 1;  // buffered mode — 0 for non-buffered
+        u8 buf_enable : 1;  // buffered mode — 0 for non-buffered
+        u8 sfnm       : 1;  // special fully nested mode — 0 normally
+        u8 _reserved  : 3;
     };
     u8 raw;
 } __attribute__((packed));
