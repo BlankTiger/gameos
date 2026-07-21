@@ -35,6 +35,7 @@ auto kernel_init(u32 magic, const boot::Multiboot2_Info* mbi) -> void {
     idt::initialize();
     pic::initialize();
     time::initialize();
+    ps2::initialize();
     idt::enable_interrupts();
 }
 

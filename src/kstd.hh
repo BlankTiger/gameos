@@ -10,6 +10,7 @@
 #include "kstd/low_level_io.hh"
 #include "kstd/memory.hh"
 #include "kstd/programmable_interrupt_controller.hh"
+#include "kstd/ps2.hh"
 #include "kstd/serial.hh"
 #include "kstd/term.hh"
 #include "kstd/time.hh"

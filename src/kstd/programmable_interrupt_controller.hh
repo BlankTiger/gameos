@@ -53,13 +53,36 @@ union ICW4 {
     u8 raw;
 } __attribute__((packed));
 
-// PIC1
-constexpr u16 PIC_CMD_PORT_MASTER  = 0x20;
-constexpr u16 PIC_DATA_PORT_MASTER = 0x21;
+// Interrupt Mask Register - 1 = masked (disabled), 0 = unmasked (enabled).
+// Master PIC covers IRQ0-IRQ7
+union IMR {
+    struct {
+        u8 irq0_pit      : 1;  // IRQ0 - PIT timer
+        u8 irq1_keyboard : 1;  // IRQ1 - PS/2 keyboard
+        u8 irq2_cascade  : 1;  // IRQ2 - cascade to slave (must be unmasked for slave IRQs)
+        u8 irq3_com2     : 1;  // IRQ3 - COM2
+        u8 irq4_com1     : 1;  // IRQ4 - COM1
+        u8 irq5_lpt2     : 1;  // IRQ5 - LPT2 / sound card
+        u8 irq6_floppy   : 1;  // IRQ6 - floppy disk
+        u8 irq7_lpt1     : 1;  // IRQ7 - LPT1 / spurious
+    };
+    u8 raw;
+} __attribute__((packed));
 
-// PIC2
-constexpr u16 PIC_CMD_PORT_SLAVE  = 0xA0;
-constexpr u16 PIC_DATA_PORT_SLAVE = 0xA1;
+// Slave PIC covers IRQ8-IRQ15.
+union IMR_Slave {
+    struct {
+        u8 irq8_rtc      : 1;  // IRQ8  - real-time clock
+        u8 irq9_acpi     : 1;  // IRQ9  - ACPI / legacy IRQ2 redirect
+        u8 irq10         : 1;  // IRQ10 - open
+        u8 irq11         : 1;  // IRQ11 - open
+        u8 irq12_mouse   : 1;  // IRQ12 - PS/2 mouse
+        u8 irq13_fpu     : 1;  // IRQ13 - FPU / coprocessor
+        u8 irq14_ata1    : 1;  // IRQ14 - primary ATA
+        u8 irq15_ata2    : 1;  // IRQ15 - secondary ATA
+    };
+    u8 raw;
+} __attribute__((packed));
 
 constexpr u8 END_OF_INTERRUPT     = 0x20;
 constexpr u8 VECTOR_OFFSET_MASTER = 32;
@@ -67,9 +90,11 @@ constexpr u8 VECTOR_OFFSET_MASTER = 32;
 auto send_eoi(u8 vector) -> void {
     debug_assert(vector >= VECTOR_OFFSET_MASTER);
 
+    using namespace low_level_io;
+
     auto irq = vector - VECTOR_OFFSET_MASTER;
-    if(irq >= 8) low_level_io::outb(PIC_CMD_PORT_SLAVE, END_OF_INTERRUPT);
-    low_level_io::outb(PIC_CMD_PORT_MASTER, END_OF_INTERRUPT);
+    if(irq >= 8) outb(PIC_CMD_PORT_SLAVE, END_OF_INTERRUPT);
+    outb(PIC_CMD_PORT_MASTER, END_OF_INTERRUPT);
 }
 
 constexpr ICW1 INIT_CMD = {
@@ -131,19 +156,40 @@ auto initialize() -> void {
     outb_with_delay(PIC_DATA_PORT_MASTER, CPU_MODE_DATA.raw);
     outb_with_delay(PIC_DATA_PORT_SLAVE,  CPU_MODE_DATA.raw);
 
-    // Mask everything except IRQ0 (PIT timer).
     (void)mask1;
     (void)mask2;
-    outb_with_delay(PIC_DATA_PORT_MASTER, 0b11111110); // unmask IRQ0 only
-    outb_with_delay(PIC_DATA_PORT_SLAVE,  0xFF);       // mask all slave IRQs
+    constexpr IMR master_mask = {
+        .irq0_pit      = 0,
+        .irq1_keyboard = 0,
+        .irq2_cascade  = 0,
+        .irq3_com2     = 1,
+        .irq4_com1     = 1,
+        .irq5_lpt2     = 1,
+        .irq6_floppy   = 1,
+        .irq7_lpt1     = 1,
+    };
+    constexpr IMR_Slave slave_mask = {
+        .irq8_rtc    = 1,
+        .irq9_acpi   = 1,
+        .irq10       = 1,
+        .irq11       = 1,
+        .irq12_mouse = 0,
+        .irq13_fpu   = 1,
+        .irq14_ata1  = 1,
+        .irq15_ata2  = 1,
+    };
+    outb_with_delay(PIC_DATA_PORT_MASTER, master_mask.raw);
+    outb_with_delay(PIC_DATA_PORT_SLAVE,  slave_mask.raw);
 }
 
 auto disable() -> void {
     using namespace low_level_io;
 
-    // Done by masking all the interrupts.
-    outb_with_delay(PIC_DATA_PORT_MASTER, 0xff);
-    outb_with_delay(PIC_DATA_PORT_SLAVE,  0xff);
+    // Mask all interrupts.
+    constexpr IMR       all_masked        = { .raw = 0xFF };
+    constexpr IMR_Slave all_slave_masked  = { .raw = 0xFF };
+    outb_with_delay(PIC_DATA_PORT_MASTER, all_masked.raw);
+    outb_with_delay(PIC_DATA_PORT_SLAVE,  all_slave_masked.raw);
 }
 
 }
