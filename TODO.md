@@ -41,3 +41,4 @@ utils:
       to simply embed stuff by doing `auto* img = @embed(path_to_img);`, many more
       features could be added here
 - [ ] make the preprocessor output debug symbols based on the real paths, not the generated paths
+- [ ] pretty enum printing (autogenerate value -> pretty enum value as string mappings)
