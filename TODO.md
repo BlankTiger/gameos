@@ -4,10 +4,11 @@ graphics:
 - [x] blending
 - [x] circles
 - [ ] lines
-- [ ] sprite embedding
-- [ ] sprite drawing
+- [x] sprite embedding
+- [x] sprite drawing
 - [ ] move draw\_char draw\_text to other location
 - [x] draw_text_immediate for asserts and term::print
+- [ ] think of a better way of storing b,g,r channels, so we can both load rgb and use bgr elsewhere
 
 fonts:
 - [ ] embedding ttfs

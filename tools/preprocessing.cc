@@ -51,8 +51,7 @@ static auto read_png_file(const std::string& path) -> std::pair<std::vector<uint
 template <typename T = std::string>
 static T read_file(const std::string& path, std::ios::openmode mode = {}) {
     std::ifstream file(path, std::ios::binary | mode);
-    if (!file)
-        throw std::runtime_error("cannot open: " + path);
+    assert(file.is_open() && "Cannot open file");
 
     return {
         std::istreambuf_iterator<char>(file),
@@ -81,21 +80,22 @@ public:
 
     auto run(std::string_view source) -> std::pair<bool, std::string> {
         clear_state(source);
+        using enum State;
         while (pos < input.size()) {
             switch (state) {
-                case State::Normal:
+                case Normal:
                     normal_state();
                     break;
-                case State::String:
+                case String:
                     string_state();
                     break;
-                case State::Char:
+                case Char:
                     char_state();
                     break;
-                case State::LineComment:
+                case LineComment:
                     line_comment_state();
                     break;
-                case State::BlockComment:
+                case BlockComment:
                     block_comment_state();
                     break;
             }
@@ -221,21 +221,18 @@ private:
         while (std::isspace((unsigned char)peek())) // remove spaces before string
             get();
 
-        if (get() != '"')
-            throw std::runtime_error("@embed expects string");
+        assert(get() == '"' && "@embed expects string");
 
         std::string path;
         while (peek() != '"' && peek() != '\0') // read string path
             path += get();
 
-        if (get() != '"')
-            throw std::runtime_error("unterminated @embed");
+        assert(get() == '"' && "Unterminated @embed");
 
         while (std::isspace((unsigned char)peek())) // remove trailing spaces after string
             get();
 
-        if (get() != ')')
-            throw std::runtime_error("expected ')'");
+        assert(get() == ')' && "Expected ')'");
 
         has_embed = true;
         Resource* resource = nullptr;
@@ -321,9 +318,9 @@ auto main(int argc, char** argv) -> int {
     std::println("Assets dir: {}", assets_dir.string());
     std::println("Input dir: {}", input_dir.string());
     std::println("Output dir: {}", output_dir.string());
-    assert((void("Assets dir does not exist"), std::filesystem::exists(assets_dir)));
-    assert((void("Input dir does not exist"), std::filesystem::exists(input_dir)));
-    assert((void("Output dir does not exist"), std::filesystem::exists(output_dir)));
+    assert(std::filesystem::exists(assets_dir) && "Assets dir does not exist");
+    assert(std::filesystem::exists(input_dir) && "Input dir does not exist");
+    assert(std::filesystem::exists(output_dir) && "Output dir does not exist");
 
     Preprocessor pp(assets_dir);
 
@@ -338,7 +335,6 @@ auto main(int argc, char** argv) -> int {
         std::ofstream out(output);
 
         std::string result;
-        result.clear();
         bool has_embed;
 
         if (input.extension() == ".hh" || input.extension() == ".cc") {
