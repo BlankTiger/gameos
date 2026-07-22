@@ -20,6 +20,7 @@
             nativeBuildInputs =
               with pkgs; [
                 cmake
+                gcc
                 pkgsCross.i686-embedded.buildPackages.gcc
                 fish
                 grub2
