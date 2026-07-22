@@ -32,6 +32,13 @@ union Pixel {
     Color color;
 };
 
+template <usize N>
+struct Resource {
+    Static_Array<u8, N> data;
+    const u32 width;
+    const u32 height;
+};
+
 struct Framebuffer {
     Pixel* pixels;
     u32 pitch;
@@ -237,6 +244,20 @@ auto draw_circle(u32 x, u32 y, u32 r, Color color) -> void {
                 }
                 set_pixel(px, py, colors_table[in_circle]);
             }
+        }
+    }
+}
+
+template <usize N>
+auto draw_sprite(const Resource<N>& res, u32 x, u32 y) -> void {
+    if (res.width == 0 || res.height == 0) return;
+
+    const Color* colors = reinterpret_cast<const Color*>(res.data.elements());
+    u32 to_print_width  = (x + res.width  >= width())  ? (width() - x)  : res.width;
+    u32 to_print_height = (y + res.height >= height()) ? (height() - y) : res.height;
+    for (u32 py = 0; py < to_print_height; ++py) {
+        for (u32 px = 0; px < to_print_width; ++px) {
+            set_pixel(x + px, y + py, colors[py * res.width + px]);
         }
     }
 }

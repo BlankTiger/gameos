@@ -58,6 +58,8 @@ auto main() -> void {
     gfx::draw_rect(250, 400, 550, 300, gfx::WHITE);
     gfx::draw_circle(525, 550, 100, gfx::RED);
 
+    gfx::draw_sprite(@embed("cool.png"), 600, 500);
+
     term::println("ZA WARUDO");
 
     gfx::draw_frame();

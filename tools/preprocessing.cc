@@ -12,13 +12,15 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+using resource_size = std::pair<uint32_t, uint32_t>;
 struct Resource {
     std::filesystem::path path;
     std::string name;
     std::vector<uint8_t> data;
+    resource_size size;
 };
 
-static auto read_png_file(const std::string& path) -> std::vector<uint8_t> {
+static auto read_png_file(const std::string& path) -> std::pair<std::vector<uint8_t>, resource_size> {
     std::ifstream file(path, std::ios::binary);
     int width, height, channels;
 
@@ -35,10 +37,15 @@ static auto read_png_file(const std::string& path) -> std::vector<uint8_t> {
     }
     std::println("    Getting pixels from {}, width: {}, height: {}", path, width, height);
 
-    std::vector<uint8_t> result(pixels, pixels + static_cast<size_t>(width * height * 4));
+    size_t pixel_count = static_cast<size_t>(width * height);
+    for (size_t i = 0; i < pixel_count; ++i) {
+        uint8_t* p = pixels + i * 4;
+        std::swap(p[0], p[2]); // Swap red channel with blue, since we require bgra
+    }
+    std::vector<uint8_t> result(pixels, pixels + pixel_count * 4);
 
     stbi_image_free(pixels);
-    return result;
+    return {result, {width, height}};
 }
 
 template <typename T = std::string>
@@ -53,10 +60,10 @@ static T read_file(const std::string& path, std::ios::openmode mode = {}) {
     };
 }
 
-static auto get_resource_data(const std::string& path) -> std::vector<uint8_t> {
-    const std::string extension = std::filesystem::path{path}.extension();
-    if (extension == ".png") return read_png_file(path);
-    return read_file<std::vector<uint8_t>>(path);
+static auto get_resource_data(const std::filesystem::path& path) -> std::pair<std::vector<uint8_t>, resource_size> {
+    const std::string extension = path.extension();
+    if (extension == ".png") return read_png_file(path.string());
+    return {read_file<std::vector<uint8_t>>(path.string()), {}};
 }
 
 static auto embed_identifier(const std::filesystem::path& path) -> std::string {
@@ -70,6 +77,8 @@ static auto embed_identifier(const std::filesystem::path& path) -> std::string {
 
 class Preprocessor {
 public:
+    Preprocessor(std::filesystem::path assets_dir) : assets(assets_dir) {};
+
     auto run(std::string_view source) -> std::pair<bool, std::string> {
         clear_state(source);
         while (pos < input.size()) {
@@ -98,6 +107,7 @@ public:
         return resources;
     }
 private:
+    std::filesystem::path assets;
     enum class State {
         Normal,
         String,
@@ -236,12 +246,14 @@ private:
             }
         }
 
+        std::filesystem::path asset_path = assets / path;
         if (!resource) {
-            std::vector<uint8_t> data = get_resource_data(path);
+            auto [data, size] = get_resource_data(asset_path);
             resources.push_back(Resource{
-                path,
+                asset_path,
                 embed_identifier(path),
                 data,
+                size,
             });
             resource = &resources.back();
         }
@@ -256,13 +268,16 @@ static void write_resources_header(
 ) {
     std::ofstream out(filename);
     out << "#pragma once\n\n";
+    out << "#include \"kstd/gfx.hh\"\n\n";
 
     for (const auto& r : resources) {
         std::println("    Writing {} as {} in resources.hh", r.path.string(), r.name);
-        out << "static const Static_array<u8, " << r.data.size() << "> " << r.name  << "{\n";
+        auto& [width, height] = r.size;
+        out << "static const gfx::Resource<" << r.data.size() << "> " <<  r.name << " = {\n";
+        out << "    .data = Static_Array<u8, " << r.data.size() << ">" << "{\n";
         for (size_t i = 0; i < r.data.size(); i++) {
             if (i % 12 == 0)
-                out << "    ";
+                out << "        ";
             out << "0x"
                 << std::hex
                 << std::setw(2)
@@ -275,7 +290,10 @@ static void write_resources_header(
             if (i % 12 == 11)
                 out << "\n";
         }
-        out << "\n};\n\n";
+        out << "    },\n";
+        out << "    .width = " << width << ",\n";
+        out << "    .height = " << height << ",\n";
+        out << "};\n\n";
     }
 }
 
@@ -291,20 +309,23 @@ static auto add_resource_include(std::string source) -> std::string {
 }
 
 auto main(int argc, char** argv) -> int {
-    if (argc < 3) {
-        std::println(stderr, "usage: preprocessing input_directory output_directory");
+    if (argc < 4) {
+        std::println(stderr, "usage: preprocessing assets_directory input_directory output_directory");
         return 1;
     }
 
-    std::filesystem::path input_dir = argv[1];
-    std::filesystem::path output_dir = argv[2];
+    std::filesystem::path assets_dir = argv[1];
+    std::filesystem::path input_dir = argv[2];
+    std::filesystem::path output_dir = argv[3];
     std::filesystem::create_directories(output_dir);
+    std::println("Assets dir: {}", assets_dir.string());
     std::println("Input dir: {}", input_dir.string());
     std::println("Output dir: {}", output_dir.string());
+    assert((void("Assets dir does not exist"), std::filesystem::exists(assets_dir)));
     assert((void("Input dir does not exist"), std::filesystem::exists(input_dir)));
     assert((void("Output dir does not exist"), std::filesystem::exists(output_dir)));
 
-    Preprocessor pp;
+    Preprocessor pp(assets_dir);
 
     for (auto const& file: std::filesystem::recursive_directory_iterator(input_dir)) {
         std::filesystem::path input = file.path();
