@@ -5,7 +5,6 @@
 #include "kstd/enum_flags.hh"
 #include "kstd/format.hh"
 #include "kstd/gfx.hh"
-#include "kstd/halt.hh"
 #include "kstd/interrupts.hh"
 #include "kstd/low_level_io.hh"
 #include "kstd/memory.hh"

@@ -2,7 +2,6 @@
 
 #include <new>
 
-#include "kstd/halt.hh"
 #include "kstd/memory.hh"
 
 auto operator new(usize size) -> void* {
