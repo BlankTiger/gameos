@@ -1,5 +1,6 @@
 #pragma once
 
+#include "enum_array.hh"
 #include "low_level_io.hh"
 #include "term.hh"
 
@@ -99,16 +100,6 @@ auto read_data() -> u8 {
     return inb(PS2_DATA_PORT);
 }
 
-auto isr_handle_ps2_keyboard() -> void {
-    u8 scancode = inb(PS2_DATA_PORT);
-    term::println("Keyboard interrupt, scancode: %", scancode);
-}
-
-auto isr_handle_ps2_mouse() -> void {
-    u8 scancode = inb(PS2_DATA_PORT);
-    term::println("Mouse interrupt, scancode: %", scancode);
-}
-
 auto initialize() -> void {
     // 1. Enable the second PS/2 port (mouse) - disabled by default on reset.
     //    Any step that times out means there is no functional PS/2 controller;
@@ -131,6 +122,119 @@ auto initialize() -> void {
     if (!send_cmd(Cmd::write_to_mouse)) return;
     if (!send_data(static_cast<u8>(Mouse_Cmd::enable_reporting))) return;
     read_data();  // consume ACK (ignore timeout - mouse may not be present)
+}
+
+constexpr u8 KEY_UP_RANGE_START = 128;
+
+enum class Scancode : u8 {
+    ESCAPE          = 0x01,
+    DIGIT_1         = 0x02,
+    DIGIT_2         = 0x03,
+    DIGIT_3         = 0x04,
+    DIGIT_4         = 0x05,
+    DIGIT_5         = 0x06,
+    DIGIT_6         = 0x07,
+    DIGIT_7         = 0x08,
+    DIGIT_8         = 0x09,
+    DIGIT_9         = 0x0A,
+    DIGIT_0         = 0x0B,
+    MINUS           = 0x0C,
+    EQUALS          = 0x0D,
+    BACKSPACE       = 0x0E,
+    TAB             = 0x0F,
+    Q               = 0x10,
+    W               = 0x11,
+    E               = 0x12,
+    R               = 0x13,
+    T               = 0x14,
+    Y               = 0x15,
+    U               = 0x16,
+    I               = 0x17,
+    O               = 0x18,
+    P               = 0x19,
+    LEFT_BRACKET    = 0x1A,
+    RIGHT_BRACKET   = 0x1B,
+    ENTER           = 0x1C,
+    LEFT_CONTROL    = 0x1D,
+    A               = 0x1E,
+    S               = 0x1F,
+    D               = 0x20,
+    F               = 0x21,
+    G               = 0x22,
+    H               = 0x23,
+    J               = 0x24,
+    K               = 0x25,
+    L               = 0x26,
+    SEMICOLON       = 0x27,
+    APOSTROPHE      = 0x28,
+    GRAVE           = 0x29,
+    LEFT_SHIFT      = 0x2A,
+    BACKSLASH       = 0x2B,
+    Z               = 0x2C,
+    X               = 0x2D,
+    C               = 0x2E,
+    V               = 0x2F,
+    B               = 0x30,
+    N               = 0x31,
+    M               = 0x32,
+    COMMA           = 0x33,
+    PERIOD          = 0x34,
+    SLASH           = 0x35,
+    RIGHT_SHIFT     = 0x36,
+    KEYPAD_MULTIPLY = 0x37,
+    LEFT_ALT        = 0x38,
+    SPACE           = 0x39,
+    CAPS_LOCK       = 0x3A,
+    F1              = 0x3B,
+    F2              = 0x3C,
+    F3              = 0x3D,
+    F4              = 0x3E,
+    F5              = 0x3F,
+    F6              = 0x40,
+    F7              = 0x41,
+    F8              = 0x42,
+    F9              = 0x43,
+    F10             = 0x44,
+    NUM_LOCK        = 0x45,
+    SCROLL_LOCK     = 0x46,
+    KEYPAD_7        = 0x47,
+    KEYPAD_8        = 0x48,
+    KEYPAD_9        = 0x49,
+    KEYPAD_MINUS    = 0x4A,
+    KEYPAD_4        = 0x4B,
+    KEYPAD_5        = 0x4C,
+    KEYPAD_6        = 0x4D,
+    KEYPAD_PLUS     = 0x4E,
+    KEYPAD_1        = 0x4F,
+    KEYPAD_2        = 0x50,
+    KEYPAD_3        = 0x51,
+    KEYPAD_0        = 0x52,
+    KEYPAD_PERIOD   = 0x53,
+    F11             = 0x57,
+    F12             = 0x58,
+    COUNT           = KEY_UP_RANGE_START, // MUST BE THE LAST ELEMENT
+};
+
+inline Enum_Array<Scancode, bool> keys;
+
+force_inline auto is_pressed(Scancode code) -> bool {
+    return keys[code];
+}
+
+auto isr_handle_ps2_keyboard() -> void {
+    u8 scancode_value = inb(PS2_DATA_PORT);
+    u8 key_value = scancode_value;
+    bool key_up = key_value >= KEY_UP_RANGE_START;
+    if (key_up) key_value -= KEY_UP_RANGE_START;
+
+    Scancode scancode = static_cast<Scancode>(key_value);
+    keys[scancode] = !key_up;
+    serial::println("Keyboard interrupt, scancode: %, pressed: %", scancode, is_pressed(scancode));
+}
+
+auto isr_handle_ps2_mouse() -> void {
+    u8 scancode = inb(PS2_DATA_PORT);
+    term::println("Mouse interrupt, scancode: %", scancode);
 }
 
 }
