@@ -11,6 +11,7 @@
 #include "kstd/programmable_interrupt_controller.hh"
 #include "kstd/ps2.hh"
 #include "kstd/serial.hh"
+#include "kstd/string.hh"
 #include "kstd/term.hh"
 #include "kstd/time.hh"
 #include "operator_new.hh"

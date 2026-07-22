@@ -5,13 +5,28 @@
 
 #include "../basic.hh"
 #include "../cstring.hh"
+#include "string.hh"
 
+//
 // Backend-agnostic formatting utilities.
 //
 // Backend must provide:
 //   static auto put_char(char c) -> void;
 //   static auto new_line() -> void;
+//
 
+//
+// For a custom type to be easily displayed by anything implementing fmt
+// implement a `format` method on it:
+//
+// struct A {
+//     const char* message;
+//
+//     auto format() -> String_View {
+//         return String_View(message);
+//     }
+// }
+//
 namespace fmt {
 
 template <typename Backend>
@@ -169,11 +184,21 @@ static force_inline auto print_value(const void* value) -> int {
     return write_pointer<Backend>(value);
 }
 
+template <typename Backend>
+static force_inline auto print_string_view(const String_View s) -> int {
+    for (auto c : s) {
+        Backend::put_char(c);
+    }
+    return s.size;
+}
+
 template <typename Backend, typename T>
 static force_inline auto print_value(T&& value) -> int {
     using U = std::remove_cvref_t<T>;
 
-    if constexpr (std::is_same_v<U, bool>) {
+    if constexpr (requires { value.format(); }) {
+        return print_string_view<Backend>(value.format());
+    } else if constexpr (std::is_same_v<U, bool>) {
         return print_value<Backend>((bool)value);
     } else if constexpr (std::is_same_v<U, char>) {
         return print_value<Backend>((char)value);
@@ -198,9 +223,9 @@ static force_inline auto print_value(T&& value) -> int {
         }
     } else if constexpr (std::is_array_v<U> && std::is_same_v<std::remove_extent_t<U>, char>) {
         return print_value<Backend>((const char*)value);
-    } else if constexpr (requires(const U& object) { object.c_str(); }) {
+    } else if constexpr (requires { value.c_str(); }) {
         return print_value<Backend>(value.c_str());
-    } else if constexpr (requires(const U& object) { object.data(); object.size; }) {
+    } else if constexpr (requires { value.data(); value.size; }) {
         if constexpr (std::is_convertible_v<decltype(value.data()), const char*>) {
             const char* data = value.data();
             usize size = (usize)value.size;
@@ -211,7 +236,7 @@ static force_inline auto print_value(T&& value) -> int {
         } else {
             return print_value<Backend>((const void*)&value);
         }
-    } else if constexpr (requires(const U& object) { object.data(); object.size(); }) {
+    } else if constexpr (requires { value.data(); value.size(); }) {
         if constexpr (std::is_convertible_v<decltype(value.data()), const char*>) {
             const char* data = value.data();
             usize size = (usize)value.size();
@@ -243,6 +268,18 @@ auto print(const char* format) -> int {
         }
     }
     return written;
+}
+
+template <typename Backend, typename T>
+auto print(T&& value) -> int {
+    return print_value<Backend>(std::forward<T>(value));
+}
+
+template <typename Backend, typename T>
+auto println(T&& value) -> int {
+    int written = print_value<Backend>(std::forward<T>(value));
+    Backend::new_line();
+    return written + 1;
 }
 
 template <typename Backend, typename T, typename... Rest>
