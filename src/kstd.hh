@@ -2,6 +2,7 @@
 
 #include "kstd/array.hh"
 #include "kstd/assert.hh"
+#include "kstd/critical_section.hh"
 #include "kstd/enum_flags.hh"
 #include "kstd/format.hh"
 #include "kstd/gfx.hh"
