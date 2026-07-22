@@ -57,6 +57,7 @@ add_custom_command(
         ${GENERATED_SOURCES}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${GENERATED_DIR}/src
     COMMAND ${PREPROCESSOR}
+            ${CMAKE_SOURCE_DIR}/assets
             ${CMAKE_SOURCE_DIR}/src
             ${GENERATED_DIR}/src
     COMMAND ${CMAKE_COMMAND} -E touch ${GENERATED_DIR}/.stamp
