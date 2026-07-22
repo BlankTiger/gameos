@@ -115,9 +115,36 @@ struct Array {
         ::operator delete(data);
     }
 
-    // Owning type: suppress implicit copy/move until properly implemented.
+    // Owning type: suppress implicit copy until properly implemented.
     Array(const Array&) = delete;
-    Array& operator=(const Array&) = delete;
+
+    Array(Array&& from) noexcept
+        : allocated(from.allocated),
+          size(from.size),
+          data(from.data) {
+        from.allocated = 0;
+        from.size      = 0;
+        from.data      = nullptr;
+    }
+
+    auto operator=(Array&& from) noexcept -> Array& {
+        if (this == &from)
+            return *this;
+
+        for (usize i = 0; i < size; ++i)
+            data[i].~T();
+        ::operator delete(data);
+
+        allocated = from.allocated;
+        size      = from.size;
+        data      = from.data;
+
+        from.allocated = 0;
+        from.size      = 0;
+        from.data      = nullptr;
+
+        return *this;
+    }
 
     auto operator[](u64 index, const std::source_location& location = std::source_location::current()) -> T& {
         assert(index < size, "index out of bounds", location);
@@ -140,6 +167,17 @@ struct Array {
         assert(size < allocated, "Implement resizing.");
         ::new (data + size) T(element);
         ++size;
+    }
+
+    // O(n) move of all elements back by one.
+    auto pop_front() -> void {
+        assert(size > 0, "pop_front on empty Array");
+        data[0].~T();
+        for (usize i = 1; i < size; ++i) {
+            ::new (data + i - 1) T(std::move(data[i]));
+            data[i].~T();
+        }
+        --size;
     }
 
     auto elements()       -> T*       { return data; }
