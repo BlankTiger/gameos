@@ -5,6 +5,7 @@
 
 #include "../basic.hh"
 #include "../cstring.hh"
+#include "enum_name.hh"
 #include "string.hh"
 
 //
@@ -211,6 +212,10 @@ static force_inline auto print_value(T&& value) -> int {
             return print_value<Backend>((u64)value);
         }
     } else if constexpr (std::is_enum_v<U>) {
+        String_View name = enum_name(value);
+        if (name.size > 0) {
+            return print_string_view<Backend>(name);
+        }
         using Underlying = std::underlying_type_t<U>;
         return print_value<Backend>((Underlying)value);
     } else if constexpr (std::is_floating_point_v<U>) {
