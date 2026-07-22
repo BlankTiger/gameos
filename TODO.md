@@ -32,6 +32,7 @@ base layer:
 - [x] remove term declarations in halt.hh instead of that do a function pointer for term::print, that would decouple the two systems completely (could even do something like a list of print function pointers that would get called after halt fires)
 - [ ] fix booting on real hardware
 - [ ] tests (gtest?)
+- [ ] stack unwinding (callstack on assert)
 
 utils:
 - [ ] todo list generator (gather notes from source code and generate a stable
@@ -39,3 +40,4 @@ utils:
 - [ ] metaprogramming framework - some metaprogram that would allow for example
       to simply embed stuff by doing `auto* img = @embed(path_to_img);`, many more
       features could be added here
+- [ ] make the preprocessor output debug symbols based on the real paths, not the generated paths
