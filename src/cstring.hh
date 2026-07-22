@@ -1,11 +1,8 @@
 #pragma once
 
-// This contains only the definitions
-#include <cstring>
-
 #include "basic.hh"
 
-auto strlen(const char* str) -> usize {
+constexpr auto strlen(const char* str) -> usize {
     usize len = 0;
     while (str[len]) len++;
     return len;

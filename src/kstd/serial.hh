@@ -80,6 +80,16 @@ auto println(const char* format) -> int {
     return fmt::println<Backend>(format);
 }
 
+template <typename T>
+auto print(T&& value) -> int {
+    return fmt::print<Backend>(std::forward<T>(value));
+}
+
+template <typename T>
+auto println(T&& value) -> int {
+    return fmt::println<Backend>(std::forward<T>(value));
+}
+
 template <typename T, typename... Rest>
 auto println(const char* format, T&& value, Rest&&... rest) -> int {
     return fmt::println<Backend>(format, std::forward<T>(value), std::forward<Rest>(rest)...);
