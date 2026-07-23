@@ -28,6 +28,7 @@
                 qemu
                 xorriso
                 gtest
+                just
               ];
           };
         }
