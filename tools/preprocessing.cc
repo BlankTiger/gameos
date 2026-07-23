@@ -293,13 +293,24 @@ static void write_resources_header(
     }
 }
 
-static auto add_resource_include(std::string source) -> std::string {
-    constexpr std::string_view pragma = "#pragma once\n";
+// #line makes diagnostics, __FILE__ and debugger source paths point at
+// the real file under src/ instead of its throwaway copy under build/.
+static auto line_directive(int line, const std::filesystem::path& original) -> std::string {
+    return "#line " + std::to_string(line) + " \"" + original.string() + "\"\n";
+}
 
-    if (auto pos = source.find(pragma); pos != std::string::npos)
-        source.insert(pos + pragma.size(), "#include \"resources.hh\"\n");
-    else
-        source.insert(0, "#include \"resources.hh\"\n");
+// Inserting the resources.hh include shifts every following line by
+// one, so line_directive() re-syncs numbering back to the original file.
+static auto add_resource_include(std::string source, const std::filesystem::path& original) -> std::string {
+    constexpr std::string_view pragma = "#pragma once\n";
+    const std::string include = "#include \"resources.hh\"\n";
+
+    if (auto pos = source.find(pragma); pos != std::string::npos) {
+        source.insert(pos + pragma.size(), include + line_directive(2, original));
+    }
+    else {
+        source.insert(0, include + line_directive(1, original));
+    }
 
     return source;
 }
@@ -317,11 +328,18 @@ static void process_file(
     std::string result;
     bool has_embed = false;
     bool is_source = input.extension() == ".hh" || input.extension() == ".cc";
+    bool is_asm    = input.extension() == ".S";
+    std::filesystem::path original = std::filesystem::absolute(input);
 
     if (is_source) {
         auto source = read_file(input);
         std::tie(has_embed, result) = pp.run(source);
-        if (has_embed) result = add_resource_include(result);
+        result = has_embed ? add_resource_include(result, original)
+                            : line_directive(1, original) + result;
+    }
+    else if (is_asm) {
+        // .S is run through cpp, so #line applies here too.
+        result = line_directive(1, original) + read_file(input);
     }
     else {
         result = read_file(input);
