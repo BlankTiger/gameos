@@ -6,7 +6,7 @@
 #include "../basic.hh"
 #include "../cstring.hh"
 #include "enum_name.hh"
-#include "string.hh"
+#include "string_view.hh"
 
 //
 // Backend-agnostic formatting utilities.

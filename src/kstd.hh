@@ -14,6 +14,7 @@
 #include "kstd/ps2.hh"
 #include "kstd/serial.hh"
 #include "kstd/string.hh"
+#include "kstd/string_view.hh"
 #include "kstd/term.hh"
 #include "kstd/time.hh"
 #include "operator_new.hh"
