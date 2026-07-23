@@ -14,7 +14,7 @@
 auto kernel_init(u32 magic, const boot::Multiboot2_Info* mbi) -> void {
     serial::initialize();
 
-    assert(magic == boot::MULTIBOOT2_MAGIC, "bad multiboot2 magic");
+    kstd_assert(magic == boot::MULTIBOOT2_MAGIC, "bad multiboot2 magic");
 
     serial::println("Initializing mem");
     mem::initialize(mbi);
@@ -26,11 +26,11 @@ auto kernel_init(u32 magic, const boot::Multiboot2_Info* mbi) -> void {
 
     serial::println("Initializing gfx");
     const auto gfx_initialized = gfx::initialize(mbi);
-    assert(gfx_initialized);
+    kstd_assert(gfx_initialized);
 
     serial::println("Initializing term");
     const auto term_initialized = term::initialize();
-    assert(term_initialized);
+    kstd_assert(term_initialized);
 
     idt::initialize();
     pic::initialize();

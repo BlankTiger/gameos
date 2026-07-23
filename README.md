@@ -7,6 +7,22 @@
 
     qemu-system-i386 -serial stdio -cdrom build/gameos.iso
 
+# Testing
+
+Host-side unit tests for kstd headers that don't need real hardware I/O
+(ports, interrupts, ...) live under `tests/`. They're built with normal g++:
+
+    nix develop -c fish
+    cmake -S tests -B build/tests -G Ninja -DCMAKE_CXX_COMPILER=g++ && cmake --build build/tests
+    ctest --test-dir build/tests
+
+kstd headers use their own `kstd_assert`/`kstd_memcpy`/`kstd_memset`/`kstd_strlen` (never the
+bare libc names) specifically so they can be included in the same translation
+unit as `<gtest/gtest.h>` without colliding with `<cassert>`/ `<cstring>`.
+`kstd/assert.hh` detects a hosted build (`__STDC_HOSTED__`) and makes `kstd_assert`
+print + `abort()` instead of halting the CPU, so anything that halts can be
+tested with `EXPECT_DEATH`.
+
 # Terminal interface (switched by using a different namespace)
 
 Must implement all forward declared functions in `kstd/term.hh`. Management of

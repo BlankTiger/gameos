@@ -16,13 +16,13 @@ struct Static_Array {
     T data[N];
 
     auto operator[](u64 index, const std::source_location& location = std::source_location::current()) -> T& {
-        assert(index < size, "index out of bounds", location);
+        kstd_assert(index < size, "index out of bounds", location);
         return data[index];
     }
 
     constexpr auto operator[](u64 index, const std::source_location& location = std::source_location::current()) const
         -> const T& {
-        assert(index < size, "index out of bounds", location);
+        kstd_assert(index < size, "index out of bounds", location);
         return data[index];
     }
 
@@ -57,24 +57,24 @@ struct Bounded_Array {
     Bounded_Array& operator=(const Bounded_Array&) = delete;
 
     auto operator[](u64 index, const std::source_location& location = std::source_location::current()) -> T& {
-        assert(index < size, "index out of bounds", location);
+        kstd_assert(index < size, "index out of bounds", location);
         return *slot(index);
     }
 
     auto operator[](u64 index, const std::source_location& location = std::source_location::current()) const
         -> const T& {
-        assert(index < size, "index out of bounds", location);
+        kstd_assert(index < size, "index out of bounds", location);
         return *slot(index);
     }
 
     auto push_back(T&& element) -> void {
-        assert(size < MAX_SIZE);
+        kstd_assert(size < MAX_SIZE);
         ::new (slot(size)) T(std::move(element));
         ++size;
     }
 
     auto push_back(const T& element) -> void {
-        assert(size < MAX_SIZE);
+        kstd_assert(size < MAX_SIZE);
         ::new (slot(size)) T(element);
         ++size;
     }
@@ -92,6 +92,31 @@ private:
         return reinterpret_cast<const T*>(data + i * sizeof(T));
     }
 };
+
+#ifdef UNIT_TESTS
+
+TEST(Bounded_Array, default_is_empty) {
+    Bounded_Array<int, 4> arr;
+    EXPECT_EQ(arr.size, 0);
+}
+
+TEST(Bounded_Array, push_back_grows_size) {
+    Bounded_Array<int, 4> arr;
+    arr.push_back(1);
+    arr.push_back(2);
+    EXPECT_EQ(arr.size, 2);
+    EXPECT_EQ(arr[0], 1);
+    EXPECT_EQ(arr[1], 2);
+}
+
+TEST(Bounded_Array, push_back_past_max_size_asserts) {
+    Bounded_Array<int, 2> arr;
+    arr.push_back(1);
+    arr.push_back(2);
+    EXPECT_DEATH(arr.push_back(3), "");
+}
+
+#endif
 
 template <typename T>
 struct Array {
@@ -147,31 +172,31 @@ struct Array {
     }
 
     auto operator[](u64 index, const std::source_location& location = std::source_location::current()) -> T& {
-        assert(index < size, "index out of bounds", location);
+        kstd_assert(index < size, "index out of bounds", location);
         return data[index];
     }
 
     auto operator[](u64 index, const std::source_location& location = std::source_location::current()) const
         -> const T& {
-        assert(index < size, "index out of bounds", location);
+        kstd_assert(index < size, "index out of bounds", location);
         return data[index];
     }
 
     auto push_back(T&& element) -> void {
-        assert(size < allocated, "Implement resizing.");
+        kstd_assert(size < allocated, "Implement resizing.");
         ::new (data + size) T(std::move(element));
         ++size;
     }
 
     auto push_back(const T& element) -> void {
-        assert(size < allocated, "Implement resizing.");
+        kstd_assert(size < allocated, "Implement resizing.");
         ::new (data + size) T(element);
         ++size;
     }
 
     // O(n) move of all elements back by one.
     auto pop_front() -> void {
-        assert(size > 0, "pop_front on empty Array");
+        kstd_assert(size > 0, "pop_front on empty Array");
         data[0].~T();
         for (usize i = 1; i < size; ++i) {
             ::new (data + i - 1) T(std::move(data[i]));

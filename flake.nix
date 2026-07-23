@@ -27,6 +27,7 @@
                 grub2
                 qemu
                 xorriso
+                gtest
               ];
           };
         }

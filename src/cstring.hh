@@ -2,17 +2,20 @@
 
 #include "basic.hh"
 
-constexpr auto strlen(const char* str) -> usize {
+constexpr auto kstd_strlen(const char* str) -> usize {
     usize len = 0;
     while (str[len]) len++;
     return len;
 }
 
-force_inline auto memcpy(
-    void* __restrict destination,
-    const void* __restrict source,
-    usize length
-) -> void* {
+#if defined(__STDC_HOSTED__) && __STDC_HOSTED__
+#include <cstring>
+#endif
+
+force_inline auto kstd_memcpy(void* __restrict destination, const void* __restrict source, usize length) -> void* {
+#if defined(__STDC_HOSTED__) && __STDC_HOSTED__
+    return std::memcpy(destination, source, length);
+#else
     u8* dst = (u8*)destination;
     const u8* src = (const u8*)source;
 
@@ -21,13 +24,13 @@ force_inline auto memcpy(
     }
 
     return destination;
+#endif
 }
 
-force_inline auto memset(
-    void* buffer,
-    int value,
-    usize length) -> void*
-{
+force_inline auto kstd_memset(void* buffer, int value, usize length) -> void* {
+#if defined(__STDC_HOSTED__) && __STDC_HOSTED__
+    return std::memset(buffer, value, length);
+#else
     u8* dst = (u8*)buffer;
 
     while (length--) {
@@ -35,4 +38,5 @@ force_inline auto memset(
     }
 
     return buffer;
+#endif
 }

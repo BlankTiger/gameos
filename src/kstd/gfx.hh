@@ -55,8 +55,8 @@ constexpr usize BUFFER_SIZE = GFX_PIXEL_COUNT * sizeof(Pixel);
 static bool __framebuffer_initialized;
 
 force_inline auto swap_buffers() -> void {
-    debug_assert(front_buffer.pixels != nullptr);
-    memcpy(front_buffer.pixels, back_buffer, BUFFER_SIZE);
+    kdebug_assert(front_buffer.pixels != nullptr);
+    kstd_memcpy(front_buffer.pixels, back_buffer, BUFFER_SIZE);
 }
 
 [[nodiscard]] auto initialize(const boot::Multiboot2_Info* mbi) -> bool {
@@ -72,9 +72,9 @@ force_inline auto swap_buffers() -> void {
     front_buffer.bits_per_pixel = framebuffer_tag->framebuffer_bpp;
     front_buffer.type           = framebuffer_tag->framebuffer_type;
     front_buffer.stride         = front_buffer.pitch / sizeof(u32);
-    assert(front_buffer.bits_per_pixel == 32, "Only 32BPP supported.");
+    kstd_assert(front_buffer.bits_per_pixel == 32, "Only 32BPP supported.");
 
-    memset(back_buffer, 0, BUFFER_SIZE);
+    kstd_memset(back_buffer, 0, BUFFER_SIZE);
     swap_buffers();
 
     __framebuffer_initialized = true;
@@ -95,8 +95,8 @@ force_inline auto height() -> u32 {
 
 template <bool IMMEDIATE = false>
 static force_inline auto set_pixel(u32 x, u32 y, Color color) -> void {
-    debug_assert(x < width());
-    debug_assert(y < height());
+    kdebug_assert(x < width());
+    kdebug_assert(y < height());
 
     auto index = y * front_buffer.stride + x;
     if constexpr(IMMEDIATE) {
