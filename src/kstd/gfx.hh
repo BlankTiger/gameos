@@ -95,8 +95,8 @@ force_inline auto height() -> u32 {
 
 template <bool IMMEDIATE = false>
 static force_inline auto set_pixel(u32 x, u32 y, Color color) -> void {
-    kstd_debug_assert(x < width());
-    kstd_debug_assert(y < height());
+    kstd_assert(x < width());
+    kstd_assert(y < height());
 
     auto index = y * front_buffer.stride + x;
     if constexpr(IMMEDIATE) {
