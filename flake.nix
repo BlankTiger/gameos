@@ -2,7 +2,7 @@
   description = "Development shell with i686 cross-compiler and fish";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
   };
 
   outputs = { self, nixpkgs }:
@@ -20,6 +20,7 @@
             nativeBuildInputs =
               with pkgs; [
                 cmake
+                ninja
                 gcc
                 pkgsCross.i686-embedded.buildPackages.gcc
                 fish

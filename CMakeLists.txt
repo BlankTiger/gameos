@@ -92,7 +92,7 @@ foreach(header ${all_headers})
                 -I ${GENERATED_DIR}/src -I ${GENERATED_DIR}
                 -fsyntax-only ${header}
         COMMAND ${CMAKE_COMMAND} -E touch ${stamp}
-        DEPENDS ${header}
+        DEPENDS ${header} ${GENERATED_DIR}/.stamp
     )
     list(APPEND header_stamps ${stamp})
 endforeach()
