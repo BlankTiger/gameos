@@ -21,7 +21,7 @@ run: build
 
 test: configure-tests
     cmake --build {{test_build_dir}}
-    ctest --test-dir {{test_build_dir}}
+    ctest --test-dir {{test_build_dir}} --output-on-failure
 
 configure-tests:
     cmake -S tests -B {{test_build_dir}} -G Ninja -DCMAKE_CXX_COMPILER=g++
