@@ -5,7 +5,7 @@
 #include <utility>
 
 #include "../basic.hh"
-#include "string.hh"
+#include "string_view.hh"
 
 //
 // Enum value name printing (e.g. "Direction::UP"), with no per-enum boilerplate:

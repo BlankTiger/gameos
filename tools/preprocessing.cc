@@ -269,7 +269,7 @@ static void write_resources_header(
     for (const auto& r : resources) {
         std::println("    Writing {} as {} in resources.hh", r.path.string(), r.name);
         auto& [width, height] = r.size;
-        out << "static const gfx::Resource<" << r.data.size() << "> " <<  r.name << " = {\n";
+        out << "constexpr gfx::Resource<" << r.data.size() << "> " <<  r.name << " = {\n";
         out << "    .data = Static_Array<u8, " << r.data.size() << ">" << "{\n";
         for (size_t i = 0; i < r.data.size(); i++) {
             if (i % 12 == 0)
