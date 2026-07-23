@@ -60,7 +60,7 @@ constexpr force_inline auto kstd_assert(
 }
 #endif
 
-constexpr force_inline auto kdebug_assert(
+constexpr force_inline auto kstd_debug_assert(
     bool predicate,
     const char* message = nullptr,
     const std::source_location& location = std::source_location::current()
