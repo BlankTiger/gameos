@@ -31,7 +31,7 @@ base layer:
 - [ ] implement cpuid (https://wiki.osdev.org/CPUID)
 - [x] remove term declarations in halt.hh instead of that do a function pointer for term::print, that would decouple the two systems completely (could even do something like a list of print function pointers that would get called after halt fires)
 - [ ] fix booting on real hardware
-- [ ] tests (gtest?)
+- [x] tests (gtest?)
 - [ ] stack unwinding (callstack on assert)
 
 utils:

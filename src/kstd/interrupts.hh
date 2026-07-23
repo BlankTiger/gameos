@@ -234,9 +234,9 @@ extern "C" auto isr_dispatch(u32* registers_pointer) -> void {
 
 auto set_gate(Interrupt_Vector_Type vector_type, void(*handler_function)()) -> void {
     auto& gate = table[static_cast<u8>(vector_type)];
-    kdebug_assert(gate.selector == KERNEL_CODE_SEGMENT);
-    kdebug_assert(gate.zero     == 0);
-    kdebug_assert(gate.type.raw == GATE_PRESENT_RING0_INT32.raw);
+    kstd_debug_assert(gate.selector == KERNEL_CODE_SEGMENT);
+    kstd_debug_assert(gate.zero     == 0);
+    kstd_debug_assert(gate.type.raw == GATE_PRESENT_RING0_INT32.raw);
 
     auto handler_address = reinterpret_cast<psize>(handler_function);
     gate.handler_address_low  = static_cast<u16>(0xFFFF & (handler_address >> 0));

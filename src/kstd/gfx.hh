@@ -55,7 +55,7 @@ constexpr usize BUFFER_SIZE = GFX_PIXEL_COUNT * sizeof(Pixel);
 static bool __framebuffer_initialized;
 
 force_inline auto swap_buffers() -> void {
-    kdebug_assert(front_buffer.pixels != nullptr);
+    kstd_debug_assert(front_buffer.pixels != nullptr);
     kstd_memcpy(front_buffer.pixels, back_buffer, BUFFER_SIZE);
 }
 
@@ -95,8 +95,8 @@ force_inline auto height() -> u32 {
 
 template <bool IMMEDIATE = false>
 static force_inline auto set_pixel(u32 x, u32 y, Color color) -> void {
-    kdebug_assert(x < width());
-    kdebug_assert(y < height());
+    kstd_debug_assert(x < width());
+    kstd_debug_assert(y < height());
 
     auto index = y * front_buffer.stride + x;
     if constexpr(IMMEDIATE) {
