@@ -3,6 +3,25 @@
 #include <source_location>
 
 #include "../basic.hh"
+
+#if defined(__STDC_HOSTED__) && __STDC_HOSTED__
+#include <cstdio>
+#include <cstdlib>
+
+constexpr force_inline auto kstd_assert(
+    bool predicate,
+    const char* message = nullptr,
+    const std::source_location& location = std::source_location::current()
+) -> void {
+    if (predicate) return;
+    std::fprintf(
+        stderr, "%s:%u:%u: %s\n",
+        location.file_name(), location.line(), location.column(),
+        message != nullptr ? message : "assertion failed"
+    );
+    std::abort();
+}
+#else
 #include "serial.hh"
 
 using Halt_Fn = auto (*)(const char* file, u32 line, u32 col, const char* message) -> void;
@@ -32,15 +51,16 @@ halt_forever(const char* message, const std::source_location& location = std::so
     for (;;) asm volatile("hlt");
 }
 
-constexpr force_inline auto assert(
+constexpr force_inline auto kstd_assert(
     bool predicate,
     const char* message = nullptr,
     const std::source_location& location = std::source_location::current()
 ) -> void {
     if (!predicate) halt_forever(message, location);
 }
+#endif
 
-constexpr force_inline auto debug_assert(
+constexpr force_inline auto kdebug_assert(
     bool predicate,
     const char* message = nullptr,
     const std::source_location& location = std::source_location::current()
@@ -48,6 +68,6 @@ constexpr force_inline auto debug_assert(
 #ifdef NDEBUG
     return;
 #else
-    assert(predicate, message, location);
+    kstd_assert(predicate, message, location);
 #endif
 }

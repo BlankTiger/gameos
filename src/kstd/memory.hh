@@ -109,12 +109,12 @@ static auto reserve_multiboot2_data(Memory_Regions& regions, const boot::Multibo
         const auto tag_type = static_cast<boot::Multiboot2_Tag_Type>(tag->type);
         if (tag_type == boot::Multiboot2_Tag_Type::CMDLINE || tag_type == boot::Multiboot2_Tag_Type::BOOT_LOADER_NAME) {
             const auto* text = tag->payload_as<char>();
-            reserve_range(regions, ptr_addr(text), ptr_addr(text) + strlen(text) + 1);
+            reserve_range(regions, ptr_addr(text), ptr_addr(text) + kstd_strlen(text) + 1);
         } else if (tag_type == boot::Multiboot2_Tag_Type::MODULE) {
             const auto* module = tag->as<boot::Multiboot2_Module_Tag>();
             reserve_range(regions, module->mod_start, module->mod_end);
             if (module->string != 0) {
-                reserve_range(regions, module->string, module->string + strlen(module->string_ptr()) + 1);
+                reserve_range(regions, module->string, module->string + kstd_strlen(module->string_ptr()) + 1);
             }
         }
 
@@ -276,7 +276,7 @@ struct Buddy_Allocator final : Allocator {
         if (pointer == nullptr) return;
 
         Allocation_Header header{};
-        memcpy(&header, reinterpret_cast<void*>(ptr_addr(pointer) - sizeof(Allocation_Header)), sizeof(header));
+        kstd_memcpy(&header, reinterpret_cast<void*>(ptr_addr(pointer) - sizeof(Allocation_Header)), sizeof(header));
 
         u64 block_base = header.block_base;
         usize order = header.order;
@@ -310,7 +310,7 @@ struct Arena_Allocator final : Allocator {
     auto init(Allocator* backing_allocator, usize reserve = DEFAULT_RESERVE_SIZE) -> void {
         allocated_ = align_up(reserve, DEFAULT_PAGE_SIZE);
         memory_base = static_cast<std::byte*>(backing_allocator->alloc(allocated_));
-        assert(memory_base != nullptr);
+        kstd_assert(memory_base != nullptr);
         current_point = memory_base;
         address_limit = memory_base + allocated_;
         backing_allocator_ = backing_allocator;
@@ -324,7 +324,7 @@ struct Arena_Allocator final : Allocator {
     auto reset() -> void {
         if constexpr (DEBUG) {
             const auto STAMP = 0xCC;
-            memset(memory_base, STAMP, current_point - memory_base);
+            kstd_memset(memory_base, STAMP, current_point - memory_base);
         }
         current_point = memory_base;
     };

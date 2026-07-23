@@ -23,8 +23,8 @@
 // struct A {
 //     const char* message;
 //
-//     auto format() -> String_View {
-//         return String_View(message);
+//     auto format() -> string_view {
+//         return string_view(message);
 //     }
 // }
 //
@@ -186,7 +186,7 @@ static force_inline auto print_value(const void* value) -> int {
 }
 
 template <typename Backend>
-static force_inline auto print_string_view(const String_View s) -> int {
+static force_inline auto print_string_view(const string_view s) -> int {
     for (auto c : s) {
         Backend::put_char(c);
     }
@@ -212,7 +212,7 @@ static force_inline auto print_value(T&& value) -> int {
             return print_value<Backend>((u64)value);
         }
     } else if constexpr (std::is_enum_v<U>) {
-        String_View name = enum_name(value);
+        string_view name = enum_name(value);
         if (name.size > 0) {
             return print_string_view<Backend>(name);
         }
