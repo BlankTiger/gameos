@@ -153,7 +153,7 @@ struct Draw_Command {
 static Array<Draw_Command> draw_commands(512);
 
 template <bool IMMEDIATE>
-auto inner_draw_char(u32 x, u32 y, char c, Color fg, Color bg) -> void {
+static auto inner_draw_char(u32 x, u32 y, char c, Color fg, Color bg) -> void {
     const auto index = static_cast<u8>(c);
     const auto& glyph = font::DATA[index];
 
@@ -188,7 +188,7 @@ auto draw_char_immediate(Args&&... args) -> void {
     inner_draw_char<true>(std::forward<Args>(args)...);
 }
 
-auto inner_draw_text(u32 x, u32 y, const char* text, Color fg = WHITE, Color bg = BLACK) -> void {
+static auto inner_draw_text(u32 x, u32 y, const char* text, Color fg = WHITE, Color bg = BLACK) -> void {
     u32 cx = x;
     u32 cy = y;
     u32 frame_width = front_buffer.width;
@@ -231,7 +231,7 @@ auto clear(Color color) -> void {
     }
 }
 
-auto inner_draw_rect(u32 x, u32 y, u32 w, u32 h, Color color) -> void {
+static auto inner_draw_rect(u32 x, u32 y, u32 w, u32 h, Color color) -> void {
     for (u32 _y = y; _y < y + h && _y < height(); ++_y) {
         for (u32 _x = x; _x < x + w && _x < width(); ++_x) {
             set_pixel(_x, _y, color);
@@ -365,25 +365,21 @@ auto draw_frame() -> void {
                 inner_draw_char<false>(cmd.x, cmd.y, cmd.c, cmd.fg, cmd.bg);
                 break;
             }
-
             case DRAW_TEXT: {
                 const Text_Command& cmd = command.text;
                 inner_draw_text(cmd.x, cmd.y, cmd.text, cmd.fg, cmd.bg);
                 break;
             }
-
             case DRAW_RECT: {
                 const Rect_Command& cmd = command.rectangle;
                 inner_draw_rect(cmd.x, cmd.y, cmd.w, cmd.h, cmd.color);
                 break;
             }
-
             case DRAW_CIRCLE: {
                 const Circle_Command& cmd = command.circle;
                 inner_draw_circle(cmd.x, cmd.y, cmd.r, cmd.color);
                 break;
             }
-
             case DRAW_SPRITE: {
                 const Sprite_Command& cmd = command.sprite;
                 inner_draw_sprite(cmd.res, cmd.x, cmd.y);
