@@ -1,11 +1,13 @@
 #pragma once
 
+#include <algorithm>
 #include <bit>
 
 #include "math.hh"
 #include "config.hh"
 #include "font8x16.hh"
 #include "multiboot2.hh"
+#include "resource.hh"
 
 namespace gfx {
 
@@ -30,13 +32,6 @@ constexpr Color TRANSPARENT{0, 0, 0, 0};
 union Pixel {
     u32 value;
     Color color;
-};
-
-template <usize N>
-struct Resource {
-    Static_Array<u8, N> data;
-    const u32 width;
-    const u32 height;
 };
 
 struct Framebuffer {
@@ -107,6 +102,56 @@ static force_inline auto set_pixel(u32 x, u32 y, Color color) -> void {
     }
 }
 
+enum class Draw_Command_Type: u8 {
+    DRAW_CHAR = 0,
+    DRAW_TEXT = 1, // Probably we will need to copy text
+    DRAW_RECT = 10,
+    DRAW_CIRCLE = 11,
+    DRAW_SPRITE = 100,
+};
+
+struct Char_Command {
+    u32 x, y;
+    char c;
+    Color fg, bg;
+};
+
+struct Text_Command {
+    u32 x, y;
+    const char* text;
+    Color fg, bg;
+};
+
+struct Rect_Command {
+    u32 x, y, w, h;
+    Color color;
+};
+
+struct Circle_Command {
+    u32 x, y, r;
+    Color color;
+};
+
+struct Sprite_Command {
+    Resource_View res;
+    u32 x, y;
+};
+
+struct Draw_Command {
+    Draw_Command_Type type;
+    u8 z;
+
+    union {
+        Char_Command character;
+        Text_Command text;
+        Rect_Command rectangle;
+        Circle_Command circle;
+        Sprite_Command sprite;
+    };
+};
+
+static Array<Draw_Command> draw_commands(512);
+
 template <bool IMMEDIATE>
 auto inner_draw_char(u32 x, u32 y, char c, Color fg, Color bg) -> void {
     const auto index = static_cast<u8>(c);
@@ -128,8 +173,14 @@ auto inner_draw_char(u32 x, u32 y, char c, Color fg, Color bg) -> void {
 }
 
 template <typename... Args>
-auto draw_char(Args&&... args) -> void {
-    inner_draw_char<false>(std::forward<Args>(args)...);
+auto draw_char(Args&&... args, u8 z = 1) -> void {
+    draw_commands.push_back(
+        Draw_Command{
+            .type = Draw_Command_Type::DRAW_CHAR,
+            .z = z,
+            .character = Char_Command{std::forward<Args>(args)...},
+        }
+    );
 }
 
 template <typename... Args>
@@ -137,7 +188,7 @@ auto draw_char_immediate(Args&&... args) -> void {
     inner_draw_char<true>(std::forward<Args>(args)...);
 }
 
-auto draw_text(u32 x, u32 y, const char* text, Color fg = WHITE, Color bg = BLACK) -> void {
+auto inner_draw_text(u32 x, u32 y, const char* text, Color fg = WHITE, Color bg = BLACK) -> void {
     u32 cx = x;
     u32 cy = y;
     u32 frame_width = front_buffer.width;
@@ -157,9 +208,19 @@ auto draw_text(u32 x, u32 y, const char* text, Color fg = WHITE, Color bg = BLAC
 
         if (cy + font::GLYPH_HEIGHT > frame_height) break;
 
-        draw_char(cx, cy, *text, fg, bg);
+        inner_draw_char<false>(cx, cy, *text, fg, bg);
         cx += font::GLYPH_WIDTH;
     }
+}
+
+auto draw_text(u32 x, u32 y, const char* text, Color fg = WHITE, Color bg = BLACK, u8 z = 1) -> void {
+    draw_commands.push_back(
+        Draw_Command{
+            .type = Draw_Command_Type::DRAW_TEXT,
+            .z = z,
+            .text = Text_Command{x, y, text, fg, bg},
+        }
+    );
 }
 
 auto clear(Color color) -> void {
@@ -170,16 +231,22 @@ auto clear(Color color) -> void {
     }
 }
 
-auto draw_frame() -> void {
-    swap_buffers();
-}
-
-auto draw_rect(u32 x, u32 y, u32 w, u32 h, Color color) -> void {
+auto inner_draw_rect(u32 x, u32 y, u32 w, u32 h, Color color) -> void {
     for (u32 _y = y; _y < y + h && _y < height(); ++_y) {
         for (u32 _x = x; _x < x + w && _x < width(); ++_x) {
             set_pixel(_x, _y, color);
         }
     }
+}
+
+auto draw_rect(u32 x, u32 y, u32 w, u32 h, Color color, u8 z = 1) -> void {
+    draw_commands.push_back(
+        Draw_Command{
+            .type = Draw_Command_Type::DRAW_RECT,
+            .z = z,
+            .rectangle = Rect_Command{x, y, w, h, color},
+        }
+    );
 }
 
 #ifndef AA_RES
@@ -192,7 +259,7 @@ constexpr static u32 AA_RES1_POW2 = AA_RES1 * AA_RES1;
 static Static_Array<Color, AA_RES_POW2 + 1> colors_table;
 
 // TODO: Can we make generic AA?
-auto draw_circle(u32 x, u32 y, u32 r, Color color) -> void {
+static auto inner_draw_circle(u32 x, u32 y, u32 r, Color color) -> void {
     u32 x1 = (x > r) ? x - r: 0;
     u32 y1 = (y > r) ? y - r: 0;
     u32 x2 = x + r + 1;
@@ -248,18 +315,83 @@ auto draw_circle(u32 x, u32 y, u32 r, Color color) -> void {
     }
 }
 
-template <usize N>
-auto draw_sprite(const Resource<N>& res, u32 x, u32 y) -> void {
+auto draw_circle(u32 x, u32 y, u32 r, Color color, u8 z = 1) -> void {
+    draw_commands.push_back(
+        Draw_Command{
+            .type = Draw_Command_Type::DRAW_CIRCLE,
+            .z = z,
+            .circle = Circle_Command{x, y, r, color},
+        }
+    );
+}
+
+static auto inner_draw_sprite(const Resource_View res, u32 x, u32 y) -> void {
     if (res.width == 0 || res.height == 0) return;
 
-    const Color* colors = reinterpret_cast<const Color*>(res.data.elements());
-    u32 to_print_width  = (x + res.width  >= width())  ? (width() - x)  : res.width;
-    u32 to_print_height = (y + res.height >= height()) ? (height() - y) : res.height;
-    for (u32 py = 0; py < to_print_height; ++py) {
-        for (u32 px = 0; px < to_print_width; ++px) {
+    const Color* colors = reinterpret_cast<const Color*>(res.data);
+    u32 clipped_width  = (x + res.width  >= width())  ? (width() - x)  : res.width;
+    u32 clipped_height = (y + res.height >= height()) ? (height() - y) : res.height;
+    for (u32 py = 0; py < clipped_height; ++py) {
+        for (u32 px = 0; px < clipped_width; ++px) {
             set_pixel(x + px, y + py, colors[py * res.width + px]);
         }
     }
+}
+
+auto draw_sprite(const Resource_View res, u32 x, u32 y, u8 z = 1) -> void {
+    draw_commands.push_back(
+        Draw_Command{
+            .type = Draw_Command_Type::DRAW_SPRITE,
+            .z = z,
+            .sprite = Sprite_Command{res, x, y},
+        }
+    );
+}
+
+template <bool z_sort = true>
+auto draw_frame() -> void {
+    if (z_sort) {
+        std::sort(draw_commands.begin(), draw_commands.end(),
+            [](const Draw_Command& a, const Draw_Command& b) {
+                return a.z < b.z;
+            }
+        );
+    }
+    for (const auto& command: draw_commands) {
+        using enum Draw_Command_Type;
+        switch (command.type) {
+            case DRAW_CHAR: {
+                const Char_Command& cmd = command.character;
+                inner_draw_char<false>(cmd.x, cmd.y, cmd.c, cmd.fg, cmd.bg);
+                break;
+            }
+
+            case DRAW_TEXT: {
+                const Text_Command& cmd = command.text;
+                inner_draw_text(cmd.x, cmd.y, cmd.text, cmd.fg, cmd.bg);
+                break;
+            }
+
+            case DRAW_RECT: {
+                const Rect_Command& cmd = command.rectangle;
+                inner_draw_rect(cmd.x, cmd.y, cmd.w, cmd.h, cmd.color);
+                break;
+            }
+
+            case DRAW_CIRCLE: {
+                const Circle_Command& cmd = command.circle;
+                inner_draw_circle(cmd.x, cmd.y, cmd.r, cmd.color);
+                break;
+            }
+
+            case DRAW_SPRITE: {
+                const Sprite_Command& cmd = command.sprite;
+                inner_draw_sprite(cmd.res, cmd.x, cmd.y);
+                break;
+            }
+        }
+    }
+    swap_buffers();
 }
 
 }  // namespace gfx

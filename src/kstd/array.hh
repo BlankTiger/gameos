@@ -120,19 +120,19 @@ TEST(Bounded_Array, push_back_past_max_size_asserts) {
 
 template <typename T>
 struct Array {
-    usize allocated;
+    usize capacity;
     usize size;
     T* data;
 
     Array()
-        : allocated(1),
+        : capacity(1),
           size(0),
-          data(static_cast<T*>(::operator new(sizeof(T) * allocated))) {}
+          data(static_cast<T*>(::operator new(sizeof(T) * capacity))) {}
 
     explicit Array(usize initial_size)
-        : allocated(initial_size),
+        : capacity(initial_size),
           size(0),
-          data(static_cast<T*>(::operator new(sizeof(T) * allocated))) {}
+          data(static_cast<T*>(::operator new(sizeof(T) * capacity))) {}
 
     ~Array() {
         for (usize i = 0; i < size; ++i)
@@ -144,10 +144,10 @@ struct Array {
     Array(const Array&) = delete;
 
     Array(Array&& from) noexcept
-        : allocated(from.allocated),
+        : capacity(from.capacity),
           size(from.size),
           data(from.data) {
-        from.allocated = 0;
+        from.capacity = 0;
         from.size      = 0;
         from.data      = nullptr;
     }
@@ -160,11 +160,11 @@ struct Array {
             data[i].~T();
         ::operator delete(data);
 
-        allocated = from.allocated;
+        capacity = from.capacity;
         size      = from.size;
         data      = from.data;
 
-        from.allocated = 0;
+        from.capacity = 0;
         from.size      = 0;
         from.data      = nullptr;
 
@@ -182,14 +182,27 @@ struct Array {
         return data[index];
     }
 
+    auto reserve(usize min_capacity) -> void {
+        if (min_capacity <= capacity) return;
+
+        usize new_capacity = capacity == 0 ? 16 : capacity;
+        while (new_capacity < min_capacity) new_capacity *= 2;
+
+        T* new_data = new T[new_capacity];
+        if (data != nullptr) kstd_memcpy(new_data, data, size);
+        delete[] data;
+        data = new_data;
+        capacity = new_capacity;
+    }
+
     auto push_back(T&& element) -> void {
-        kstd_assert(size < allocated, "Implement resizing.");
+        reserve(size + 1);
         ::new (data + size) T(std::move(element));
         ++size;
     }
 
     auto push_back(const T& element) -> void {
-        kstd_assert(size < allocated, "Implement resizing.");
+        reserve(size + 1);
         ::new (data + size) T(element);
         ++size;
     }
@@ -203,6 +216,13 @@ struct Array {
             data[i].~T();
         }
         --size;
+    }
+
+    auto clear() {
+        for (usize i = 0; i < size; ++i) {
+            data[i].~T();
+        }
+        size = 0;
     }
 
     auto elements()       -> T*       { return data; }

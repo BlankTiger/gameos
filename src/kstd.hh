@@ -12,6 +12,7 @@
 #include "kstd/memory.hh"
 #include "kstd/programmable_interrupt_controller.hh"
 #include "kstd/ps2.hh"
+#include "kstd/resource.hh"
 #include "kstd/serial.hh"
 #include "kstd/string.hh"
 #include "kstd/string_view.hh"
