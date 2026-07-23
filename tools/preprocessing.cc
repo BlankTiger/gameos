@@ -1,12 +1,15 @@
+#include <algorithm>
 #include <cassert>
 #include <cctype>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <mutex>
 #include <print>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -74,40 +77,54 @@ static auto embed_identifier(const std::filesystem::path& path) -> std::string {
     return result;
 }
 
+// Guards concurrent access to the shared resource list, since @embed lookups
+// and inserts happen from worker threads processing different input files.
+class Resource_Pool {
+public:
+    auto find_or_create(
+        const std::filesystem::path& asset_path,
+        const std::string& name
+    ) -> Resource* {
+        std::lock_guard lock(mutex);
+        for (auto& r : resources) {
+            if (r.path == asset_path) return &r;
+        }
+        auto [data, size] = get_resource_data(asset_path);
+        resources.push_back(Resource{asset_path, name, std::move(data), size});
+        return &resources.back();
+    }
+
+    auto get() const -> const std::vector<Resource>& {
+        return resources;
+    }
+
+private:
+    std::mutex mutex;
+    std::vector<Resource> resources;
+};
+
 class Preprocessor {
 public:
-    Preprocessor(std::filesystem::path assets_dir) : assets(assets_dir) {};
+    Preprocessor(std::filesystem::path assets_dir, Resource_Pool& pool) : assets(assets_dir), pool(pool) {};
 
     auto run(std::string_view source) -> std::pair<bool, std::string> {
         clear_state(source);
         using enum State;
         while (pos < input.size()) {
             switch (state) {
-                case Normal:
-                    normal_state();
-                    break;
-                case String:
-                    string_state();
-                    break;
-                case Char:
-                    char_state();
-                    break;
-                case LineComment:
-                    line_comment_state();
-                    break;
-                case BlockComment:
-                    block_comment_state();
-                    break;
+                case Normal:       normal_state();        break;
+                case String:       string_state();        break;
+                case Char:         char_state();          break;
+                case LineComment:  line_comment_state();  break;
+                case BlockComment: block_comment_state(); break;
             }
         }
         return {has_embed, output};
     }
 
-    auto get_resources() const -> const std::vector<Resource>& {
-        return resources;
-    }
 private:
     std::filesystem::path assets;
+    Resource_Pool& pool;
     enum class State {
         Normal,
         String,
@@ -117,7 +134,6 @@ private:
     };
 
     State state = State::Normal;
-    std::vector<Resource> resources;
 
     std::string_view input;
     size_t pos = 0;
@@ -235,25 +251,8 @@ private:
         assert(get() == ')' && "Expected ')'");
 
         has_embed = true;
-        Resource* resource = nullptr;
-        for (auto& r : resources) {
-            if (r.path == path) {
-                resource = &r;
-                break;
-            }
-        }
-
         std::filesystem::path asset_path = assets / path;
-        if (!resource) {
-            auto [data, size] = get_resource_data(asset_path);
-            resources.push_back(Resource{
-                asset_path,
-                embed_identifier(path),
-                data,
-                size,
-            });
-            resource = &resources.back();
-        }
+        Resource* resource = pool.find_or_create(asset_path, embed_identifier(path));
 
         output += resource->name; // replace @embed with resource name
     }
@@ -279,7 +278,7 @@ static void write_resources_header(
                 << std::hex
                 << std::setw(2)
                 << std::setfill('0')
-                << (int)r.data[i]
+                << static_cast<uint32_t>(r.data[i])
                 << std::dec
                 << ",";
             if (i % 12 != 11)
@@ -305,6 +304,48 @@ static auto add_resource_include(std::string source) -> std::string {
     return source;
 }
 
+static void process_file(
+    const std::filesystem::path& assets_dir,
+    const std::filesystem::path& input_dir,
+    const std::filesystem::path& output_dir,
+    Resource_Pool& pool,
+    const std::filesystem::path& input
+) {
+    Preprocessor pp(assets_dir, pool);
+    std::filesystem::path output = output_dir / std::filesystem::relative(input, input_dir);
+
+    std::string result;
+    bool has_embed = false;
+    bool is_source = input.extension() == ".hh" || input.extension() == ".cc";
+
+    if (is_source) {
+        auto source = read_file(input);
+        std::tie(has_embed, result) = pp.run(source);
+        if (has_embed) result = add_resource_include(result);
+    }
+    else {
+        result = read_file(input);
+    }
+
+    static std::mutex print_mutex;
+    std::ofstream out(output);
+    {
+        std::lock_guard lock(print_mutex);
+        std::println("Processing file: {}", input.string());
+        std::println("    Output set to: {}", output.string());
+        if (is_source) {
+            if (has_embed)
+                std::println("    {} has @embed, adding #include \"resources.hh\"", input.string());
+        }
+        else {
+            std::println("    Omitting non .hh/.cc file: {}", input.string());
+        }
+        if (!out) std::println(stderr, "    failed to write {}", output.string());
+        std::println("    Writing to {}", output.string());
+    }
+    out << result;
+}
+
 auto main(int argc, char** argv) -> int {
     if (argc < 4) {
         std::println(stderr, "usage: preprocessing assets_directory input_directory output_directory");
@@ -322,44 +363,39 @@ auto main(int argc, char** argv) -> int {
     assert(std::filesystem::exists(input_dir) && "Input dir does not exist");
     assert(std::filesystem::exists(output_dir) && "Output dir does not exist");
 
-    Preprocessor pp(assets_dir);
-
+    std::vector<std::filesystem::path> input_files;
     for (auto const& file: std::filesystem::recursive_directory_iterator(input_dir)) {
-        std::filesystem::path input = file.path();
-        if (std::filesystem::is_directory(input)) continue;
-        std::println("Processing file: {}", input.string());
-
-        std::filesystem::path output = output_dir / std::filesystem::relative(input, input_dir);
-        std::println("    Output set to: {}", output.string());
-        std::filesystem::create_directories(output.parent_path());
-        std::ofstream out(output);
-
-        std::string result;
-        bool has_embed;
-
-        if (input.extension() == ".hh" || input.extension() == ".cc") {
-            auto source = read_file(input);
-            std::tie(has_embed, result) = pp.run(source);
-            if (has_embed) {
-                std::println("    {} has @embed, adding #include \"resources.hh\"", input.string());
-                result = add_resource_include(result);
-            }
-        }
-        else {
-            std::println("    Omitting non .hh/.cc file: {}", input.string());
-            result = read_file(input);
-        }
-
-        if (!out) {
-            std::println(stderr, "    failed to write {}", output.string());
-        }
-        std::println("    Writing to {}", output.string());
-        out << result;
+        if (std::filesystem::is_directory(file.path())) continue;
+        input_files.push_back(file.path());
     }
+
+    // Create output directories up front; create_directories races if called
+    // concurrently for shared parent directories.
+    for (auto const& input : input_files) {
+        std::filesystem::path output = output_dir / std::filesystem::relative(input, input_dir);
+        std::filesystem::create_directories(output.parent_path());
+    }
+
+    Resource_Pool pool;
+
+    auto thread_count = std::max<uint32_t>(1, std::thread::hardware_concurrency());
+    thread_count = static_cast<uint32_t>(std::min<size_t>(thread_count, std::max<size_t>(1, input_files.size())));
+
+    {
+        std::vector<std::jthread> workers;
+        size_t chunk = (input_files.size() + thread_count - 1) / thread_count;
+        for (uint32_t t = 0; t < thread_count; ++t) {
+            size_t begin = t * chunk;
+            size_t end   = std::min(input_files.size(), begin + chunk);
+            if (begin >= end) continue;
+            workers.emplace_back([&, begin, end] {
+                for (size_t i = begin; i < end; ++i)
+                    process_file(assets_dir, input_dir, output_dir, pool, input_files[i]);
+            });
+        }
+    }
+
     std::println("Writing {}", (output_dir / "resources.hh").string());
-    write_resources_header(
-        output_dir / "resources.hh",
-        pp.get_resources()
-    );
+    write_resources_header(output_dir / "resources.hh", pool.get());
 }
 
