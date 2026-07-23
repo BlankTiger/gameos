@@ -105,7 +105,7 @@ static force_inline auto set_pixel(u32 x, u32 y, Color color) -> void {
 
 enum class Draw_Command_Type: u8 {
     DRAW_CHAR,
-    DRAW_TEXT,
+    DRAW_TEXT, // Probably we will need to copy text
     DRAW_RECT,
     DRAW_CIRCLE,
     DRAW_SPRITE,
@@ -214,12 +214,12 @@ auto inner_draw_text(u32 x, u32 y, string_view text, Color fg = WHITE, Color bg 
     }
 }
 
-auto draw_text(u32 x, u32 y, const char* text, Color fg = WHITE, Color bg = TRANSPARENT, u8 z = 1) -> void {
+auto draw_text(u32 x, u32 y, string_view text, Color fg = WHITE, Color bg = TRANSPARENT, u8 z = 1) -> void {
     draw_commands.push_back(
         Draw_Command{
             .type = Draw_Command_Type::DRAW_TEXT,
             .z = z,
-            .text = Text_Command{x, y, string_view{text}, fg, bg},
+            .text = Text_Command{x, y, text, fg, bg},
         }
     );
 }
