@@ -153,7 +153,7 @@ struct Draw_Command {
 static Array<Draw_Command> draw_commands(512);
 
 template <bool IMMEDIATE>
-static auto inner_draw_char(u32 x, u32 y, char c, Color fg, Color bg) -> void {
+auto inner_draw_char(u32 x, u32 y, char c, Color fg, Color bg) -> void {
     const auto index = static_cast<u8>(c);
     const auto& glyph = font::DATA[index];
 
@@ -188,7 +188,7 @@ auto draw_char_immediate(Args&&... args) -> void {
     inner_draw_char<true>(std::forward<Args>(args)...);
 }
 
-static auto inner_draw_text(u32 x, u32 y, const char* text, Color fg = WHITE, Color bg = BLACK) -> void {
+auto inner_draw_text(u32 x, u32 y, const char* text, Color fg = WHITE, Color bg = BLACK) -> void {
     u32 cx = x;
     u32 cy = y;
     u32 frame_width = front_buffer.width;
@@ -231,7 +231,7 @@ auto clear(Color color) -> void {
     }
 }
 
-static auto inner_draw_rect(u32 x, u32 y, u32 w, u32 h, Color color) -> void {
+auto inner_draw_rect(u32 x, u32 y, u32 w, u32 h, Color color) -> void {
     for (u32 _y = y; _y < y + h && _y < height(); ++_y) {
         for (u32 _x = x; _x < x + w && _x < width(); ++_x) {
             set_pixel(_x, _y, color);
@@ -259,7 +259,7 @@ constexpr static u32 AA_RES1_POW2 = AA_RES1 * AA_RES1;
 static Static_Array<Color, AA_RES_POW2 + 1> colors_table;
 
 // TODO: Can we make generic AA?
-static auto inner_draw_circle(u32 x, u32 y, u32 r, Color color) -> void {
+auto inner_draw_circle(u32 x, u32 y, u32 r, Color color) -> void {
     u32 x1 = (x > r) ? x - r: 0;
     u32 y1 = (y > r) ? y - r: 0;
     u32 x2 = x + r + 1;
@@ -325,7 +325,7 @@ auto draw_circle(u32 x, u32 y, u32 r, Color color, u8 z = 1) -> void {
     );
 }
 
-static auto inner_draw_sprite(const Resource_View res, u32 x, u32 y) -> void {
+auto inner_draw_sprite(const Resource_View res, u32 x, u32 y) -> void {
     if (res.width == 0 || res.height == 0) return;
 
     const Color* colors = reinterpret_cast<const Color*>(res.data);

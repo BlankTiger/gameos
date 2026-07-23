@@ -7,6 +7,7 @@
 #include <iterator>
 
 #include "../basic.hh"
+#include "../cstring.hh"
 #include "assert.hh"
 #include "array_iterator.hh"
 
@@ -31,6 +32,35 @@ struct Static_Array {
 
     ARRAY_ITERATOR()
 };
+
+#ifdef UNIT_TESTS
+
+TEST(Static_Array, stores_values) {
+    Static_Array<int, 3> arr{{1, 2, 3}};
+
+    EXPECT_EQ(arr.size, 3);
+    EXPECT_EQ(arr[0], 1);
+    EXPECT_EQ(arr[1], 2);
+    EXPECT_EQ(arr[2], 3);
+}
+
+TEST(Static_Array, elements_returns_data_pointer) {
+    Static_Array<int, 2> arr{{10, 20}};
+
+    auto* ptr = arr.elements();
+
+    EXPECT_EQ(ptr[0], 10);
+    EXPECT_EQ(ptr[1], 20);
+}
+
+TEST(Static_Array, out_of_bounds_asserts) {
+    Static_Array<int, 2> arr{{1, 2}};
+
+    EXPECT_DEATH(arr[2], "");
+}
+
+#endif
+
 
 //
 // Use as a normal Array. The exception is this can't grow, because it's backed by static memory.
@@ -97,13 +127,16 @@ private:
 
 TEST(Bounded_Array, default_is_empty) {
     Bounded_Array<int, 4> arr;
+
     EXPECT_EQ(arr.size, 0);
 }
 
 TEST(Bounded_Array, push_back_grows_size) {
     Bounded_Array<int, 4> arr;
+
     arr.push_back(1);
     arr.push_back(2);
+
     EXPECT_EQ(arr.size, 2);
     EXPECT_EQ(arr[0], 1);
     EXPECT_EQ(arr[1], 2);
@@ -111,8 +144,10 @@ TEST(Bounded_Array, push_back_grows_size) {
 
 TEST(Bounded_Array, push_back_past_max_size_asserts) {
     Bounded_Array<int, 2> arr;
+
     arr.push_back(1);
     arr.push_back(2);
+
     EXPECT_DEATH(arr.push_back(3), "");
 }
 
@@ -188,9 +223,17 @@ struct Array {
         usize new_capacity = capacity == 0 ? 16 : capacity;
         while (new_capacity < min_capacity) new_capacity *= 2;
 
-        T* new_data = new T[new_capacity];
-        if (data != nullptr) kstd_memcpy(new_data, data, size);
-        delete[] data;
+        T* new_data = static_cast<T*>(::operator new(sizeof(T) * new_capacity));
+        if constexpr (std::is_trivially_copyable_v<T>) {
+            kstd_memcpy(new_data, data, sizeof(T) * size);
+        } else {
+            for (usize i = 0; i < size; ++i) {
+                ::new (new_data + i) T(std::move(data[i]));
+                data[i].~T();
+            }
+        }
+        ::operator delete(data);
+
         data = new_data;
         capacity = new_capacity;
     }
@@ -230,3 +273,118 @@ struct Array {
 
     ARRAY_ITERATOR()
 };
+
+
+#ifdef UNIT_TESTS
+
+TEST(Array, default_is_empty) {
+    Array<int> arr;
+
+    EXPECT_EQ(arr.size, 0);
+    EXPECT_EQ(arr.capacity, 1);
+}
+
+TEST(Array, push_back_grows_size) {
+    Array<int> arr;
+
+    arr.push_back(1);
+    arr.push_back(2);
+
+    EXPECT_EQ(arr.size, 2);
+    EXPECT_EQ(arr[0], 1);
+    EXPECT_EQ(arr[1], 2);
+}
+
+TEST(Array, push_back_increases_capacity_when_full) {
+    Array<int> arr(2);
+
+    arr.push_back(1);
+    arr.push_back(2);
+
+    usize pre_capacity = arr.capacity;
+
+    arr.push_back(3);
+
+    EXPECT_EQ(arr.size, 3);
+    EXPECT_EQ(arr[0], 1);
+    EXPECT_EQ(arr[1], 2);
+    EXPECT_EQ(arr[2], 3);
+    EXPECT_EQ(pre_capacity, 2);
+    EXPECT_EQ(arr.capacity, 4);
+}
+
+TEST(Array, reserve_increases_capacity) {
+    Array<int> arr;
+
+    auto old_capacity = arr.capacity;
+
+    arr.reserve(100);
+
+    EXPECT_TRUE(arr.capacity >= 100);
+    EXPECT_TRUE(arr.capacity > old_capacity);
+}
+
+TEST(Array, pop_front_removes_first_element) {
+    Array<int> arr;
+
+    arr.push_back(1);
+    arr.push_back(2);
+    arr.push_back(3);
+
+    arr.pop_front();
+
+    EXPECT_EQ(arr.size, 2);
+    EXPECT_EQ(arr[0], 2);
+    EXPECT_EQ(arr[1], 3);
+}
+
+TEST(Array, clear_removes_all_elements) {
+    Array<int> arr;
+
+    arr.push_back(1);
+    arr.push_back(2);
+
+    arr.clear();
+
+    EXPECT_EQ(arr.size, 0);
+}
+
+TEST(Array, out_of_bounds_asserts) {
+    Array<int> arr;
+
+    arr.push_back(42);
+
+    EXPECT_DEATH(arr[1], "");
+}
+
+TEST(Array, move_constructor_transfers_ownership) {
+    Array<int> first;
+
+    first.push_back(123);
+
+    Array<int> second(std::move(first));
+
+    EXPECT_EQ(second.size, 1);
+    EXPECT_EQ(second[0], 123);
+
+    EXPECT_EQ(first.size, 0);
+    EXPECT_EQ(first.data, nullptr);
+}
+
+TEST(Array, move_assignment_transfers_ownership) {
+    Array<int> first;
+    Array<int> second;
+
+    first.push_back(55);
+    second.push_back(99);
+
+    second = std::move(first);
+
+    EXPECT_EQ(second.size, 1);
+    EXPECT_EQ(second[0], 55);
+
+    EXPECT_EQ(first.size, 0);
+    EXPECT_EQ(first.data, nullptr);
+}
+
+#endif
