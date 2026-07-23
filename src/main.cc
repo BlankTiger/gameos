@@ -59,7 +59,9 @@ auto main() -> void {
     gfx::draw_rect(250, 400, 550, 300, gfx::WHITE);
     gfx::draw_circle(525, 550, 100, gfx::RED);
 
-    gfx::draw_sprite(@embed("cool.png"), 600, 500);
+    gfx::draw_sprite(@embed("cool.png").view(), 550, 500);
+    gfx::draw_sprite(@embed("cool.png").view(), 600, 500, 2);
+    gfx::draw_sprite(@embed("cool.png").view(), 700, 500);
 
     term::println("ZA WARUDO");
 
