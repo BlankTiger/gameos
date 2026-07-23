@@ -7,6 +7,7 @@
 #include "config.hh"
 #include "font8x16.hh"
 #include "multiboot2.hh"
+#include "string_view.hh"
 #include "resource.hh"
 
 namespace gfx {
@@ -103,11 +104,11 @@ static force_inline auto set_pixel(u32 x, u32 y, Color color) -> void {
 }
 
 enum class Draw_Command_Type: u8 {
-    DRAW_CHAR = 0,
-    DRAW_TEXT = 1, // Probably we will need to copy text
-    DRAW_RECT = 10,
-    DRAW_CIRCLE = 11,
-    DRAW_SPRITE = 100,
+    DRAW_CHAR,
+    DRAW_TEXT,
+    DRAW_RECT,
+    DRAW_CIRCLE,
+    DRAW_SPRITE,
 };
 
 struct Char_Command {
@@ -118,7 +119,7 @@ struct Char_Command {
 
 struct Text_Command {
     u32 x, y;
-    const char* text;
+    string_view text;
     Color fg, bg;
 };
 
@@ -188,14 +189,14 @@ auto draw_char_immediate(Args&&... args) -> void {
     inner_draw_char<true>(std::forward<Args>(args)...);
 }
 
-auto inner_draw_text(u32 x, u32 y, const char* text, Color fg = WHITE, Color bg = BLACK) -> void {
+auto inner_draw_text(u32 x, u32 y, string_view text, Color fg = WHITE, Color bg = TRANSPARENT) -> void {
     u32 cx = x;
     u32 cy = y;
     u32 frame_width = front_buffer.width;
     u32 frame_height = front_buffer.height;
 
-    for (; *text; ++text) {
-        if (*text == '\n') {
+    for (const auto c: text) {
+        if (c == '\n') {
             cx = x;
             cy += font::GLYPH_HEIGHT;
             continue;
@@ -208,17 +209,17 @@ auto inner_draw_text(u32 x, u32 y, const char* text, Color fg = WHITE, Color bg 
 
         if (cy + font::GLYPH_HEIGHT > frame_height) break;
 
-        inner_draw_char<false>(cx, cy, *text, fg, bg);
+        inner_draw_char<false>(cx, cy, c, fg, bg);
         cx += font::GLYPH_WIDTH;
     }
 }
 
-auto draw_text(u32 x, u32 y, const char* text, Color fg = WHITE, Color bg = BLACK, u8 z = 1) -> void {
+auto draw_text(u32 x, u32 y, const char* text, Color fg = WHITE, Color bg = TRANSPARENT, u8 z = 1) -> void {
     draw_commands.push_back(
         Draw_Command{
             .type = Draw_Command_Type::DRAW_TEXT,
             .z = z,
-            .text = Text_Command{x, y, text, fg, bg},
+            .text = Text_Command{x, y, string_view{text}, fg, bg},
         }
     );
 }
@@ -351,7 +352,7 @@ auto draw_sprite(const Resource_View res, u32 x, u32 y, u8 z = 1) -> void {
 template <bool z_sort = true>
 auto draw_frame() -> void {
     if (z_sort) {
-        std::sort(draw_commands.begin(), draw_commands.end(),
+        std::stable_sort(draw_commands.begin(), draw_commands.end(),
             [](const Draw_Command& a, const Draw_Command& b) {
                 return a.z < b.z;
             }
@@ -363,28 +364,23 @@ auto draw_frame() -> void {
             case DRAW_CHAR: {
                 const Char_Command& cmd = command.character;
                 inner_draw_char<false>(cmd.x, cmd.y, cmd.c, cmd.fg, cmd.bg);
-                break;
-            }
+            } break;
             case DRAW_TEXT: {
                 const Text_Command& cmd = command.text;
                 inner_draw_text(cmd.x, cmd.y, cmd.text, cmd.fg, cmd.bg);
-                break;
-            }
+            } break;
             case DRAW_RECT: {
                 const Rect_Command& cmd = command.rectangle;
                 inner_draw_rect(cmd.x, cmd.y, cmd.w, cmd.h, cmd.color);
-                break;
-            }
+            } break;
             case DRAW_CIRCLE: {
                 const Circle_Command& cmd = command.circle;
                 inner_draw_circle(cmd.x, cmd.y, cmd.r, cmd.color);
-                break;
-            }
+            } break;
             case DRAW_SPRITE: {
                 const Sprite_Command& cmd = command.sprite;
                 inner_draw_sprite(cmd.res, cmd.x, cmd.y);
-                break;
-            }
+            } break;
         }
     }
     swap_buffers();
