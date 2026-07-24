@@ -2,8 +2,8 @@
 
 #include <source_location>
 
-#include "../basic.hh"
-#include "../cstring.hh"
+#include "basic.hh"
+#include "cstring.hh"
 
 //
 // Forward-declared instead of #include "array.hh": array.hh pulls in assert.hh

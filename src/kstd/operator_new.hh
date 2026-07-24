@@ -2,7 +2,7 @@
 
 #include <new>
 
-#include "kstd/memory.hh"
+#include "memory.hh"
 
 auto operator new(usize size) -> void* {
     if (void* ptr = mem::__global_allocator->alloc(size)) return ptr;

@@ -3,8 +3,8 @@
 #include <type_traits>
 #include <utility>
 
-#include "../basic.hh"
-#include "../cstring.hh"
+#include "basic.hh"
+#include "cstring.hh"
 #include "enum_name.hh"
 #include "string_view.hh"
 

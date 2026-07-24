@@ -1,3 +1,5 @@
+#pragma once
+
 #include "basic.hh"
 
 template <typename T>

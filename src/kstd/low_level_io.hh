@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../basic.hh"
+#include "basic.hh"
 
 // Wrappers for communicating via I/O ports.
 namespace low_level_io {

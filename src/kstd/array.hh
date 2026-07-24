@@ -6,8 +6,8 @@
 #include <source_location>
 #include <iterator>
 
-#include "../basic.hh"
-#include "../cstring.hh"
+#include "basic.hh"
+#include "cstring.hh"
 #include "assert.hh"
 #include "array_iterator.hh"
 

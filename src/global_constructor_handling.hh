@@ -1,6 +1,6 @@
 #pragma once
 
-#include "int.hh"
+#include "kstd/int.hh"
 
 using Init_Function = void (*)();
 

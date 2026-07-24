@@ -2,7 +2,7 @@
 
 #include <climits>
 
-#include "../basic.hh"
+#include "basic.hh"
 #include "array.hh"
 
 namespace font {

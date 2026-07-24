@@ -5,8 +5,8 @@
 #include <type_traits>
 #include <utility>
 
-#include "../basic.hh"
-#include "../cstring.hh"
+#include "basic.hh"
+#include "cstring.hh"
 #include "array.hh"
 #include "array_iterator.hh"
 #include "assert.hh"

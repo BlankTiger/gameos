@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../basic.hh"
+#include "basic.hh"
 
 //
 // This lives separately from kstd/interrupts.hh so that other modules can
