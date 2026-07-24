@@ -8,6 +8,10 @@ force_inline auto abs(s32 x) -> s32 {
     return (x ^ (x >> 31)) - (x >> 31);
 }
 
+force_inline auto abs_diff(u32 a, u32 b) {
+    return (a > b) ? (a - b) : (b - a);
+}
+
 force_inline auto lerp(u8 a, u8 b, int pos, int max) -> u8 {
     return a + ((b - a) * pos) / max;
 }
