@@ -63,36 +63,38 @@ struct Backend {
     }
 };
 
+inline Backend backend;
+
 auto print(const char* format) -> int {
-    return fmt::print<Backend>(format);
+    return fmt::print(backend, format);
 }
 
 template <typename T, typename... Rest>
 auto print(const char* format, T&& value, Rest&&... rest) -> int {
-    return fmt::print<Backend>(format, std::forward<T>(value), std::forward<Rest>(rest)...);
+    return fmt::print(backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
 }
 
 auto println() -> int {
-    return fmt::println<Backend>();
+    return fmt::println(backend);
 }
 
 auto println(const char* format) -> int {
-    return fmt::println<Backend>(format);
+    return fmt::println(backend, format);
 }
 
 template <typename T>
 auto print(T&& value) -> int {
-    return fmt::print<Backend>(std::forward<T>(value));
+    return fmt::print(backend, std::forward<T>(value));
 }
 
 template <typename T>
 auto println(T&& value) -> int {
-    return fmt::println<Backend>(std::forward<T>(value));
+    return fmt::println(backend, std::forward<T>(value));
 }
 
 template <typename T, typename... Rest>
 auto println(const char* format, T&& value, Rest&&... rest) -> int {
-    return fmt::println<Backend>(format, std::forward<T>(value), std::forward<Rest>(rest)...);
+    return fmt::println(backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
 }
 
 }
