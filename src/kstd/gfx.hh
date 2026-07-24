@@ -7,7 +7,6 @@
 #include "config.hh"
 #include "font8x16.hh"
 #include "multiboot2.hh"
-#include "serial.hh"
 #include "string_view.hh"
 #include "resource.hh"
 
@@ -30,39 +29,38 @@ struct Framebuffer_Format {
     u8 blue_pos;
     static constexpr u8 alpha_pos = 24;
 
-    void init(const boot::Multiboot2_Framebuffer_Tag& tag) {
+    auto init(const boot::Multiboot2_Framebuffer_Tag& tag) -> void {
         red_pos   = tag.framebuffer_info.direct_color.framebuffer_red_field_position;
         green_pos = tag.framebuffer_info.direct_color.framebuffer_green_field_position;
         blue_pos  = tag.framebuffer_info.direct_color.framebuffer_blue_field_position;
     }
 };
 
-static Framebuffer_Format framebuffer_fmt;
+inline Framebuffer_Format framebuffer_fmt;
 
 struct Pixel {
     u32 raw;
 
     Pixel() : raw(0) {}
-    Pixel(Color c, const Framebuffer_Format& fmt = framebuffer_fmt) {
-        raw = (static_cast<u32>(c.r) << fmt.red_pos)   |
-              (static_cast<u32>(c.g) << fmt.green_pos) |
-              (static_cast<u32>(c.b) << fmt.blue_pos)  |
+    Pixel(Color c) {
+        raw = (static_cast<u32>(c.r) << framebuffer_fmt.red_pos)   |
+              (static_cast<u32>(c.g) << framebuffer_fmt.green_pos) |
+              (static_cast<u32>(c.b) << framebuffer_fmt.blue_pos)  |
               (static_cast<u32>(c.a) << Framebuffer_Format::alpha_pos);
     }
 
-    Color color(const Framebuffer_Format& fmt = framebuffer_fmt) const {
+    auto color() -> Color {
         return {
-            .r = static_cast<u8>((raw >> fmt.red_pos)   & 0xFF),
-            .g = static_cast<u8>((raw >> fmt.green_pos) & 0xFF),
-            .b = static_cast<u8>((raw >> fmt.blue_pos)  & 0xFF),
+            .r = static_cast<u8>((raw >> framebuffer_fmt.red_pos)   & 0xFF),
+            .g = static_cast<u8>((raw >> framebuffer_fmt.green_pos) & 0xFF),
+            .b = static_cast<u8>((raw >> framebuffer_fmt.blue_pos)  & 0xFF),
             .a = static_cast<u8>((raw >> Framebuffer_Format::alpha_pos) & 0xFF),
         };
     }
 
     operator u32() const { return raw; }
 
-    force_inline void blend_with(Color fg, const Framebuffer_Format& fmt = framebuffer_fmt)
-    {
+    force_inline auto blend_with(Color fg, const Framebuffer_Format& fmt = framebuffer_fmt) -> void {
         u8 r = static_cast<u8>((raw >> fmt.red_pos)   & 0xFF);
         u8 g = static_cast<u8>((raw >> fmt.green_pos) & 0xFF);
         u8 b = static_cast<u8>((raw >> fmt.blue_pos)  & 0xFF);
@@ -88,10 +86,10 @@ struct Framebuffer {
     usize stride;
 };
 
-static Framebuffer front_buffer;
-static Pixel back_buffer[GFX_PIXEL_COUNT];
+inline Framebuffer front_buffer;
+inline Pixel back_buffer[GFX_PIXEL_COUNT];
 constexpr usize BUFFER_SIZE = GFX_PIXEL_COUNT * sizeof(Pixel);
-static bool __framebuffer_initialized;
+inline bool __framebuffer_initialized;
 
 force_inline auto swap_buffers() -> void {
     kstd_debug_assert(front_buffer.pixels != nullptr);
@@ -115,7 +113,7 @@ force_inline auto swap_buffers() -> void {
     framebuffer_fmt.init(*framebuffer_tag);
     kstd_assert(
         !(framebuffer_fmt.red_pos == 0 && framebuffer_fmt.green_pos == 0 && framebuffer_fmt.blue_pos == 0),
-        "FramebufferFormat was not initialized"
+        "Framebuffer_Format was not initialized"
     );
 
     kstd_memset(back_buffer, 0, BUFFER_SIZE);
