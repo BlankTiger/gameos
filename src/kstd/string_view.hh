@@ -17,18 +17,23 @@ struct string_view;
 //
 // Forward-declared instead of #include "assert.hh": assert.hh pulls in
 // serial.hh -> format.hh -> string_view.hh (for printing string_view), which
-// would cycle right back here.
+// would cycle right back here. Forward-declared unconditionally (rather than
+// only in a UNIT_TESTS-less branch) since whichever header reaches this one
+// first in the cycle (assert.hh -> string_view.hh, or string_view.hh ->
+// assert.hh under UNIT_TESTS) needs kstd_assert visible for operator[]
+// below before the other header's #include of this one returns.
 //
-// Under UNIT_TESTS this header is the entry point on its own.
-//
-#ifdef UNIT_TESTS
-#include "assert.hh"
-#else
 constexpr force_inline auto kstd_assert(
     bool predicate,
     const string_view message,
     const std::source_location& location
 ) -> void;
+
+// Under UNIT_TESTS this header can also be the entry point on its own, so
+// pull in assert.hh directly for a real definition of kstd_assert rather
+// than relying on something else to provide it.
+#ifdef UNIT_TESTS
+#include "assert.hh"
 #endif
 
 // A non-owning view over existing char memory: a pointer plus a length.
