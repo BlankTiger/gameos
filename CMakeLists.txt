@@ -108,6 +108,8 @@ target_compile_options(gameos PRIVATE
     $<$<COMPILE_LANGUAGE:C,CXX>:-Wextra>
     $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions>
     $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
+    -DGFX_WIDTH=${GFX_WIDTH}
+    -DGFX_HEIGHT=${GFX_HEIGHT}
 )
 
 target_link_options(gameos PRIVATE
