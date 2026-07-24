@@ -41,10 +41,6 @@ static auto read_png_file(const std::string& path) -> std::pair<std::vector<uint
     std::println("    Getting pixels from {}, width: {}, height: {}", path, width, height);
 
     size_t pixel_count = static_cast<size_t>(width * height);
-    for (size_t i = 0; i < pixel_count; ++i) {
-        uint8_t* p = pixels + i * 4;
-        std::swap(p[0], p[2]); // Swap red channel with blue, since we require bgra
-    }
     std::vector<uint8_t> result(pixels, pixels + pixel_count * 4);
 
     stbi_image_free(pixels);

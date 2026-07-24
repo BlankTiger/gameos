@@ -41,16 +41,16 @@ header_start:
      *   u16 type   = 5   (MULTIBOOT_HEADER_TAG_FRAMEBUFFER)
      *   u16 flags  = 0   (not optional - the bootloader must honour this)
      *   u32 size   = 20  (bytes, including the type/flags/size fields)
-     *   u32 width  = 1024
-     *   u32 height = 768
+     *   u32 width  = GFX_WIDTH
+     *   u32 height = GFX_HEIGHT
      *   u32 depth  = 32  (bits per pixel)
      */
     .align 8
     .short 5                            /* tag type: framebuffer request      */
     .short 0                            /* flags: 0 = required                */
     .long  20                           /* tag size in bytes                  */
-    .long  1024                         /* requested width  (pixels)          */
-    .long  768                          /* requested height (pixels)          */
+    .long  GFX_WIDTH                    /* requested width  (pixels)          */
+    .long  GFX_HEIGHT                   /* requested height (pixels)          */
     .long  32                           /* requested depth  (bpp)             */
 
     /*

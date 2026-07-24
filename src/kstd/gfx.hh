@@ -7,32 +7,75 @@
 #include "config.hh"
 #include "font8x16.hh"
 #include "multiboot2.hh"
+#include "serial.hh"
 #include "string_view.hh"
 #include "resource.hh"
 
 namespace gfx {
 
 struct Color {
-    u8 b, g, r, a;
-
-    force_inline void blend_with(Color fg) {
-        b = math::lerp(b, fg.b, fg.a, 255);
-        g = math::lerp(g, fg.g, fg.a, 255);
-        r = math::lerp(r, fg.r, fg.a, 255);
-        a = 255;
-    }
+    u8 r, g, b, a;
 };
 
 constexpr Color BLACK{0, 0, 0, 255};
 constexpr Color WHITE{255, 255, 255, 255};
-constexpr Color RED{0, 0, 255, 255};
+constexpr Color RED{255, 0, 0, 255};
 constexpr Color GREEN{0, 255, 0, 255};
-constexpr Color BLUE{255, 0, 0, 255};
+constexpr Color BLUE{0, 0, 255, 255};
 constexpr Color TRANSPARENT{0, 0, 0, 0};
 
-union Pixel {
-    u32 value;
-    Color color;
+struct Framebuffer_Format {
+    u8 red_pos;
+    u8 green_pos;
+    u8 blue_pos;
+    static constexpr u8 alpha_pos = 24;
+
+    void init(const boot::Multiboot2_Framebuffer_Tag& tag) {
+        red_pos   = tag.framebuffer_info.direct_color.framebuffer_red_field_position;
+        green_pos = tag.framebuffer_info.direct_color.framebuffer_green_field_position;
+        blue_pos  = tag.framebuffer_info.direct_color.framebuffer_blue_field_position;
+    }
+};
+
+static Framebuffer_Format framebuffer_fmt;
+
+struct Pixel {
+    u32 raw;
+
+    Pixel() : raw(0) {}
+    Pixel(Color c, const Framebuffer_Format& fmt = framebuffer_fmt) {
+        raw = (static_cast<u32>(c.r) << fmt.red_pos)   |
+              (static_cast<u32>(c.g) << fmt.green_pos) |
+              (static_cast<u32>(c.b) << fmt.blue_pos)  |
+              (static_cast<u32>(c.a) << Framebuffer_Format::alpha_pos);
+    }
+
+    Color color(const Framebuffer_Format& fmt = framebuffer_fmt) const {
+        return {
+            .r = static_cast<u8>((raw >> fmt.red_pos)   & 0xFF),
+            .g = static_cast<u8>((raw >> fmt.green_pos) & 0xFF),
+            .b = static_cast<u8>((raw >> fmt.blue_pos)  & 0xFF),
+            .a = static_cast<u8>((raw >> Framebuffer_Format::alpha_pos) & 0xFF),
+        };
+    }
+
+    operator u32() const { return raw; }
+
+    force_inline void blend_with(Color fg, const Framebuffer_Format& fmt = framebuffer_fmt)
+    {
+        u8 r = static_cast<u8>((raw >> fmt.red_pos)   & 0xFF);
+        u8 g = static_cast<u8>((raw >> fmt.green_pos) & 0xFF);
+        u8 b = static_cast<u8>((raw >> fmt.blue_pos)  & 0xFF);
+
+        r = math::lerp(r, fg.r, fg.a, 255);
+        g = math::lerp(g, fg.g, fg.a, 255);
+        b = math::lerp(b, fg.b, fg.a, 255);
+
+        raw = (static_cast<u32>(r) << fmt.red_pos)   |
+              (static_cast<u32>(g) << fmt.green_pos) |
+              (static_cast<u32>(b) << fmt.blue_pos)  |
+              (0xFF << Framebuffer_Format::alpha_pos);
+    }
 };
 
 struct Framebuffer {
@@ -69,6 +112,11 @@ force_inline auto swap_buffers() -> void {
     front_buffer.type           = framebuffer_tag->framebuffer_type;
     front_buffer.stride         = front_buffer.pitch / sizeof(u32);
     kstd_assert(front_buffer.bits_per_pixel == 32, "Only 32BPP supported.");
+    framebuffer_fmt.init(*framebuffer_tag);
+    kstd_assert(
+        !(framebuffer_fmt.red_pos == 0 && framebuffer_fmt.green_pos == 0 && framebuffer_fmt.blue_pos == 0),
+        "FramebufferFormat was not initialized"
+    );
 
     kstd_memset(back_buffer, 0, BUFFER_SIZE);
     swap_buffers();
@@ -96,10 +144,10 @@ static force_inline auto set_pixel(u32 x, u32 y, Color color) -> void {
 
     auto index = y * front_buffer.stride + x;
     if constexpr(IMMEDIATE) {
-        front_buffer.pixels[index].color.blend_with(color);
-        back_buffer[index].color.blend_with(color);
+        front_buffer.pixels[index].blend_with(color);
+        back_buffer[index].blend_with(color);
     } else {
-        back_buffer[index].color.blend_with(color);
+        back_buffer[index].blend_with(color);
     }
 }
 
@@ -273,9 +321,9 @@ auto inner_draw_circle(u32 x, u32 y, u32 r, Color color) -> void {
     u32 color_alpha = color.a;
     for (usize i = 0; i < colors_table.size; ++i) {
         colors_table[i] = Color{
-            .b = color.b,
-            .g = color.g,
             .r = color.r,
+            .g = color.g,
+            .b = color.b,
             .a = static_cast<u8>(color_alpha * i / AA_RES_POW2),
         };
     }
