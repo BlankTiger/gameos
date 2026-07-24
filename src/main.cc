@@ -67,6 +67,8 @@ auto main() -> void {
 
     gfx::draw_frame();
 
+    stacktrace::print_stack_trace();
+
     auto seconds = 1;
     while (true) {
         term::println("%", seconds);
