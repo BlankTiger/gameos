@@ -12,6 +12,8 @@
 template <typename T, usize N>
 struct Static_Array;
 
+struct string_view;
+
 //
 // Forward-declared instead of #include "assert.hh": assert.hh pulls in
 // serial.hh -> format.hh -> string_view.hh (for printing string_view), which
@@ -24,7 +26,7 @@ struct Static_Array;
 #else
 constexpr force_inline auto kstd_assert(
     bool predicate,
-    const char* message,
+    const string_view message,
     const std::source_location& location
 ) -> void;
 #endif
@@ -63,6 +65,10 @@ struct string_view {
 
     auto operator!=(const string_view& other) const -> bool {
         return !(*this == other);
+    }
+
+    operator bool() const {
+        return data != nullptr;
     }
 
     auto format() const -> string_view {

@@ -3,6 +3,7 @@
 #include <source_location>
 
 #include "basic.hh"
+#include "string_view.hh"
 
 #if defined(__STDC_HOSTED__) && __STDC_HOSTED__
 #include <cstdio>
@@ -10,21 +11,21 @@
 
 constexpr force_inline auto kstd_assert(
     bool predicate,
-    const char* message = nullptr,
+    const string_view message,
     const std::source_location& location = std::source_location::current()
 ) -> void {
     if (predicate) return;
     std::fprintf(
         stderr, "%s:%u:%u: %s\n",
         location.file_name(), location.line(), location.column(),
-        message != nullptr ? message : "assertion failed"
+        message ? message : "assertion failed"
     );
     std::abort();
 }
 #else
 #include "serial.hh"
 
-using Halt_Fn = auto (*)(const char* file, u32 line, u32 col, const char* message) -> void;
+using Halt_Fn = auto (*)(const string_view file, u32 line, u32 col, const string_view message) -> void;
 inline Halt_Fn __halt_print;
 
 force_inline auto halt_set_print(Halt_Fn fn) -> void {
@@ -34,7 +35,7 @@ force_inline auto halt_set_print(Halt_Fn fn) -> void {
 static bool __panicking = false;
 
 [[noreturn]] static auto
-halt_forever(const char* message, const std::source_location& location = std::source_location::current()) -> void {
+halt_forever(const string_view message, const std::source_location& location = std::source_location::current()) -> void {
     if (__panicking) {
         for (;;) asm volatile("hlt");
     }
@@ -53,7 +54,7 @@ halt_forever(const char* message, const std::source_location& location = std::so
 
 constexpr force_inline auto kstd_assert(
     bool predicate,
-    const char* message = nullptr,
+    const string_view message = {},
     const std::source_location& location = std::source_location::current()
 ) -> void {
     if (!predicate) halt_forever(message, location);
@@ -62,7 +63,7 @@ constexpr force_inline auto kstd_assert(
 
 constexpr force_inline auto kstd_debug_assert(
     bool predicate,
-    const char* message = nullptr,
+    const string_view message = {},
     const std::source_location& location = std::source_location::current()
 ) -> void {
 #ifdef NDEBUG
@@ -70,4 +71,11 @@ constexpr force_inline auto kstd_debug_assert(
 #else
     kstd_assert(predicate, message, location);
 #endif
+}
+
+constexpr force_inline auto unimplemented(
+    const string_view message = {},
+    const std::source_location& location = std::source_location::current()
+) -> void {
+    kstd_assert(false, message ? message : "unimplemented", location);
 }

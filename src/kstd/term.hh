@@ -79,7 +79,7 @@ auto println(const char* format, T&& value, Rest&&... rest) -> int {
     __state = {0, 0};
     auto is_initialized = gfx::is_initialized();
     if (is_initialized) {
-        halt_set_print(+[](const char* file, u32 line, u32 col, const char* message) {
+        halt_set_print(+[](const string_view file, u32 line, u32 col, const string_view message) {
             print("%:%:%", file, line, col);
             if (message != nullptr) println(": %", message);
         });
