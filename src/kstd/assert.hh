@@ -47,36 +47,38 @@ struct Halt_Printer_Backend {
     }
 };
 
+inline Halt_Printer_Backend backend;
+
 auto print(const char* format) -> int {
-    return fmt::print<Halt_Printer_Backend>(format);
+    return fmt::print(backend, format);
 }
 
 template <typename T, typename... Rest>
 auto print(const char* format, T&& value, Rest&&... rest) -> int {
-    return fmt::print<Halt_Printer_Backend>(format, std::forward<T>(value), std::forward<Rest>(rest)...);
+    return fmt::print(backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
 }
 
 auto println() -> int {
-    return fmt::println<Halt_Printer_Backend>();
+    return fmt::println(backend);
 }
 
 template <typename T>
 auto print(T&& value) -> int {
-    return fmt::print<Halt_Printer_Backend>(std::forward<T>(value));
+    return fmt::print(backend, std::forward<T>(value));
 }
 
 template <typename T>
 auto println(T&& value) -> int {
-    return fmt::println<Halt_Printer_Backend>(std::forward<T>(value));
+    return fmt::println(backend, std::forward<T>(value));
 }
 
 auto println(const char* format) -> int {
-    return fmt::println<Halt_Printer_Backend>(format);
+    return fmt::println(backend, format);
 }
 
 template <typename T, typename... Rest>
 auto println(const char* format, T&& value, Rest&&... rest) -> int {
-    return fmt::println<Halt_Printer_Backend>(format, std::forward<T>(value), std::forward<Rest>(rest)...);
+    return fmt::println(backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
 }
 
 } // namespace halt
