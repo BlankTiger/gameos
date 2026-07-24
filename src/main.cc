@@ -63,6 +63,12 @@ auto main() -> void {
     gfx::draw_sprite(@embed("cool.png").view(), 600, 500, 2);
     gfx::draw_sprite(@embed("cool.png").view(), 700, 500);
 
+    gfx::draw_line(50, 50, 500, 600, gfx::BLUE);
+    gfx::draw_line(100, 400, 500, 600, gfx::GREEN);
+    gfx::draw_line(300, 50, 500, 600, gfx::RED);
+    gfx::draw_line(300, 50, 600, 50, gfx::WHITE);
+    gfx::draw_line(300, 50, 600, 50, gfx::WHITE);
+
     term::println("ZA WARUDO");
 
     gfx::draw_frame();
