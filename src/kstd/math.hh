@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../basic.hh"
+#include "basic.hh"
 
 namespace math {
 

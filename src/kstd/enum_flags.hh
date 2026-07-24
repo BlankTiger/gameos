@@ -2,7 +2,7 @@
 
 #include <type_traits>
 
-#include "../basic.hh"
+#include "basic.hh"
 
 template <typename Enum, typename... Flags>
     requires(std::is_enum_v<Enum> && (std::is_same_v<Enum, Flags> && ...))

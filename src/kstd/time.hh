@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../basic.hh"
+#include "basic.hh"
 #include "low_level_io.hh"
 
 namespace time {
