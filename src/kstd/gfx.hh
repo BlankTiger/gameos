@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <tuple>
 
 #include "math.hh"
 #include "config.hh"
@@ -14,6 +15,10 @@ namespace gfx {
 
 struct Color {
     u8 r, g, b, a;
+
+    auto with_alpha(u8 alpha) -> Color {
+        return {r, g, b, alpha};
+    }
 };
 
 constexpr Color BLACK{0, 0, 0, 255};
@@ -152,8 +157,9 @@ static force_inline auto set_pixel(u32 x, u32 y, Color color) -> void {
 enum class Draw_Command_Type: u8 {
     DRAW_CHAR,
     DRAW_TEXT, // Probably we will need to copy text
-    DRAW_RECT,
     DRAW_CIRCLE,
+    DRAW_LINE,
+    DRAW_RECT,
     DRAW_SPRITE,
 };
 
@@ -169,13 +175,18 @@ struct Text_Command {
     Color fg, bg;
 };
 
-struct Rect_Command {
-    u32 x, y, w, h;
+struct Circle_Command {
+    u32 x, y, r;
     Color color;
 };
 
-struct Circle_Command {
-    u32 x, y, r;
+struct Line_Command {
+    u32 x1, y1, x2, y2;
+    Color color;
+};
+
+struct Rect_Command {
+    u32 x, y, w, h;
     Color color;
 };
 
@@ -191,8 +202,9 @@ struct Draw_Command {
     union {
         Char_Command character;
         Text_Command text;
-        Rect_Command rectangle;
         Circle_Command circle;
+        Line_Command line;
+        Rect_Command rectangle;
         Sprite_Command sprite;
     };
 };
@@ -221,11 +233,14 @@ auto inner_draw_char(u32 x, u32 y, char c, Color fg, Color bg) -> void {
 
 template <typename... Args>
 auto draw_char(Args&&... args, u8 z = 1) -> void {
+    auto tuple = std::forward_as_tuple(std::forward<Args>(args)...);
+    auto&& [x, y, c, fg, bg] = tuple;
+    if (x >= width() || y >= height()) return;
     draw_commands.push_back(
         Draw_Command{
             .type = Draw_Command_Type::DRAW_CHAR,
             .z = z,
-            .character = Char_Command{std::forward<Args>(args)...},
+            .character = Char_Command{x, y, c, fg, bg},
         }
     );
 }
@@ -261,6 +276,7 @@ auto inner_draw_text(u32 x, u32 y, string_view text, Color fg = WHITE, Color bg 
 }
 
 auto draw_text(u32 x, u32 y, string_view text, Color fg = WHITE, Color bg = TRANSPARENT, u8 z = 1) -> void {
+    if (x >= width() || y >= height()) return;
     draw_commands.push_back(
         Draw_Command{
             .type = Draw_Command_Type::DRAW_TEXT,
@@ -276,24 +292,6 @@ auto clear(Color color) -> void {
             set_pixel(x, y, color);
         }
     }
-}
-
-auto inner_draw_rect(u32 x, u32 y, u32 w, u32 h, Color color) -> void {
-    for (u32 _y = y; _y < y + h && _y < height(); ++_y) {
-        for (u32 _x = x; _x < x + w && _x < width(); ++_x) {
-            set_pixel(_x, _y, color);
-        }
-    }
-}
-
-auto draw_rect(u32 x, u32 y, u32 w, u32 h, Color color, u8 z = 1) -> void {
-    draw_commands.push_back(
-        Draw_Command{
-            .type = Draw_Command_Type::DRAW_RECT,
-            .z = z,
-            .rectangle = Rect_Command{x, y, w, h, color},
-        }
-    );
 }
 
 #ifndef AA_RES
@@ -363,6 +361,7 @@ auto inner_draw_circle(u32 x, u32 y, u32 r, Color color) -> void {
 }
 
 auto draw_circle(u32 x, u32 y, u32 r, Color color, u8 z = 1) -> void {
+    if (x >= width() || y >= height()) return;
     draw_commands.push_back(
         Draw_Command{
             .type = Draw_Command_Type::DRAW_CIRCLE,
@@ -372,9 +371,120 @@ auto draw_circle(u32 x, u32 y, u32 r, Color color, u8 z = 1) -> void {
     );
 }
 
-auto inner_draw_sprite(const Resource_View res, u32 x, u32 y) -> void {
-    if (res.width == 0 || res.height == 0) return;
+constexpr s32 FP_SHIFT = 8;
+constexpr s32 FP_ONE   = 1 << FP_SHIFT; // 256
 
+force_inline s32 fp_floor(s32 x)
+{
+    return x >> FP_SHIFT;
+}
+
+force_inline s32 fpart(s32 x)
+{
+    return x & (FP_ONE - 1);
+}
+
+force_inline s32 rfpart(s32 x)
+{
+    return FP_ONE - fpart(x);
+}
+
+force_inline u8 alpha(s32 x)
+{
+    return static_cast<u8>((x * 255) >> FP_SHIFT);
+}
+
+auto inner_draw_line_endpoint(u32 x, u32 y, bool steep, Color color) -> s32 {
+    s32 sy = static_cast<s32>(y) << FP_SHIFT;
+    s32 _y = fp_floor(sy);
+
+    if (steep) {
+        set_pixel(_y, x, color.with_alpha(alpha(rfpart(sy))));
+        set_pixel(_y + 1, x, color.with_alpha(alpha(fpart(sy))));
+    }
+    else {
+        set_pixel(x, _y, color.with_alpha(alpha(rfpart(sy))));
+        set_pixel(x, _y + 1, color.with_alpha(alpha(fpart(sy))));
+    }
+
+    return sy;
+}
+
+auto inner_draw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color) -> void {
+    bool steep = math::abs_diff(y1, y2) > math::abs_diff(x1, x2);
+    if (steep) {
+        std::swap(x1, y1);
+        std::swap(x2, y2);
+    }
+    if (x1 > x2) {
+        std::swap(x1, x2);
+        std::swap(y1, y2);
+    }
+
+    u32 dx = x2 - x1;
+    s32 dy = static_cast<s32>(y2) - static_cast<s32>(y1);
+
+    s32 gradient = 0;
+    if (dx != 0) gradient = (dy << FP_SHIFT) / static_cast<s32>(dx);
+
+    // First point
+    s32 intery = inner_draw_line_endpoint(x1, y1, steep, color) + gradient;
+
+    // Second point
+    (void) inner_draw_line_endpoint(x2, y2, steep, color);
+
+    // Main loop
+    if (steep) {
+        for (u32 x = x1 + 1; x < x2; ++x) {
+            s32 y = fp_floor(intery);
+            set_pixel(y, x, color.with_alpha(alpha(rfpart(intery))));
+            set_pixel(y + 1, x, color.with_alpha(alpha(fpart(intery))));
+            intery += gradient;
+        }
+    }
+    else {
+        for (u32 x = x1 + 1; x < x2; ++x) {
+            s32 y = fp_floor(intery);
+            set_pixel(x, y, color.with_alpha(alpha(rfpart(intery))));
+            set_pixel(x, y + 1, color.with_alpha(alpha(fpart(intery))));
+            intery += gradient;
+        }
+    }
+}
+
+auto draw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color, u8 z = 1) -> void {
+    if (x2 >= width() || y2 >= height()) return;
+    draw_commands.push_back(
+        Draw_Command{
+            .type = Draw_Command_Type::DRAW_LINE,
+            .z = z,
+            .line = Line_Command{x1, y1, x2, y2, color}
+        }
+    );
+}
+
+auto inner_draw_rect(u32 x, u32 y, u32 w, u32 h, Color color) -> void {
+    u32 clipped_width  = (x + w  >= width())  ? (width() - x)  : w;
+    u32 clipped_height = (y + h >= height())  ? (height() - y) : h;
+    for (u32 _y = y; _y < y +  clipped_height; ++_y) {
+        for (u32 _x = x; _x < x + clipped_width; ++_x) {
+            set_pixel(_x, _y, color);
+        }
+    }
+}
+
+auto draw_rect(u32 x, u32 y, u32 w, u32 h, Color color, u8 z = 1) -> void {
+    if (x >= width() || y >= height()) return;
+    draw_commands.push_back(
+        Draw_Command{
+            .type = Draw_Command_Type::DRAW_RECT,
+            .z = z,
+            .rectangle = Rect_Command{x, y, w, h, color},
+        }
+    );
+}
+
+auto inner_draw_sprite(const Resource_View res, u32 x, u32 y) -> void {
     const Color* colors = reinterpret_cast<const Color*>(res.data);
     u32 clipped_width  = (x + res.width  >= width())  ? (width() - x)  : res.width;
     u32 clipped_height = (y + res.height >= height()) ? (height() - y) : res.height;
@@ -386,6 +496,8 @@ auto inner_draw_sprite(const Resource_View res, u32 x, u32 y) -> void {
 }
 
 auto draw_sprite(const Resource_View res, u32 x, u32 y, u8 z = 1) -> void {
+    if (res.width == 0 || res.height == 0) return;
+    if (x >= width() || y >= height()) return;
     draw_commands.push_back(
         Draw_Command{
             .type = Draw_Command_Type::DRAW_SPRITE,
@@ -415,13 +527,17 @@ auto draw_frame() -> void {
                 const Text_Command& cmd = command.text;
                 inner_draw_text(cmd.x, cmd.y, cmd.text, cmd.fg, cmd.bg);
             } break;
-            case DRAW_RECT: {
-                const Rect_Command& cmd = command.rectangle;
-                inner_draw_rect(cmd.x, cmd.y, cmd.w, cmd.h, cmd.color);
-            } break;
             case DRAW_CIRCLE: {
                 const Circle_Command& cmd = command.circle;
                 inner_draw_circle(cmd.x, cmd.y, cmd.r, cmd.color);
+            } break;
+            case DRAW_LINE: {
+                const Line_Command& cmd = command.line;
+                inner_draw_line(cmd.x1, cmd.y1, cmd.x2, cmd.y2, cmd.color);
+            } break;
+            case DRAW_RECT: {
+                const Rect_Command& cmd = command.rectangle;
+                inner_draw_rect(cmd.x, cmd.y, cmd.w, cmd.h, cmd.color);
             } break;
             case DRAW_SPRITE: {
                 const Sprite_Command& cmd = command.sprite;
