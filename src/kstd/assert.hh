@@ -11,14 +11,15 @@
 
 constexpr force_inline auto kstd_assert(
     bool predicate,
-    const string_view message,
+    const string_view message = {},
     const std::source_location& location = std::source_location::current()
 ) -> void {
     if (predicate) return;
+    const string_view msg = message ? message : "assertion failed";
     std::fprintf(
-        stderr, "%s:%u:%u: %s\n",
+        stderr, "%s:%u:%u: %.*s\n",
         location.file_name(), location.line(), location.column(),
-        message ? message : "assertion failed"
+        static_cast<int>(msg.size), msg.data
     );
     std::abort();
 }
