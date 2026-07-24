@@ -258,3 +258,44 @@ TEST(string, index_out_of_bounds_assert) {
 }
 
 #endif
+
+struct String_Print_Backend {
+    string target;
+
+    auto put_char(char c) -> void {
+        target.push_back(c);
+    }
+
+    auto new_line() -> void {
+        put_char('\n');
+    }
+};
+
+auto sprint(const char* format) -> string {
+    String_Print_Backend backend;
+    fmt::print(backend, format);
+    return backend.target;
+}
+
+template <typename T, typename... Rest>
+auto sprint(const char* format, T&& value, Rest&&... rest) -> string {
+    String_Print_Backend backend;
+    fmt::print(backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
+    return backend.target;
+}
+
+template <typename T>
+auto sprint(T&& value) -> string {
+    String_Print_Backend backend;
+    fmt::print(backend, std::forward<T>(value));
+    return backend.target;
+}
+
+#ifdef UNIT_TESTS
+
+TEST(sprint, can_format_values_into_a_string) {
+    auto formatted = sprint("%, %!", "hello", "world");
+    EXPECT_EQ(formatted, "hello, world!");
+}
+
+#endif
