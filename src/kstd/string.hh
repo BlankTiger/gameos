@@ -10,10 +10,11 @@
 #include "array.hh"
 #include "array_iterator.hh"
 #include "assert.hh"
+#include "format.hh"
 #include "string_view.hh"
 
-template <typename T = char>
 struct string {
+    using T = char;
     static_assert(std::is_same_v<T, char>, "string only supports T = char for now");
 
     T*    data     = nullptr;
@@ -112,6 +113,30 @@ struct string {
         return string_view(data, size);
     }
 
+    auto operator==(const string& other) const -> bool {
+        return view() == other.view();
+    }
+
+    auto operator!=(const string& other) const -> bool {
+        return !(*this == other);
+    }
+
+    auto operator==(const string_view& other) const -> bool {
+        return view() == other;
+    }
+
+    auto operator!=(const string_view& other) const -> bool {
+        return !(*this == other);
+    }
+
+    auto operator==(const char* other) const -> bool {
+        return view() == string_view{other};
+    }
+
+    auto operator!=(const char* other) const -> bool {
+        return !(*this == other);
+    }
+
     auto format() const -> string_view {
         return view();
     }
@@ -133,7 +158,7 @@ TEST(string_view, iterator) {
     string_view view = "abc";
     string collected;
     for (char c : view) collected += c;
-    EXPECT_EQ(collected.view(), string_view("abc"));
+    EXPECT_EQ(collected.view(), "abc");
 }
 
 TEST(string, default_is_empty) {
@@ -145,12 +170,12 @@ TEST(string, default_is_empty) {
 
 TEST(string, can_be_made_from_string_view) {
     string str{string_view("hello")};
-    EXPECT_EQ(str.view(), string_view("hello"));
+    EXPECT_EQ(str.view(), "hello");
 }
 
 TEST(string, can_be_made_from_cstring) {
     string str = "hello";
-    EXPECT_EQ(str.view(), string_view("hello"));
+    EXPECT_EQ(str.view(), "hello");
 }
 
 TEST(string, append_grows_2x) {
@@ -160,20 +185,21 @@ TEST(string, append_grows_2x) {
     EXPECT_EQ(str.capacity, 16);
     str.append("world");
     EXPECT_EQ(str.capacity, 16);
-    EXPECT_EQ(str.view(), string_view("hello world"));
+    EXPECT_EQ(str.view(), "hello world");
 }
 
 TEST(string, push_back_on_single_on_single_chars) {
     string str;
     for (char c : {'a', 'b', 'c'}) str.push_back(c);
-    EXPECT_EQ(str.view(), string_view("abc"));
+    EXPECT_EQ(str.view(), "abc");
 }
 
 TEST(string, operator_plus_means_append) {
     string str;
     str += 'a';
     str += string_view("bc");
-    EXPECT_EQ(str.view(), string_view("abc"));
+    str += "de";
+    EXPECT_EQ(str.view(), "abcde");
 }
 
 TEST(string, clear_resets_size_but_not_capacity) {
@@ -197,15 +223,33 @@ TEST(string, copy_constructor) {
     string original = "hello";
     string copy = original;
     copy += '!';
-    EXPECT_EQ(original.view(), string_view("hello"));
-    EXPECT_EQ(copy.view(),     string_view("hello!"));
+    EXPECT_EQ(original.view(), "hello");
+    EXPECT_EQ(copy.view(),     "hello!");
 }
 
 TEST(string, move_constructor) {
     string original = "hello";
     string moved = std::move(original);
-    EXPECT_EQ(moved.view(), string_view("hello"));
+    EXPECT_EQ(moved.view(), "hello");
     EXPECT_EQ(original.size, 0);
+}
+
+TEST(string, equality) {
+    EXPECT_EQ(string("abc"), string("abc"));
+    EXPECT_NE(string("abc"), string("abd"));
+    EXPECT_NE(string("abc"), string("ab"));
+}
+
+TEST(string, equality_with_string_view) {
+    EXPECT_EQ(string("abc"), string_view("abc"));
+    EXPECT_NE(string("abc"), string_view("abd"));
+    EXPECT_NE(string("abc"), string_view("ab"));
+}
+
+TEST(string, equality_with_cstring) {
+    EXPECT_EQ(string("abc"), "abc");
+    EXPECT_NE(string("abc"), "abd");
+    EXPECT_NE(string("abc"), "ab");
 }
 
 TEST(string, index_out_of_bounds_assert) {
