@@ -19,6 +19,7 @@ struct Frame {
 };
 
 auto get_function_name(psize address) -> string_view {
+    (void)address;
     return "implement me!";
 }
 

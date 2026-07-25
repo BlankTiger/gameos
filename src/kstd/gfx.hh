@@ -430,6 +430,7 @@ auto draw_frame() -> void {
         }
     }
     swap_buffers();
+    draw_commands.clear();
 }
 
 }  // namespace gfx

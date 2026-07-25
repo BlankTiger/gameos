@@ -16,11 +16,19 @@ force_inline auto kstd_memcpy(void* __restrict destination, const void* __restri
 #if defined(__STDC_HOSTED__) && __STDC_HOSTED__
     return std::memcpy(destination, source, length);
 #else
-    u8* dst = (u8*)destination;
-    const u8* src = (const u8*)source;
+    usize dwords = length / 4;
+    usize remainder = length % 4;
 
-    while (length--) {
-        *dst++ = *src++;
+    void* dst = destination;
+    const void* src = source;
+
+    asm volatile("rep movsl" : "+D"(dst), "+S"(src), "+c"(dwords) : : "memory");
+
+    u8* dst_bytes = static_cast<u8*>(dst);
+    const u8* src_bytes = static_cast<const u8*>(src);
+
+    while (remainder--) {
+        *dst_bytes++ = *src_bytes++;
     }
 
     return destination;

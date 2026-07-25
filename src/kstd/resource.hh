@@ -18,4 +18,8 @@ struct Resource {
     constexpr auto view() const -> Resource_View {
         return { data.elements(), data.size, width, height };
     }
+
+    operator const Resource_View() const {
+        return view();
+    }
 };
