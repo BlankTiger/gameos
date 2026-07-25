@@ -1,5 +1,17 @@
+#include "game.hh"
 #include "global_constructor_handling.hh"
-#include "kstd.hh"
+
+#include "kstd/assert.hh"
+#include "kstd/interrupts.hh"
+#include "kstd/memory.hh"
+#include "kstd/multiboot2.hh"
+#include "kstd/operator_new.hh"
+#include "kstd/programmable_interrupt_controller.hh"
+#include "kstd/ps2.hh"
+#include "kstd/term.hh"
+#include "kstd/time.hh"
+#include "kstd/gfx.hh"
+#include "kstd/serial.hh"
 
 /* Check if the compiler thinks you are targeting the wrong operating system. */
 #if defined(__linux__)
@@ -40,44 +52,8 @@ auto kernel_init(u32 magic, const boot::Multiboot2_Info* mbi) -> void {
 }
 
 auto main() -> void {
-    gfx::clear(gfx::BLACK);
-
     term::println("Hello from GameOS!");
-
-    gfx::draw_rect(250, 250, 100, 100, gfx::BLUE);
-    gfx::draw_rect(300, 300, 80, 80, gfx::Color{0, 0, 200, 128});
-
-    gfx::draw_rect(400, 250, 100, 100, gfx::GREEN);
-    gfx::draw_rect(450, 300, 80, 80, gfx::Color{0, 200, 0, 128});
-
-    gfx::draw_rect(550, 250, 100, 100, gfx::RED);
-    gfx::draw_rect(600, 300, 80, 80, gfx::Color{200, 0, 0, 128});
-
-    gfx::draw_rect(700, 250, 100, 100, gfx::WHITE);
-    gfx::draw_rect(750, 300, 80, 80, gfx::Color{230, 230, 230, 128});
-
-    gfx::draw_rect(250, 400, 550, 300, gfx::WHITE);
-    gfx::draw_circle(525, 550, 100, gfx::RED);
-
-    gfx::draw_sprite(@embed("cool.png").view(), 550, 500);
-    gfx::draw_sprite(@embed("cool.png").view(), 600, 500, 2);
-    gfx::draw_sprite(@embed("cool.png").view(), 700, 500);
-
-    term::println("ZA WARUDO");
-
-    gfx::draw_frame();
-
-    stacktrace::print_stack_trace();
-
-    auto seconds = 1;
-    while (true) {
-        term::println("%", seconds);
-        time::sleep_ms(1000);
-        if (seconds == 10) break;
-        ++seconds;
-    }
-
-    term::println("OWARIDA");
+    game_main();
 }
 
 extern "C" auto kernel_main(u32 magic, const boot::Multiboot2_Info* mbi) -> void {
