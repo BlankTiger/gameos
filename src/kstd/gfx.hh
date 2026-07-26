@@ -371,40 +371,38 @@ auto draw_circle(u32 x, u32 y, u32 r, Color color, u8 z = 1) -> void {
     );
 }
 
-constexpr s32 FP_SHIFT = 8;
-constexpr s32 FP_ONE   = 1 << FP_SHIFT; // 256
+constexpr s32 FIXED_POINT_SHIFT = 8;
+constexpr s32 FIXED_POINT_ONE   = 1 << FIXED_POINT_SHIFT; // 256
 
-force_inline s32 fp_floor(s32 x)
-{
-    return x >> FP_SHIFT;
+force_inline s32 fixed_point_floor(s32 x) {
+    return x >> FIXED_POINT_SHIFT;
 }
 
-force_inline s32 fpart(s32 x)
-{
-    return x & (FP_ONE - 1);
+force_inline s32 fractional_part(s32 x) {
+    return x & (FIXED_POINT_ONE - 1);
 }
 
-force_inline s32 rfpart(s32 x)
-{
-    return FP_ONE - fpart(x);
+force_inline s32 reverse_fractional_part(s32 x) {
+    return FIXED_POINT_ONE - fractional_part(x);
 }
 
-force_inline u8 alpha(s32 x)
-{
-    return static_cast<u8>((x * 255) >> FP_SHIFT);
+force_inline u8 alpha(s32 x) {
+    return static_cast<u8>((x * 255) >> FIXED_POINT_SHIFT);
 }
 
 auto inner_draw_line_endpoint(u32 x, u32 y, bool steep, Color color) -> s32 {
-    s32 sy = static_cast<s32>(y) << FP_SHIFT;
-    s32 _y = fp_floor(sy);
+    s32 sy = static_cast<s32>(y) << FIXED_POINT_SHIFT;
+    s32 _y = fixed_point_floor(sy);
+    s32 rev_frac_sy_alpha = alpha(reverse_fractional_part(sy));
+    s32 frac_sy_alpha = alpha(fractional_part(sy));
 
     if (steep) {
-        set_pixel(_y, x, color.with_alpha(alpha(rfpart(sy))));
-        set_pixel(_y + 1, x, color.with_alpha(alpha(fpart(sy))));
+        set_pixel(_y, x, color.with_alpha(rev_frac_sy_alpha));
+        set_pixel(_y + 1, x, color.with_alpha(frac_sy_alpha));
     }
     else {
-        set_pixel(x, _y, color.with_alpha(alpha(rfpart(sy))));
-        set_pixel(x, _y + 1, color.with_alpha(alpha(fpart(sy))));
+        set_pixel(x, _y, color.with_alpha(rev_frac_sy_alpha));
+        set_pixel(x, _y + 1, color.with_alpha(frac_sy_alpha));
     }
 
     return sy;
@@ -425,10 +423,10 @@ auto inner_draw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color) -> void {
     s32 dy = static_cast<s32>(y2) - static_cast<s32>(y1);
 
     s32 gradient = 0;
-    if (dx != 0) gradient = (dy << FP_SHIFT) / static_cast<s32>(dx);
+    if (dx != 0) gradient = (dy << FIXED_POINT_SHIFT) / static_cast<s32>(dx);
 
     // First point
-    s32 intery = inner_draw_line_endpoint(x1, y1, steep, color) + gradient;
+    s32 curr_y = inner_draw_line_endpoint(x1, y1, steep, color) + gradient;
 
     // Second point
     (void) inner_draw_line_endpoint(x2, y2, steep, color);
@@ -436,18 +434,22 @@ auto inner_draw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color) -> void {
     // Main loop
     if (steep) {
         for (u32 x = x1 + 1; x < x2; ++x) {
-            s32 y = fp_floor(intery);
-            set_pixel(y, x, color.with_alpha(alpha(rfpart(intery))));
-            set_pixel(y + 1, x, color.with_alpha(alpha(fpart(intery))));
-            intery += gradient;
+            s32 y = fixed_point_floor(curr_y);
+            s32 rev_frac_curr_y_alpha = alpha(reverse_fractional_part(curr_y));
+            s32 frac_curr_y_alpha = alpha(fractional_part(curr_y));
+            set_pixel(y, x, color.with_alpha(rev_frac_curr_y_alpha));
+            set_pixel(y + 1, x, color.with_alpha(frac_curr_y_alpha));
+            curr_y += gradient;
         }
     }
     else {
         for (u32 x = x1 + 1; x < x2; ++x) {
-            s32 y = fp_floor(intery);
-            set_pixel(x, y, color.with_alpha(alpha(rfpart(intery))));
-            set_pixel(x, y + 1, color.with_alpha(alpha(fpart(intery))));
-            intery += gradient;
+            s32 y = fixed_point_floor(curr_y);
+            s32 rev_frac_curr_y_alpha = alpha(reverse_fractional_part(curr_y));
+            s32 frac_curr_y_alpha = alpha(fractional_part(curr_y));
+            set_pixel(x, y, color.with_alpha(rev_frac_curr_y_alpha));
+            set_pixel(x, y + 1, color.with_alpha(frac_curr_y_alpha));
+            curr_y += gradient;
         }
     }
 }
