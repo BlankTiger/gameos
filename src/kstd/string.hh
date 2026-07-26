@@ -146,6 +146,10 @@ struct string {
         return data[index];
     }
 
+    operator string_view() const {
+        return view();
+    }
+
     auto elements() -> T* { return data; }
     auto elements() const -> const T* { return data; }
 

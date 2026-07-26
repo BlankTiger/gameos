@@ -66,6 +66,14 @@ struct Pixel {
     operator u32() const { return raw; }
 
     force_inline auto blend_with(Color fg, const Framebuffer_Format& fmt = framebuffer_fmt) -> void {
+        if (fg.a == 255) {
+            raw = (static_cast<u32>(fg.r) << fmt.red_pos)   |
+                  (static_cast<u32>(fg.g) << fmt.green_pos) |
+                  (static_cast<u32>(fg.b) << fmt.blue_pos)  |
+                  (0xFF << Framebuffer_Format::alpha_pos);
+            return;
+        }
+
         u8 r = static_cast<u8>((raw >> fmt.red_pos)   & 0xFF);
         u8 g = static_cast<u8>((raw >> fmt.green_pos) & 0xFF);
         u8 b = static_cast<u8>((raw >> fmt.blue_pos)  & 0xFF);
@@ -275,8 +283,7 @@ auto inner_draw_text(u32 x, u32 y, string_view text, Color fg = WHITE, Color bg 
     }
 }
 
-auto draw_text(u32 x, u32 y, string_view text, Color fg = WHITE, Color bg = TRANSPARENT, u8 z = 1) -> void {
-    if (x >= width() || y >= height()) return;
+auto draw_text(u32 x, u32 y, const string_view text, Color fg = WHITE, Color bg = TRANSPARENT, u8 z = 1) -> void {
     draw_commands.push_back(
         Draw_Command{
             .type = Draw_Command_Type::DRAW_TEXT,

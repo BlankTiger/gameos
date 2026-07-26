@@ -6,9 +6,10 @@
 #include "kstd/time.hh"
 #include "kstd/gfx.hh"
 #include "kstd/ps2.hh"
+#include "kstd/string.hh"
 
 constexpr f32 PLAYER_SPEED_PX_PER_SEC = 300.0f;
-constexpr f64 TARGET_FRAME_TIME_TICKS = static_cast<f64>(time::TICK_RATE) / 60.0;
+constexpr u64 FPS_MAX                 = 144;
 
 struct Player {
     f32 x;
@@ -18,6 +19,11 @@ struct Player {
 
 struct Game {
     Player player;
+    u64    time_ms    = 0;
+    f64    dt         = 0.0;
+    u64    dt_real    = 0;
+    f64    time_scale = 1.0;
+    f64    fps        = 0.0;
 };
 
 auto update_player(Player& player, f64 dt) -> void {
@@ -31,16 +37,17 @@ auto update_player(Player& player, f64 dt) -> void {
     const auto max_x = static_cast<f32>(gfx::width()  - player.sprite.width);
     const auto max_y = static_cast<f32>(gfx::height() - player.sprite.height);
 
-    player.x = std::clamp(static_cast<f32>(player.x + dx * PLAYER_SPEED_PX_PER_SEC * dt), f32{0}, max_x);
-    player.y = std::clamp(static_cast<f32>(player.y + dy * PLAYER_SPEED_PX_PER_SEC * dt), f32{0}, max_y);
+    const auto scale = PLAYER_SPEED_PX_PER_SEC * dt;
+    player.x = std::clamp(static_cast<f32>(player.x + dx * scale), f32{0}, max_x);
+    player.y = std::clamp(static_cast<f32>(player.y + dy * scale), f32{0}, max_y);
 }
 
 auto draw_player(const Player& player) -> void {
     gfx::draw_sprite(player.sprite, player.x, player.y);
 }
 
-auto update(Game& game, f64 dt) -> void {
-    update_player(game.player, dt);
+auto update(Game& game) -> void {
+    update_player(game.player, game.dt);
 }
 
 auto draw(const Game& game) -> void {
@@ -64,6 +71,10 @@ auto draw(const Game& game) -> void {
     }
 
     draw_player(game.player);
+
+    const auto fps_text = sprint("FPS: %", game.fps);
+    gfx::draw_text(8, 8, fps_text);
+
     gfx::draw_frame();
 }
 
@@ -75,23 +86,26 @@ auto game_main() -> void {
     };
     Game game{player};
 
-    auto last_frame_ticks     = static_cast<f64>(time::get_ticks());
-    auto frame_deadline_ticks = last_frame_ticks;
+    u64 last_tick = time::get_ticks();
+
+    constexpr auto TARGET_TICKS = time::ticks_per_frame(FPS_MAX);
 
     while (!ps2::is_pressed(ps2::Scancode::ESCAPE)) {
-        const auto frame_start_ticks = static_cast<f64>(time::get_ticks());
-        const auto dt = (frame_start_ticks - last_frame_ticks) / static_cast<f64>(time::TICK_RATE);
-        last_frame_ticks = frame_start_ticks;
+        const u64 frame_start = time::get_ticks();
+        const u64 elapsed     = frame_start - last_tick;
+        last_tick = frame_start;
 
-        update(game, dt);
+        game.dt_real  = elapsed;
+        game.dt       = static_cast<f64>(game.dt_real) / time::TICK_RATE * game.time_scale;
+        game.time_ms += time::ticks_to_ms(game.dt_real);
+        game.fps      = 1 / game.dt;
+
+        update(game);
         draw(game);
 
-        frame_deadline_ticks += TARGET_FRAME_TIME_TICKS;
-        const auto now_ticks = static_cast<f64>(time::get_ticks());
-        if (now_ticks < frame_deadline_ticks) {
-            time::sleep_ms(static_cast<u64>(frame_deadline_ticks - now_ticks));
-        } else {
-            frame_deadline_ticks = now_ticks; // fell behind schedule
+        const u64 frame_ticks = time::get_ticks() - frame_start;
+        if (frame_ticks < TARGET_TICKS) {
+            time::sleep_ticks(TARGET_TICKS - frame_ticks);
         }
     }
 }
