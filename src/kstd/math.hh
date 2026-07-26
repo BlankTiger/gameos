@@ -3,6 +3,7 @@
 #include "basic.hh"
 #include "array.hh"
 #include "assert.hh"
+#include "string.hh"
 
 namespace math {
 
@@ -102,6 +103,23 @@ struct Grid3 {
 
     force_inline auto backing_array_index_for(u32 row, u32 col, u32 layer) const -> usize {
         return cells_in_layer * layer + row * cols + col;
+    }
+
+    auto format() const -> string_view {
+        string result;
+        for (u32 layer_index = 0; layer_index < layers; ++layer_index) {
+            for (u32 row_index = 0; row_index < rows; ++row_index) {
+                result += "  [";
+                for (u32 col_index = 0; col_index < cols; ++col_index) {
+                    result += at(row_index, col_index, layer_index) ? '1' : '0';
+                    if (col_index != cols - 1) result += ", ";
+                }
+                result += "]\n";
+            }
+
+            result += "\n\n";
+        }
+        return result;
     }
 };
 

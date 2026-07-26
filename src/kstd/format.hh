@@ -29,7 +29,7 @@
 // struct A {
 //     const char* message;
 //
-//     auto format() -> string_view {
+//     auto format() const -> string_view {
 //         return string_view(message);
 //     }
 // }
