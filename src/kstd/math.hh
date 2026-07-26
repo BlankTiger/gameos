@@ -39,12 +39,13 @@ struct Rect {
     }
 };
 
-// rows (top to bottom)
-// cols (left to right)
 // layers (top to bottom)
+// rows   (top to bottom)
+// cols   (left to right)
 template <typename T = bool>
 struct Grid3 {
     Array<T> backing_array;
+
     T default_value;
     u32 rows, cols, layers;
     u32 cells_in_layer;
@@ -83,6 +84,15 @@ struct Grid3 {
             if (backing_array[index] != value) return false;
         }
         return true;
+    }
+
+    // Check if the space down a layer contains a value that is different from the default_value.
+    // value_lower == default_value -> can move lower
+    auto can_move_lower(u32 row, u32 col, u32 layer) -> bool {
+        if (layer > layers - 1) return false;
+
+        const auto& value_lower = at(row, col, layer + 1);
+        return value_lower == default_value;
     }
 
     force_inline auto at(u32 row, u32 col, u32 layer) const -> T {
@@ -155,6 +165,25 @@ TEST(Grid3_bool, can_check_for_a_layer_filled_with_value) {
     grid.set(1, 0, 0, true);
     grid.set(1, 1, 0, true);
     EXPECT_TRUE(grid.layer_filled_with(0, true));
+}
+
+TEST(Grid3_bool, can_move_lower_empty_space_below) {
+    Grid3 grid(2, 2, 3);
+    grid.set(0, 1, 1, true);
+    EXPECT_TRUE(grid.can_move_lower(0, 1, 1));
+}
+
+TEST(Grid3_bool, cant_move_lower_on_last_layer) {
+    Grid3 grid(2, 2, 3);
+    grid.set(0, 1, 2, true);
+    EXPECT_FALSE(grid.can_move_lower(0, 1, 3));
+}
+
+TEST(Grid3_bool, cant_move_lower_when_something_is_blocking_lower) {
+    Grid3 grid(2, 2, 3);
+    grid.set(0, 1, 1, true);
+    grid.set(0, 1, 2, true);
+    EXPECT_FALSE(grid.can_move_lower(0, 1, 1));
 }
 
 #endif
