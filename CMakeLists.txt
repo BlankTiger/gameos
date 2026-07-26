@@ -99,7 +99,7 @@ endforeach()
 
 add_custom_target(check_headers ALL DEPENDS ${header_stamps})
 
-target_include_directories(gameos PRIVATE ${GENERATED_DIR})
+target_include_directories(gameos PRIVATE ${GENERATED_DIR} ${GENERATED_DIR}/src)
 
 target_compile_options(gameos PRIVATE
     $<$<COMPILE_LANGUAGE:C,CXX>:-ffreestanding>

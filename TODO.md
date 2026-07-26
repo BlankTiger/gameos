@@ -33,6 +33,8 @@ base layer:
 - [ ] fix booting on real hardware
 - [x] tests (gtest?)
 - [ ] stack unwinding (callstack on assert)
+- [ ] save floating point registers on an interrupt
+- [ ] save SIMD registers on an interrupt
 
 utils:
 - [ ] todo list generator (gather notes from source code and generate a stable
