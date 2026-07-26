@@ -81,10 +81,49 @@ struct Bounded_Array {
             slot(i)->~T();
     }
 
-    // Bounded_Array owns its elements, so copies/moves need element-wise
-    // construction.  Delete them until actually needed to avoid silent bugs.
-    Bounded_Array(const Bounded_Array&) = delete;
-    Bounded_Array& operator=(const Bounded_Array&) = delete;
+    Bounded_Array(const Bounded_Array& from) : size(from.size) {
+        for (usize i = 0; i < size; ++i)
+            ::new (slot(i)) T(*from.slot(i));
+    }
+
+    Bounded_Array(Bounded_Array&& from) noexcept : size(from.size) {
+        for (usize i = 0; i < size; ++i) {
+            ::new (slot(i)) T(std::move(*from.slot(i)));
+            from.slot(i)->~T();
+        }
+        from.size = 0;
+    }
+
+    auto operator=(const Bounded_Array& from) -> Bounded_Array& {
+        if (this == &from)
+            return *this;
+
+        for (usize i = 0; i < size; ++i)
+            slot(i)->~T();
+
+        size = from.size;
+        for (usize i = 0; i < size; ++i)
+            ::new (slot(i)) T(*from.slot(i));
+
+        return *this;
+    }
+
+    auto operator=(Bounded_Array&& from) noexcept -> Bounded_Array& {
+        if (this == &from)
+            return *this;
+
+        for (usize i = 0; i < size; ++i)
+            slot(i)->~T();
+
+        size = from.size;
+        for (usize i = 0; i < size; ++i) {
+            ::new (slot(i)) T(std::move(*from.slot(i)));
+            from.slot(i)->~T();
+        }
+        from.size = 0;
+
+        return *this;
+    }
 
     auto operator[](u64 index, const std::source_location& location = std::source_location::current()) -> T& {
         kstd_assert(index < size, "index out of bounds", location);
@@ -175,16 +214,21 @@ struct Array {
         ::operator delete(data);
     }
 
-    // Owning type: suppress implicit copy until properly implemented.
-    Array(const Array&) = delete;
+    Array(const Array& from)
+        : capacity(from.capacity),
+          size(from.size),
+          data(static_cast<T*>(::operator new(sizeof(T) * capacity))) {
+        for (usize i = 0; i < size; ++i)
+            ::new (data + i) T(from.data[i]);
+    }
 
     Array(Array&& from) noexcept
         : capacity(from.capacity),
           size(from.size),
           data(from.data) {
         from.capacity = 0;
-        from.size      = 0;
-        from.data      = nullptr;
+        from.size     = 0;
+        from.data     = nullptr;
     }
 
     auto operator=(Array&& from) noexcept -> Array& {
