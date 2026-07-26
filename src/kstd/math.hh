@@ -90,7 +90,7 @@ struct Grid3 {
     // Check if the space down a layer contains a value that is different from the default_value.
     // value_lower == default_value -> can move lower
     auto can_move_lower(u32 row, u32 col, u32 layer) -> bool {
-        if (layer > layers - 1) return false;
+        if (layer + 1 >= layers) return false;
 
         const auto& value_lower = at(row, col, layer + 1);
         return value_lower == default_value;
