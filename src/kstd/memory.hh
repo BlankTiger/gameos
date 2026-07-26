@@ -49,7 +49,9 @@ static auto reserve_range(Memory_Regions& regions, u64 start, u64 end) -> void {
         }
 
         if (start <= region_start && end >= region_end) {
-            regions[i] = regions[--regions.size];
+            const usize last = regions.size - 1;
+            if (i != last) regions[i] = regions[last];
+            regions.size--;
             continue;
         }
 
@@ -98,7 +100,19 @@ static auto parse_multiboot2_memory_map(Memory_Regions& regions, const boot::Mul
 }
 
 static auto reserve_multiboot2_data(Memory_Regions& regions, const boot::Multiboot2_Info* mbi) -> void {
-    reserve_range(regions, 0, PAGE_SIZE);
+    //
+    // Reserve all of conventional low memory (0 - 1 MiB).
+    //
+    // GRUB leaves live structures down here that we never asked for and
+    // don't track in the multiboot memory map as "reserved" - notably its
+    // own temporary GDT. If the buddy allocator hands out a page in this
+    // range, the very first heap write into it corrupts that GDT; CS stays
+    // "valid" until the next interrupt tries to reload it, at which point
+    // you get a #GP -> #DF -> triple fault (looks like a random bootloop
+    // with no useful backtrace, since by the time it manifests the actual
+    // corrupting write is long gone).
+    //
+    reserve_range(regions, 0, 0x100000);
     reserve_range(regions, ptr_addr(mbi), ptr_addr(mbi) + mbi->total_size);
     reserve_range(regions, ptr_addr(&__kernel_start), ptr_addr(&__kernel_end));
 
