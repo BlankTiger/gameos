@@ -16,7 +16,7 @@
 constexpr u64 FPS_MAX                                 = 144;
 constexpr u64 ARBITRARY_FALLING_BODY_BLOCK_SIZE_LIMIT = 10;
 
-using Block_Coords = math::Vec3<u32>;
+using Block_Coords = math::Vector3<u32>;
 using Body = std::initializer_list<Block_Coords>;
 
 struct Falling_Body {
