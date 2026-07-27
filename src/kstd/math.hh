@@ -73,12 +73,18 @@ struct Grid3 {
         backing_array[index] = default_value;
     }
 
-    auto clear_layer(u32 layer) -> void {
+    template <typename Skip_Predicate>
+    auto clear_layer(u32 layer, Skip_Predicate skip) -> void {
         for (u32 row = 0; row < rows; ++row) {
             for (u32 col = 0; col < cols; ++col) {
+                if (skip(row, col, layer)) continue;
                 clear(row, col, layer);
             }
         }
+    }
+
+    auto clear_layer(u32 layer) -> void {
+        clear_layer(layer, [](u32, u32, u32) { return false; });
     }
 
     force_inline auto move(u32 from_row, u32 from_col, u32 from_layer, u32 to_row, u32 to_col, u32 to_layer) -> void {
@@ -102,12 +108,18 @@ struct Grid3 {
         backing_array[to_index] = backing_array[from_index];
     }
 
-    auto copy_layer(u32 from_layer, u32 to_layer) -> void {
+    template <typename Skip_Predicate>
+    auto copy_layer(u32 from_layer, u32 to_layer, Skip_Predicate skip) -> void {
         for (u32 row = 0; row < rows; ++row) {
             for (u32 col = 0; col < cols; ++col) {
+                if (skip(row, col, from_layer)) continue;
                 copy(row, col, from_layer, row, col, to_layer);
             }
         }
+    }
+
+    auto copy_layer(u32 from_layer, u32 to_layer) -> void {
+        copy_layer(from_layer, to_layer, [](u32, u32, u32) { return false; });
     }
 
     auto layer_filled_with(u32 layer, const T& value) const -> bool {
