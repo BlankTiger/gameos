@@ -137,8 +137,9 @@ struct string {
         return !(*this == other);
     }
 
-    auto format() const -> string_view {
-        return view();
+    auto format() const -> string {
+        string result = *this;
+        return result;
     }
 
     auto operator[](usize index) const -> T {
