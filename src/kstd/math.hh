@@ -1,5 +1,6 @@
 #pragma once
 
+#include <tuple>
 #include <type_traits>
 
 #include "basic.hh"
@@ -60,6 +61,18 @@ struct Vec2 {
     [[nodiscard]] static constexpr auto one()  -> Vec2 { return Vec2{ T(1), T(1) }; }
 };
 
+template<usize I, typename T>
+constexpr T& get(math::Vec2<T>& v) {
+    static_assert(I < 3);
+    return v.data[I];
+}
+
+template<usize I, typename T>
+constexpr const T& get(const math::Vec2<T>& v) {
+    static_assert(I < 3);
+    return v.data[I];
+}
+
 template <Numeric T>
 struct Vec3 {
     using value_type = T;
@@ -74,6 +87,19 @@ struct Vec3 {
     [[nodiscard]] static constexpr auto zero() -> Vec3 { return Vec3{ T(0), T(0), T(0) }; }
     [[nodiscard]] static constexpr auto one()  -> Vec3 { return Vec3{ T(1), T(1), T(1) }; }
 };
+
+template<usize I, typename T>
+constexpr T& get(math::Vec3<T>& v) {
+    static_assert(I < 3);
+    return v.data[I];
+}
+
+template<usize I, typename T>
+constexpr const T& get(const math::Vec3<T>& v) {
+    static_assert(I < 3);
+    return v.data[I];
+}
+
 
 template <typename T>
 struct is_vec : std::false_type {};
@@ -623,3 +649,21 @@ TEST(Grid3_bool, cant_move_lower_when_something_is_blocking_lower) {
 #endif
 
 }  // namespace math
+
+namespace std {
+    template<typename T>
+    struct tuple_size<math::Vec2<T>> : integral_constant<size_t, 2> {};
+
+    template<usize I, typename T>
+    struct tuple_element<I, math::Vec2<T>> {
+        using type = T;
+    };
+
+    template<typename T>
+    struct tuple_size<math::Vec3<T>> : integral_constant<size_t, 3> {};
+
+    template<usize I, typename T>
+    struct tuple_element<I, math::Vec3<T>> {
+        using type = T;
+    };
+}
