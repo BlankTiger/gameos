@@ -35,11 +35,21 @@ struct Falling_Body {
     }
 };
 
-// Refactor: Body should be a Static_Array, make the creation of
-// available_bodies a result of a constexpr function.
+// Tetracubes below are laid out with row/col forming the 3x3 footprint and
+// layer as the falling axis.
 constexpr std::initializer_list<Body> available_bodies = {
-    Body{{0, 0, 0}, {0, 0, 1}},
-    Body{{0, 0, 0}, {1, 0, 0}, {0, 0, 1}},
+    Body{{0, 0, 0}, {0, 0, 1}},                        // domino
+    Body{{0, 0, 0}, {1, 0, 0}, {0, 0, 1}},             // tromino, bent
+    Body{{0, 0, 0}, {0, 0, 1}, {0, 0, 2}, {0, 0, 3}},  // I
+    Body{{0, 0, 0}, {1, 0, 0}, {0, 1, 0}, {1, 1, 0}},  // O (square)
+    Body{{0, 0, 0}, {0, 0, 1}, {0, 0, 2}, {1, 0, 2}},  // L
+    Body{{1, 0, 0}, {1, 0, 1}, {1, 0, 2}, {0, 0, 2}},  // J (mirrored L)
+    Body{{0, 0, 0}, {0, 0, 1}, {0, 0, 2}, {1, 0, 1}},  // T
+    Body{{1, 0, 0}, {2, 0, 0}, {0, 0, 1}, {1, 0, 1}},  // S (skew)
+    Body{{0, 0, 0}, {1, 0, 0}, {1, 0, 1}, {2, 0, 1}},  // Z (mirrored S)
+    Body{{0, 0, 0}, {1, 0, 0}, {0, 1, 0}, {0, 0, 1}},  // branch (tripod)
+    Body{{0, 0, 0}, {1, 0, 0}, {1, 1, 0}, {1, 1, 1}},  // left screw
+    Body{{0, 0, 0}, {1, 0, 0}, {1, 0, 1}, {1, 1, 1}},  // right screw (mirrored)
 };
 
 enum struct Block_Type {
@@ -63,7 +73,7 @@ struct Game {
     f64 time_scale = 1.0;
     f64 fps        = 0.0;
 
-    Game(u32 rows = 3, u32 cols = 3, u32 layers = 5) : grid(math::Grid3<Block_Type>(rows, cols, layers)) {}
+    Game(u32 rows = 3, u32 cols = 3, u32 layers = 7) : grid(math::Grid3<Block_Type>(rows, cols, layers)) {}
 };
 
 // there was available space -> true
@@ -93,8 +103,7 @@ auto create_new_falling_body(Body blocks) -> Falling_Body {
 }
 
 auto get_new_falling_body() -> Falling_Body {
-    const auto max          = available_bodies.size() - 1;
-    const auto body_index   = rand::generate(0, max);
+    const auto body_index   = rand::generate(0, available_bodies.size());
     const auto body         = available_bodies.begin()[body_index];
     const auto falling_body = create_new_falling_body(body);
 
@@ -213,10 +222,10 @@ auto game_main() -> void {
     Game game;
     for (u32 row = 0; row < game.grid.rows; ++row) {
         for (u32 col = 0; col < game.grid.cols; ++col) {
-            game.grid.set(row, col, 4, Block_Type::SOLID);
+            game.grid.set(row, col, game.grid.layers - 1, Block_Type::SOLID);
         }
     }
-    game.grid.clear(0, 0, 4);
+    game.grid.clear(0, 0, game.grid.layers - 1);
 
     Falling_Body body = get_new_falling_body();
     set_new_falling_body(game, body);
