@@ -10,11 +10,11 @@ struct Xoshiro_256pp_State {
     u64 s[4];
 };
 
-force_inline u64 rol64(u64 x, int k) {
+force_inline auto rol64(u64 x, int k) -> u64 {
     return (x << k) | (x >> (64 - k));
 }
 
-u64 xoshiro256pp(Xoshiro_256pp_State* state) {
+auto xoshiro256pp(Xoshiro_256pp_State* state) -> u64 {
 	u64* s = state->s;
 	const u64 result = rol64(s[0] + s[3], 23) + s[0];
 	const u64 t = s[1] << 17;
@@ -33,20 +33,20 @@ u64 xoshiro256pp(Xoshiro_256pp_State* state) {
 inline Xoshiro_256pp_State xoshiro256pp_state;
 
 // Vigna's recommended way to turn a single seed into well-distributed state.
-force_inline u64 splitmix64(u64* state) {
+force_inline auto splitmix64(u64* state) -> u64 {
     u64 z = (*state += 0x9E3779B97F4A7C15);
     z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9;
     z = (z ^ (z >> 27)) * 0x94D049BB133111EB;
     return z ^ (z >> 31);
 }
 
-force_inline u64 rdtsc() {
+force_inline auto rdtsc() -> u64 {
     u32 lo, hi;
     asm volatile("rdtsc" : "=a"(lo), "=d"(hi));
     return (u64(hi) << 32) | lo;
 }
 
-force_inline bool cpu_has_rdrand() {
+force_inline auto cpu_has_rdrand() -> bool {
     u32 ecx;
     asm volatile("cpuid" : "=c"(ecx) : "a"(1) : "ebx", "edx");
     return (ecx >> 30) & 1;
@@ -54,7 +54,7 @@ force_inline bool cpu_has_rdrand() {
 
 // Intel's recommended retry loop; a handful of failures in a row means the
 // hardware RNG is (temporarily) out of entropy, not that it's unsupported.
-force_inline bool rdrand32(u32* out) {
+force_inline auto rdrand32(u32* out) -> bool {
     for (int attempt = 0; attempt < 10; attempt++) {
         u8 ok;
         asm volatile("rdrand %0; setc %1" : "=r"(*out), "=qm"(ok));
@@ -63,7 +63,7 @@ force_inline bool rdrand32(u32* out) {
     return false;
 }
 
-force_inline u64 hardware_seed() {
+force_inline auto hardware_seed() -> u64 {
     if (cpu_has_rdrand()) {
         u32 lo, hi;
         if (rdrand32(&lo) && rdrand32(&hi)) {
