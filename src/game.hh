@@ -130,19 +130,23 @@ auto update(Game& game) -> void {
             layer_destroyed[layer] = true;
         }
 
+        auto skip_if_is_falling = [&](u32 row, u32 col, u32 layer) {
+            return game.grid.at(row, col, layer) == Block_Type::FALLING;
+        };
+
         s64 write_layer = static_cast<s64>(game.grid.layers) - 1;
 
         for (s64 read_layer = static_cast<s64>(game.grid.layers) - 1; read_layer >= 0; --read_layer) {
             if (!layer_destroyed[read_layer]) {
                 if (read_layer != write_layer) {
-                    game.grid.copy_layer(static_cast<u32>(read_layer), static_cast<u32>(write_layer));
+                    game.grid.copy_layer(static_cast<u32>(read_layer), static_cast<u32>(write_layer), skip_if_is_falling);
                 }
                 --write_layer;
             }
         }
 
         for (s64 layer = write_layer; layer >= 0; --layer) {
-            game.grid.clear_layer(static_cast<u32>(layer));
+            game.grid.clear_layer(static_cast<u32>(layer), skip_if_is_falling);
         }
 
         game.layers_to_destroy.clear();
