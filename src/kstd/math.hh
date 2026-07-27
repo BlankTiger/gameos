@@ -47,7 +47,7 @@ template<typename T>
 concept Numeric = std::integral<T> || std::floating_point<T>;
 
 template <Numeric T>
-struct Vec2 {
+struct Vector2 {
     using value_type = T;
     static constexpr auto size = 2;
     union {
@@ -57,24 +57,12 @@ struct Vec2 {
 
     constexpr auto operator[](usize i) -> T& { return data[i]; }
     constexpr auto operator[](usize i) const -> const T& { return data[i]; }
-    [[nodiscard]] static constexpr auto zero() -> Vec2 { return Vec2{ T(0), T(0) }; }
-    [[nodiscard]] static constexpr auto one()  -> Vec2 { return Vec2{ T(1), T(1) }; }
+    [[nodiscard]] static constexpr auto zero() -> Vector2 { return Vector2{ T(0), T(0) }; }
+    [[nodiscard]] static constexpr auto one()  -> Vector2 { return Vector2{ T(1), T(1) }; }
 };
 
-template<usize I, typename T>
-constexpr T& get(math::Vec2<T>& v) {
-    static_assert(I < 3);
-    return v.data[I];
-}
-
-template<usize I, typename T>
-constexpr const T& get(const math::Vec2<T>& v) {
-    static_assert(I < 3);
-    return v.data[I];
-}
-
 template <Numeric T>
-struct Vec3 {
+struct Vector3 {
     using value_type = T;
     static constexpr auto size = 3;
     union {
@@ -84,95 +72,150 @@ struct Vec3 {
 
     constexpr auto operator[](usize i) -> T& { return data[i]; }
     constexpr auto operator[](usize i) const -> const T& { return data[i]; }
-    [[nodiscard]] static constexpr auto zero() -> Vec3 { return Vec3{ T(0), T(0), T(0) }; }
-    [[nodiscard]] static constexpr auto one()  -> Vec3 { return Vec3{ T(1), T(1), T(1) }; }
+    [[nodiscard]] static constexpr auto zero() -> Vector3 { return Vector3{ T(0), T(0), T(0) }; }
+    [[nodiscard]] static constexpr auto one()  -> Vector3 { return Vector3{ T(1), T(1), T(1) }; }
 };
 
-template<usize I, typename T>
-constexpr T& get(math::Vec3<T>& v) {
-    static_assert(I < 3);
-    return v.data[I];
-}
+template <Numeric T>
+struct Vector4 {
+    using value_type = T;
+    static constexpr auto size = 4;
+    union {
+        struct { T x, y, z, w; };
+        T data[size];
+    };
 
-template<usize I, typename T>
-constexpr const T& get(const math::Vec3<T>& v) {
-    static_assert(I < 3);
-    return v.data[I];
-}
+    constexpr Vector4() {}
+    constexpr Vector4(T x, T y, T z, T w): x(x), y(y), z(z), w(w) {}
+    constexpr Vector4(const Vector3<T>& v, T w) : x(v.x), y(v.y), z(v.z), w(w) {}
 
+    constexpr auto operator[](usize i) -> T& { return data[i]; }
+    constexpr auto operator[](usize i) const -> const T& { return data[i]; }
+    explicit constexpr operator Vector3<T>() const { return Vector3<T>{ x, y, z }; }
+    [[nodiscard]] static constexpr auto zero() -> Vector4 { return Vector4{ T(0), T(0), T(0), T(0) }; }
+    [[nodiscard]] static constexpr auto one() -> Vector4 { return Vector4{ T(1), T(1), T(1), T(1) }; }
+};
 
 template <typename T>
 struct is_vec : std::false_type {};
 
 template <typename T>
-struct is_vec<Vec2<T>> : std::true_type {};
+struct is_vec<Vector2<T>> : std::true_type {};
 
 template <typename T>
-struct is_vec<Vec3<T>> : std::true_type {};
+struct is_vec<Vector3<T>> : std::true_type {};
+
+template <typename T>
+struct is_vec<Vector4<T>> : std::true_type {};
 
 template <typename T>
 concept IsVector = is_vec<std::remove_cvref_t<T>>::value;
 
+template<usize I, IsVector V>
+constexpr auto get(V& v) -> typename V::value_type& {
+    static_assert(I < V::size);
+    return v.data[I];
+}
+
+template<usize I, IsVector V>
+constexpr const auto get(const V& v) -> const typename V::value_type& {
+    static_assert(I < V::size);
+    return v.data[I];
+}
+
+} // namespace math
+
+// Have to define it here, because tests use it
+// Alternatively move tests to the bottom
+namespace std {
+    template<typename T>
+
+    struct tuple_size<math::Vector2<T>> : integral_constant<size_t, 2> {};
+
+    template<usize I, typename T>
+    struct tuple_element<I, math::Vector2<T>> {
+        using type = T;
+    };
+
+    template<typename T>
+    struct tuple_size<math::Vector3<T>> : integral_constant<size_t, 3> {};
+
+    template<usize I, typename T>
+    struct tuple_element<I, math::Vector3<T>> {
+        using type = T;
+    };
+
+    template<typename T>
+    struct tuple_size<math::Vector4<T>> : integral_constant<size_t, 4> {};
+
+    template<usize I, typename T>
+    struct tuple_element<I, math::Vector4<T>> {
+        using type = T;
+    };
+}
+
+namespace math {
+
 template <IsVector V>
-[[nodiscard]] constexpr auto operator+(const V& a, const V& b) -> V {
+[[nodiscard]] constexpr auto operator + (const V& a, const V& b) -> V {
     V result {};
     for (usize i = 0; i < V::size; ++i) result[i] = a[i] + b[i];
     return result;
 }
 
 template <IsVector V>
-constexpr auto operator+=(V& a, const V& b) -> V& {
+constexpr auto operator += (V& a, const V& b) -> V& {
     for (usize i = 0; i < V::size; ++i) a[i] += b[i];
     return a;
 }
 
 template <IsVector V>
-[[nodiscard]] constexpr auto operator-(const V& a, const V& b) -> V {
+[[nodiscard]] constexpr auto operator - (const V& a, const V& b) -> V {
     V result {};
     for (usize i = 0; i < V::size; ++i) result[i] = a[i] - b[i];
     return result;
 }
 
 template <IsVector V>
-constexpr auto operator-=(V& a, const V& b) -> V& {
+constexpr auto operator -= (V& a, const V& b) -> V& {
     for (usize i = 0; i < V::size; ++i) a[i] -= b[i];
     return a;
 }
 
 template <IsVector V>
-[[nodiscard]] constexpr auto operator*(const V& v, typename V::value_type scalar) -> V {
+[[nodiscard]] constexpr auto operator * (const V& v, typename V::value_type scalar) -> V {
     V result{};
     for (usize i = 0; i < V::size; ++i) result[i] = v[i] * scalar;
     return result;
 }
 
 template <IsVector V>
-constexpr auto operator*=(V& a, typename V::value_type scalar) -> V& {
+constexpr auto operator *= (V& a, typename V::value_type scalar) -> V& {
     for (usize i = 0; i < V::size; ++i) a[i] *= scalar;
     return a;
 }
 
 template <IsVector V>
-[[nodiscard]] constexpr auto operator*(typename V::value_type scalar, const V& v) -> V {
+[[nodiscard]] constexpr auto operator * (typename V::value_type scalar, const V& v) -> V {
     return v * scalar;
 }
 
 template <IsVector V>
-[[nodiscard]] constexpr auto operator/(const V& v, typename V::value_type scalar) -> V {
+[[nodiscard]] constexpr auto operator / (const V& v, typename V::value_type scalar) -> V {
     V result{};
     for (usize i = 0; i < V::size; i++) result[i] = v[i] / scalar;
     return result;
 }
 
 template <IsVector V>
-[[nodiscard]] constexpr auto operator-(const V& v) -> V {
+[[nodiscard]] constexpr auto operator - (const V& v) -> V {
     V result{};
     for (usize i = 0; i < V::size; i++) result[i] = -v[i];
     return result;
 }
 
 template <IsVector V>
-constexpr auto operator==(const V& a, const V& b) -> bool {
+constexpr auto operator == (const V& a, const V& b) -> bool {
     for (usize i = 0; i < V::size; i++) {
         if (a[i] != b[i])
             return false;
@@ -182,7 +225,7 @@ constexpr auto operator==(const V& a, const V& b) -> bool {
 
 
 template <IsVector V>
-constexpr auto operator!=(const V& a, const V& b) -> bool {
+constexpr auto operator != (const V& a, const V& b) -> bool {
     return !(a == b);
 }
 
@@ -200,243 +243,311 @@ template <IsVector V>
 
 #ifdef UNIT_TESTS
 
-TEST(Vec2, can_create_vec2) {
-    Vec2<s32> v{1, 2};
+template <IsVector V>
+void expect_values(const V& v, std::initializer_list<typename V::value_type> values) {
+    usize i = 0;
+    for (auto value : values) {
+        EXPECT_EQ(v[i], value);
+        ++i;
+    }
+}
 
-    EXPECT_EQ(v.x, 1);
-    EXPECT_EQ(v.y, 2);
+TEST(Vector, create) {
+    expect_values(Vector2<s32>{1,2}, {1,2});
+    expect_values(Vector3<s32>{1,2,3}, {1,2,3});
+    expect_values(Vector4<s32>{1,2,3,4}, {1,2,3,4});
+}
 
-    EXPECT_EQ(v[0], 1);
-    EXPECT_EQ(v[1], 2);
+template <IsVector V>
+void test_zero() {
+    auto v = V::zero();
+    for (usize i = 0; i < V::size; ++i) EXPECT_EQ(v[i], 0);
+}
+
+TEST(Vector, zero) {
+    test_zero<Vector2<s32>>();
+    test_zero<Vector3<s32>>();
+    test_zero<Vector4<s32>>();
+}
+
+template <IsVector V>
+void test_one() {
+    auto v = V::one();
+    for (usize i = 0; i < V::size; ++i) EXPECT_EQ(v[i], 1);
 }
 
 
-TEST(Vec3, can_create_vec3) {
-    Vec3<s32> v{1, 2, 3};
-
-    EXPECT_EQ(v.x, 1);
-    EXPECT_EQ(v.y, 2);
-    EXPECT_EQ(v.z, 3);
-
-    EXPECT_EQ(v[0], 1);
-    EXPECT_EQ(v[1], 2);
-    EXPECT_EQ(v[2], 3);
+TEST(Vector, one) {
+    test_one<Vector2<s32>>();
+    test_one<Vector3<s32>>();
+    test_one<Vector4<s32>>();
 }
 
-TEST(Vec2, vec2_zero_returns_zero) {
-    auto v = Vec2<s32>::zero();
+template <IsVector V>
+void test_add() {
+    V a{}, b{};
 
-    EXPECT_EQ(v.x, 0);
-    EXPECT_EQ(v.y, 0);
+    for (usize i = 0; i < V::size; ++i) {
+        a[i] = i + 1;
+        b[i] = i + 2;
+    }
+
+    auto result = a + b;
+    for (usize i = 0; i < V::size; ++i) EXPECT_EQ(result[i], (i + 1) + (i + 2));
 }
 
-
-TEST(Vec3, vec3_zero_returns_zero) {
-    auto v = Vec3<s32>::zero();
-
-    EXPECT_EQ(v.x, 0);
-    EXPECT_EQ(v.y, 0);
-    EXPECT_EQ(v.z, 0);
+TEST(Vector, add) {
+    test_add<Vector2<s32>>();
+    test_add<Vector3<s32>>();
+    test_add<Vector4<s32>>();
 }
 
-TEST(Vec2, vec2_one_returns_one) {
-    auto v = Vec2<s32>::one();
+template <IsVector V>
+void test_add_assign() {
+    V a{}, b{};
 
-    EXPECT_EQ(v.x, 1);
-    EXPECT_EQ(v.y, 1);
-}
-
-
-TEST(Vec3, vec3_one_returns_one) {
-    auto v = Vec3<s32>::one();
-
-    EXPECT_EQ(v.x, 1);
-    EXPECT_EQ(v.y, 1);
-    EXPECT_EQ(v.z, 1);
-}
-
-TEST(Vec2, can_add) {
-    Vec2<s32> a{1, 2};
-    Vec2<s32> b{3, 4};
-    Vec2<s32> expected{4, 6};
-
-    EXPECT_EQ(a + b, expected);
-}
-
-
-TEST(Vec3, can_add) {
-    Vec3<s32> a{1, 2, 3};
-    Vec3<s32> b{4, 5, 6};
-    Vec3<s32> expected{5, 7, 9};
-
-    EXPECT_EQ(a + b, expected);
-}
-
-
-TEST(Vec2, can_add_assign) {
-    Vec2<s32> a{1, 2};
-    Vec2<s32> b{3, 4};
+    for (usize i = 0; i < V::size; ++i) {
+        a[i] = i + 1;
+        b[i] = i + 2;
+    }
 
     a += b;
-
-    EXPECT_EQ(a.x, 4);
-    EXPECT_EQ(a.y, 6);
+    for (usize i = 0; i < V::size; ++i) EXPECT_EQ(a[i], (i + 1) + (i + 2));
 }
 
-
-TEST(Vec3, can_add_assign) {
-    Vec3<s32> a{1, 2, 3};
-    Vec3<s32> b{3, 4, 5};
-
-    a += b;
-
-    EXPECT_EQ(a.x, 4);
-    EXPECT_EQ(a.y, 6);
-    EXPECT_EQ(a.z, 8);
+TEST(Vector, add_assign) {
+    test_add_assign<Vector2<s32>>();
+    test_add_assign<Vector3<s32>>();
+    test_add_assign<Vector4<s32>>();
 }
 
-TEST(Vec2, can_subtract) {
-    Vec2<s32> a{5, 7};
-    Vec2<s32> b{2, 3};
-    Vec2<s32> expected{3, 4};
+template <IsVector V>
+void test_subtract() {
+    V a{}, b{};
 
-    EXPECT_EQ(a - b, expected);
+    for (usize i = 0; i < V::size; ++i) {
+        a[i] = i + 5;
+        b[i] = i + 2;
+    }
+
+    auto result = a - b;
+    for (usize i = 0; i < V::size; ++i) EXPECT_EQ(result[i], 3);
 }
 
-
-TEST(Vec3, can_subtract) {
-    Vec3<s32> a{5, 7, 9};
-    Vec3<s32> b{2, 3, 4};
-    Vec3<s32> expected{3, 4, 5};
-
-    EXPECT_EQ(a - b, expected);
+TEST(Vector, subtract) {
+    test_subtract<Vector2<s32>>();
+    test_subtract<Vector3<s32>>();
+    test_subtract<Vector4<s32>>();
 }
 
+template <IsVector V>
+void test_subtract_assign() {
+    V a{}, b{};
 
-TEST(Vec2, can_subtract_assign) {
-    Vec2<s32> a{5, 7};
-    Vec2<s32> b{2, 3};
+    for (usize i = 0; i < V::size; ++i) {
+        a[i] = i + 5;
+        b[i] = i + 2;
+    }
 
     a -= b;
-
-    EXPECT_EQ(a.x, 3);
-    EXPECT_EQ(a.y, 4);
+    for (usize i = 0; i < V::size; ++i) EXPECT_EQ(a[i], 3);
 }
 
-TEST(Vec2, can_multiply_scalar) {
-    Vec2<s32> v{2, 3};
-    Vec2<s32> expected{6, 9};
+TEST(Vector, subtract_assign) {
+    test_subtract_assign<Vector2<s32>>();
+    test_subtract_assign<Vector3<s32>>();
+    test_subtract_assign<Vector4<s32>>();
+}
 
-    EXPECT_EQ(v * 3, expected);
+template <IsVector V>
+void test_scalar_multiply() {
+    V v{};
+
+    for (usize i = 0; i < V::size; ++i)
+        v[i] = i + 1;
+
+    auto result = v * 2;
+    for (usize i = 0; i < V::size; ++i) EXPECT_EQ(result[i], (i + 1) * 2);
+}
+
+TEST(Vector, multiply_scalar) {
+    test_scalar_multiply<Vector2<s32>>();
+    test_scalar_multiply<Vector3<s32>>();
+    test_scalar_multiply<Vector4<s32>>();
+}
+
+template <IsVector V>
+void test_scalar_left_multiply() {
+    V v{};
+
+    for (usize i = 0; i < V::size; ++i)
+        v[i] = i + 1;
+
+    auto result = 2 * v;
+    for (usize i = 0; i < V::size; ++i) EXPECT_EQ(result[i], (i + 1) * 2);
+}
+
+TEST(Vector, scalar_left_multiply) {
+    test_scalar_left_multiply<Vector2<s32>>();
+    test_scalar_left_multiply<Vector3<s32>>();
+    test_scalar_left_multiply<Vector4<s32>>();
+}
+
+template <IsVector V>
+void test_scalar_multiply_assign() {
+    V v{};
+
+    for (usize i = 0; i < V::size; ++i)
+        v[i] = i + 1;
+
+    v *= 2;
+    for (usize i = 0; i < V::size; ++i) EXPECT_EQ(v[i], (i + 1) * 2);
+}
+
+TEST(Vector, multiply_scalar_assign) {
+    test_scalar_multiply_assign<Vector2<s32>>();
+    test_scalar_multiply_assign<Vector3<s32>>();
+    test_scalar_multiply_assign<Vector4<s32>>();
+}
+
+template <IsVector V>
+void test_scalar_divide() {
+    V v{};
+
+    for (usize i = 0; i < V::size; ++i)
+        v[i] = (i + 1) * 2;
+
+    auto result = v / 2;
+    for (usize i = 0; i < V::size; ++i) EXPECT_EQ(result[i], i + 1);
+}
+
+TEST(Vector, divide_scalar) {
+    test_scalar_divide<Vector2<s32>>();
+    test_scalar_divide<Vector3<s32>>();
+    test_scalar_divide<Vector4<s32>>();
+}
+
+template <IsVector V>
+void test_unary_minus() {
+    V v{};
+
+    for (usize i = 0; i < V::size; ++i)
+        v[i] = i + 1;
+
+    auto result = -v;
+    for (usize i = 0; i < V::size; ++i) EXPECT_EQ(result[i], -(i + 1));
+}
+
+TEST(Vector, unary_minus) {
+    test_unary_minus<Vector2<s32>>();
+    test_unary_minus<Vector3<s32>>();
+    test_unary_minus<Vector4<s32>>();
+}
+
+template <IsVector V>
+void test_equality() {
+    V a{}, b{}, c{};
+
+    for (usize i = 0; i < V::size; ++i) {
+        a[i] = i;
+        b[i] = i;
+        c[i] = i + 1;
+    }
+
+    EXPECT_TRUE(a == b);
+    EXPECT_FALSE(a == c);
+    EXPECT_TRUE(a != c);
+}
+
+TEST(Vector, equality) {
+    test_equality<Vector2<s32>>();
+    test_equality<Vector3<s32>>();
+    test_equality<Vector4<s32>>();
+}
+
+template <IsVector V>
+void test_dot() {
+    V a{}, b{};
+
+    auto expected = 0;
+
+    for (usize i = 0; i < V::size; ++i) {
+        a[i] = i + 1;
+        b[i] = i + 2;
+        expected += a[i] * b[i];
+    }
+
+    EXPECT_EQ(dot(a, b), expected);
+}
+
+TEST(Vector, dot) {
+    test_dot<Vector2<s32>>();
+    test_dot<Vector3<s32>>();
+    test_dot<Vector4<s32>>();
+}
+
+template <IsVector V>
+void test_length_sq() {
+    V v{};
+
+    auto expected = 0;
+
+    for (usize i = 0; i < V::size; ++i) {
+        v[i] = i + 1;
+        expected += v[i] * v[i];
+    }
+
+    EXPECT_EQ(length_sq(v), expected);
+}
+
+TEST(Vector, length_squared) {
+    test_length_sq<Vector2<s32>>();
+    test_length_sq<Vector3<s32>>();
+    test_length_sq<Vector4<s32>>();
+}
+
+TEST(Vector, structured_binding) {
+    const auto [x, y] = Vector2<s32>{1, 2};
+
+    EXPECT_EQ(x, 1);
+    EXPECT_EQ(y, 2);
+
+
+    const auto [a, b, c] = Vector3<s32>{1, 2, 3};
+
+    EXPECT_EQ(a, 1);
+    EXPECT_EQ(b, 2);
+    EXPECT_EQ(c, 3);
+
+
+    const auto [d, e, f, g] = Vector4<s32>{1, 2, 3, 4};
+
+    EXPECT_EQ(d, 1);
+    EXPECT_EQ(e, 2);
+    EXPECT_EQ(f, 3);
+    EXPECT_EQ(g, 4);
+}
+
+TEST(Vector4, construct_from_vector3) {
+    Vector3<s32> v{1,2,3};
+
+    Vector4<s32> result{v,4};
+
+    EXPECT_EQ(result.x,1);
+    EXPECT_EQ(result.y,2);
+    EXPECT_EQ(result.z,3);
+    EXPECT_EQ(result.w,4);
 }
 
 
-TEST(Vec3, can_multiply_scalar) {
-    Vec3<s32> v{2, 3, 4};
-    Vec3<s32> expected{4, 6, 8};
+TEST(Vector4, convert_to_vector3) {
+    Vector4<s32> v{1,2,3,4};
 
-    EXPECT_EQ(v * 2, expected);
-}
+    Vector3<s32> result = static_cast<Vector3<s32>>(v);
 
-
-TEST(Vec2, can_multiply_scalar_assign) {
-    Vec2<s32> v{2, 3};
-
-    v *= 4;
-
-    EXPECT_EQ(v.x, 8);
-    EXPECT_EQ(v.y, 12);
-}
-
-
-TEST(Vec3, can_multiply_scalar_assign) {
-    Vec3<s32> v{2, 3, 4};
-
-    v *= 3;
-
-    EXPECT_EQ(v.x, 6);
-    EXPECT_EQ(v.y, 9);
-    EXPECT_EQ(v.z, 12);
-}
-
-
-TEST(Vec2, scalar_can_be_left_side) {
-    Vec2<s32> v{2, 3};
-    Vec2<s32> expected{6, 9};
-
-    EXPECT_EQ(3 * v, expected);
-}
-
-TEST(Vec2, can_divide_scalar) {
-    Vec2<s32> v{8, 12};
-    Vec2<s32> expected{2, 3};
-
-    EXPECT_EQ(v / 4, expected);
-}
-
-
-TEST(Vec3, can_divide_scalar) {
-    Vec3<s32> v{9, 12, 15};
-    Vec3<s32> expected{3, 4, 5};
-
-    EXPECT_EQ(v / 3, expected);
-}
-
-TEST(Vec2, unary_minus) {
-    Vec2<s32> v{1, -2};
-    Vec2<s32> expected{-1, 2};
-
-    EXPECT_EQ(-v, expected);
-}
-
-
-TEST(Vec3, unary_minus) {
-    Vec3<s32> v{1, -2, 3};
-    Vec3<s32> expected{-1, 2, -3};
-
-    EXPECT_EQ(-v, expected);
-}
-
-TEST(Vec2, equality) {
-    Vec2<s32> s1{1, 2}, s2{1, 2};
-    Vec2<s32> s3{1, 2}, s4{2, 2};
-
-    EXPECT_TRUE(s1 == s2);
-    EXPECT_FALSE(s3 == s4);
-}
-
-
-TEST(Vec3, inequality) {
-    Vec3<s32> s1{1, 2, 3}, s2{1, 2, 4};
-    EXPECT_TRUE(s1 != s2);
-}
-
-TEST(Vec2, dot_product) {
-    Vec2<s32> a{1,2};
-    Vec2<s32> b{3,4};
-
-    EXPECT_EQ(dot(a,b), 11);
-}
-
-
-TEST(Vec3, dot_product) {
-    Vec3<s32> a{1,2,3};
-    Vec3<s32> b{4,5,6};
-
-    EXPECT_EQ(dot(a,b), 32);
-}
-
-TEST(Vec2, length_squared) {
-    Vec2<s32> v{3,4};
-
-    EXPECT_EQ(length_sq(v), 25);
-}
-
-
-TEST(Vec3, length_squared) {
-    Vec3<s32> v{1,2,2};
-
-    EXPECT_EQ(length_sq(v), 9);
+    EXPECT_EQ(result.x,1);
+    EXPECT_EQ(result.y,2);
+    EXPECT_EQ(result.z,3);
 }
 
 #endif
@@ -649,21 +760,3 @@ TEST(Grid3_bool, cant_move_lower_when_something_is_blocking_lower) {
 #endif
 
 }  // namespace math
-
-namespace std {
-    template<typename T>
-    struct tuple_size<math::Vec2<T>> : integral_constant<size_t, 2> {};
-
-    template<usize I, typename T>
-    struct tuple_element<I, math::Vec2<T>> {
-        using type = T;
-    };
-
-    template<typename T>
-    struct tuple_size<math::Vec3<T>> : integral_constant<size_t, 3> {};
-
-    template<usize I, typename T>
-    struct tuple_element<I, math::Vec3<T>> {
-        using type = T;
-    };
-}
