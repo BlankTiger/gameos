@@ -51,7 +51,7 @@ struct Grid3 {
     u32 rows, cols, layers;
     u32 cells_in_layer;
 
-    Grid3(u32 rows, u32 cols, u32 layers, T&& default_value = {})
+    Grid3(u32 rows, u32 cols, u32 layers, const T& default_value = {})
         : backing_array(Array<T>{rows * cols * layers}),
           default_value(default_value),
           rows(rows),
@@ -63,24 +63,54 @@ struct Grid3 {
         }
     }
 
-    auto set(u32 row, u32 col, u32 layer, T&& value) -> void {
+    force_inline auto set(u32 row, u32 col, u32 layer, const T& value) -> void {
         const auto index = backing_array_index_for(row, col, layer);
         backing_array[index] = value;
     }
 
-    auto clear(u32 row, u32 col, u32 layer) -> void {
+    force_inline auto clear(u32 row, u32 col, u32 layer) -> void {
         const auto index = backing_array_index_for(row, col, layer);
         backing_array[index] = default_value;
     }
 
-    auto move(u32 from_row, u32 from_col, u32 from_layer, u32 to_row, u32 to_col, u32 to_layer) -> void {
+    auto clear_layer(u32 layer) -> void {
+        for (u32 row = 0; row < rows; ++row) {
+            for (u32 col = 0; col < cols; ++col) {
+                clear(row, col, layer);
+            }
+        }
+    }
+
+    force_inline auto move(u32 from_row, u32 from_col, u32 from_layer, u32 to_row, u32 to_col, u32 to_layer) -> void {
         const auto from_index = backing_array_index_for(from_row, from_col, from_layer);
         const auto to_index   = backing_array_index_for(to_row,   to_col,   to_layer);
         backing_array[to_index]   = std::move(backing_array[from_index]);
         backing_array[from_index] = default_value;
     }
 
-    auto layer_filled_with(u32 layer, T&& value) const -> bool {
+    auto move_layer(u32 from_layer, u32 to_layer) -> void {
+        for (u32 row = 0; row < rows; ++row) {
+            for (u32 col = 0; col < cols; ++col) {
+                move(row, col, from_layer, row, col, to_layer);
+            }
+        }
+    }
+
+    force_inline auto copy(u32 from_row, u32 from_col, u32 from_layer, u32 to_row, u32 to_col, u32 to_layer) -> void {
+        const auto from_index = backing_array_index_for(from_row, from_col, from_layer);
+        const auto to_index   = backing_array_index_for(to_row,   to_col,   to_layer);
+        backing_array[to_index] = backing_array[from_index];
+    }
+
+    auto copy_layer(u32 from_layer, u32 to_layer) -> void {
+        for (u32 row = 0; row < rows; ++row) {
+            for (u32 col = 0; col < cols; ++col) {
+                copy(row, col, from_layer, row, col, to_layer);
+            }
+        }
+    }
+
+    auto layer_filled_with(u32 layer, const T& value) const -> bool {
         for (u32 index = layer * cells_in_layer; index < (layer + 1) * cells_in_layer; ++index) {
             if (backing_array[index] != value) return false;
         }
@@ -111,7 +141,7 @@ struct Grid3 {
             for (u32 row_index = 0; row_index < rows; ++row_index) {
                 result += "  [";
                 for (u32 col_index = 0; col_index < cols; ++col_index) {
-                    result += at(row_index, col_index, layer_index) ? '1' : '0';
+                    result += sprint("%", at(row_index, col_index, layer_index));
                     if (col_index != cols - 1) result += ", ";
                 }
                 result += "]\n";
