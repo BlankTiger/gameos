@@ -76,21 +76,6 @@ struct Game {
     Game(u32 rows = 3, u32 cols = 3, u32 layers = 7) : grid(math::Grid3<Block_Type>(rows, cols, layers)) {}
 };
 
-// there was available space -> true
-// otherwise                 -> false
-auto set_new_falling_body(Game& game, Falling_Body body) -> bool {
-    game.falling_body = body;
-
-    for (const auto& [row, col, layer] : body.blocks) {
-        if (game.grid.at(row, col, layer) != Block_Type::EMPTY) return false;
-    }
-
-    for (const auto& [row, col, layer] : body.blocks) {
-        game.grid.set(row, col, layer, Block_Type::FALLING);
-    }
-    return true;
-}
-
 auto create_new_falling_body(Body blocks) -> Falling_Body {
     Falling_Body body;
 
@@ -102,12 +87,25 @@ auto create_new_falling_body(Body blocks) -> Falling_Body {
     return body;
 }
 
-auto get_new_falling_body() -> Falling_Body {
-    const auto body_index   = rand::generate(0, available_bodies.size());
-    const auto body         = available_bodies.begin()[body_index];
-    const auto falling_body = create_new_falling_body(body);
+// there was available space -> true
+// otherwise                 -> false
+auto produce_new_falling_body(Game& game) -> bool {
+    const auto body_index = rand::generate(0, available_bodies.size());
+    const auto body       = available_bodies.begin()[body_index];
 
-    return falling_body;
+    auto falling_body = create_new_falling_body(body);
+    falling_body.layer_sort();
+
+    game.falling_body = falling_body;
+
+    for (const auto& [row, col, layer] : falling_body.blocks) {
+        if (game.grid.at(row, col, layer) != Block_Type::EMPTY) return false;
+    }
+
+    for (const auto& [row, col, layer] : falling_body.blocks) {
+        game.grid.set(row, col, layer, Block_Type::FALLING);
+    }
+    return true;
 }
 
 auto falling_body_can_go_lower(const Game& game) -> bool {
@@ -197,9 +195,8 @@ auto update(Game& game) -> void {
                 }
             }
 
-            auto new_falling_body = get_new_falling_body();
-            new_falling_body.layer_sort();
-            set_new_falling_body(game, new_falling_body);
+            auto ok = produce_new_falling_body(game);
+            (void)ok; // @TODO: Discarding for now, will use later for determining if the game is over.
         }
 
         game.current_move_started_at_tick = get_ticks();
@@ -227,8 +224,8 @@ auto game_main() -> void {
     }
     game.grid.clear(0, 0, game.grid.layers - 1);
 
-    Falling_Body body = get_new_falling_body();
-    set_new_falling_body(game, body);
+    auto ok = produce_new_falling_body(game);
+    kstd_assert(ok);
 
     u64 last_tick = time::get_ticks();
     game.current_move_started_at_tick = last_tick;
