@@ -16,13 +16,7 @@
 constexpr u64 FPS_MAX                                 = 144;
 constexpr u64 ARBITRARY_FALLING_BODY_BLOCK_SIZE_LIMIT = 10;
 
-struct Block_Coords {
-    u32 row, col, layer;
-
-    auto operator==(const Block_Coords& other) -> bool {
-        return row == other.row && col == other.col && layer == other.layer;
-    }
-};
+using Block_Coords = math::Vec3<u32>;
 using Body = std::initializer_list<Block_Coords>;
 
 struct Falling_Body {
@@ -30,7 +24,7 @@ struct Falling_Body {
 
     auto layer_sort() -> void {
         std::sort(blocks.begin(), blocks.end(), [](const Block_Coords& a, const Block_Coords& b) {
-            return a.layer > b.layer;
+            return a.z > b.z;
         });
     }
 };
