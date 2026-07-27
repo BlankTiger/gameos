@@ -208,6 +208,16 @@ struct Array {
           size(0),
           data(static_cast<T*>(::operator new(sizeof(T) * capacity))) {}
 
+    explicit Array(usize initial_size, const T& initial_value)
+        : capacity(initial_size),
+          size(0),
+          data(static_cast<T*>(::operator new(sizeof(T) * capacity))) {
+        for (usize index = 0; index < initial_size; ++index) {
+            ::new (static_cast<void*>(data + index)) T(initial_value);
+            ++size;
+        }
+    }
+
     ~Array() {
         for (usize i = 0; i < size; ++i)
             data[i].~T();

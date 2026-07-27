@@ -35,14 +35,24 @@ struct Falling_Body {
     }
 };
 
+// Refactor: Body should be a Static_Array, make the creation of
+// available_bodies a result of a constexpr function.
 constexpr std::initializer_list<Body> available_bodies = {
     Body{{0, 0, 0}, {0, 0, 1}},
     Body{{0, 0, 0}, {1, 0, 0}, {0, 0, 1}},
 };
 
+enum struct Block_Type {
+    EMPTY,
+    SOLID,
+    FALLING,
+};
+
 struct Game {
-    math::Grid3<bool> grid;
+    math::Grid3<Block_Type> grid;
     Falling_Body falling_body;
+
+    Array<u32> layers_to_destroy;
 
     u64 time_till_next_move_ms       = 1000;
     u64 current_move_started_at_tick = 0;
@@ -53,7 +63,7 @@ struct Game {
     f64 time_scale = 1.0;
     f64 fps        = 0.0;
 
-    Game(u32 rows = 3, u32 cols = 3, u32 layers = 5) : grid(math::Grid3(rows, cols, layers)) {}
+    Game(u32 rows = 3, u32 cols = 3, u32 layers = 5) : grid(math::Grid3<Block_Type>(rows, cols, layers)) {}
 };
 
 // there was available space -> true
@@ -62,11 +72,11 @@ auto set_new_falling_body(Game& game, Falling_Body body) -> bool {
     game.falling_body = body;
 
     for (const auto& [row, col, layer] : body.blocks) {
-        if (game.grid.at(row, col, layer)) return false;
+        if (game.grid.at(row, col, layer) != Block_Type::EMPTY) return false;
     }
 
     for (const auto& [row, col, layer] : body.blocks) {
-        game.grid.set(row, col, layer, true);
+        game.grid.set(row, col, layer, Block_Type::FALLING);
     }
     return true;
 }
@@ -112,6 +122,32 @@ auto falling_body_can_go_lower(const Game& game) -> bool {
 }
 
 auto update(Game& game) -> void {
+    // Handle layer destruction.
+    {
+        Array<bool> layer_destroyed(game.grid.layers, false);
+
+        for (u32 layer : game.layers_to_destroy) {
+            layer_destroyed[layer] = true;
+        }
+
+        s64 write_layer = static_cast<s64>(game.grid.layers) - 1;
+
+        for (s64 read_layer = static_cast<s64>(game.grid.layers) - 1; read_layer >= 0; --read_layer) {
+            if (!layer_destroyed[read_layer]) {
+                if (read_layer != write_layer) {
+                    game.grid.copy_layer(static_cast<u32>(read_layer), static_cast<u32>(write_layer));
+                }
+                --write_layer;
+            }
+        }
+
+        for (s64 layer = write_layer; layer >= 0; --layer) {
+            game.grid.clear_layer(static_cast<u32>(layer));
+        }
+
+        game.layers_to_destroy.clear();
+    }
+
     // Handle rotations.
 
     // Handle movement.
@@ -131,15 +167,26 @@ auto update(Game& game) -> void {
             for (auto& [row, col, layer] : game.falling_body.blocks) {
                 game.grid.clear(row, col, layer);
                 layer += 1;
-                game.grid.set(row, col, layer, true);
+                game.grid.set(row, col, layer, Block_Type::FALLING);
             }
         }
         else {
-            // Solidify into bottom-most layers.
+            // Solidify into bottom-most layers (FALLING -> SOLID).
             // Get and set the next falling_body.
+            for (const auto& [row, col, layer] : game.falling_body.blocks) {
+                game.grid.set(row, col, layer, Block_Type::SOLID);
+            }
 
-            // If there is a new full layer, then clear it and move everything above it
-            // lower by a layer.
+            // If there is a new full layer, then schedule it for destruction.
+            for (s64 layer_index = game.grid.layers - 1; layer_index >= 0; --layer_index) {
+                if (game.grid.layer_filled_with(layer_index, Block_Type::SOLID)) {
+                    game.layers_to_destroy.push_back(layer_index);
+                }
+            }
+
+            auto new_falling_body = get_new_falling_body();
+            new_falling_body.layer_sort();
+            set_new_falling_body(game, new_falling_body);
         }
 
         game.current_move_started_at_tick = get_ticks();
@@ -153,13 +200,19 @@ auto draw(const Game& game) -> void {
     gfx::draw_text(8, 8, fps_text);
 
     const auto grid_as_text = sprint("%", game.grid);
-    gfx::draw_text(gfx::width() / 2, gfx::height() / 8, grid_as_text);
+    gfx::draw_text(gfx::width() / 3, gfx::height() / 8, grid_as_text);
 
     gfx::draw_frame();
 }
 
 auto game_main() -> void {
     Game game;
+    for (u32 row = 0; row < game.grid.rows; ++row) {
+        for (u32 col = 0; col < game.grid.cols; ++col) {
+            game.grid.set(row, col, 4, Block_Type::SOLID);
+        }
+    }
+    game.grid.clear(0, 0, 4);
 
     Falling_Body body = get_new_falling_body();
     set_new_falling_body(game, body);
