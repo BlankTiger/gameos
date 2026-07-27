@@ -118,7 +118,7 @@ constexpr auto get(V& v) -> typename V::value_type& {
 }
 
 template<usize I, IsVector V>
-constexpr const auto get(const V& v) -> const typename V::value_type& {
+constexpr auto get(const V& v) -> const typename V::value_type& {
     static_assert(I < V::size);
     return v.data[I];
 }
@@ -129,7 +129,6 @@ constexpr const auto get(const V& v) -> const typename V::value_type& {
 // Alternatively move tests to the bottom
 namespace std {
     template<typename T>
-
     struct tuple_size<math::Vector2<T>> : integral_constant<size_t, 2> {};
 
     template<usize I, typename T>
@@ -237,7 +236,7 @@ template <IsVector V>
 }
 
 template <IsVector V>
-[[nodiscard]] constexpr auto length_sq(const V& v) -> typename V::value_type {
+[[nodiscard]] constexpr auto length_squared(const V& v) -> typename V::value_type {
     return dot(v, v);
 }
 
@@ -245,10 +244,9 @@ template <IsVector V>
 
 template <IsVector V>
 void expect_values(const V& v, std::initializer_list<typename V::value_type> values) {
-    usize i = 0;
-    for (auto value : values) {
-        EXPECT_EQ(v[i], value);
-        ++i;
+    EXPECT_EQ(V::size, values.size());
+    for (int i = 0; i < V::size; i++) {
+        EXPECT_EQ(v[i], values.begin()[i]);
     }
 }
 
@@ -268,6 +266,9 @@ TEST(Vector, zero) {
     test_zero<Vector2<s32>>();
     test_zero<Vector3<s32>>();
     test_zero<Vector4<s32>>();
+    test_zero<Vector2<f32>>();
+    test_zero<Vector3<f32>>();
+    test_zero<Vector4<f32>>();
 }
 
 template <IsVector V>
@@ -281,6 +282,9 @@ TEST(Vector, one) {
     test_one<Vector2<s32>>();
     test_one<Vector3<s32>>();
     test_one<Vector4<s32>>();
+    test_one<Vector2<f32>>();
+    test_one<Vector3<f32>>();
+    test_one<Vector4<f32>>();
 }
 
 template <IsVector V>
@@ -300,6 +304,9 @@ TEST(Vector, add) {
     test_add<Vector2<s32>>();
     test_add<Vector3<s32>>();
     test_add<Vector4<s32>>();
+    test_add<Vector2<f32>>();
+    test_add<Vector3<f32>>();
+    test_add<Vector4<f32>>();
 }
 
 template <IsVector V>
@@ -319,6 +326,9 @@ TEST(Vector, add_assign) {
     test_add_assign<Vector2<s32>>();
     test_add_assign<Vector3<s32>>();
     test_add_assign<Vector4<s32>>();
+    test_add_assign<Vector2<f32>>();
+    test_add_assign<Vector3<f32>>();
+    test_add_assign<Vector4<f32>>();
 }
 
 template <IsVector V>
@@ -338,6 +348,9 @@ TEST(Vector, subtract) {
     test_subtract<Vector2<s32>>();
     test_subtract<Vector3<s32>>();
     test_subtract<Vector4<s32>>();
+    test_subtract<Vector2<f32>>();
+    test_subtract<Vector3<f32>>();
+    test_subtract<Vector4<f32>>();
 }
 
 template <IsVector V>
@@ -357,6 +370,9 @@ TEST(Vector, subtract_assign) {
     test_subtract_assign<Vector2<s32>>();
     test_subtract_assign<Vector3<s32>>();
     test_subtract_assign<Vector4<s32>>();
+    test_subtract_assign<Vector2<f32>>();
+    test_subtract_assign<Vector3<f32>>();
+    test_subtract_assign<Vector4<f32>>();
 }
 
 template <IsVector V>
@@ -374,6 +390,9 @@ TEST(Vector, multiply_scalar) {
     test_scalar_multiply<Vector2<s32>>();
     test_scalar_multiply<Vector3<s32>>();
     test_scalar_multiply<Vector4<s32>>();
+    test_scalar_multiply<Vector2<f32>>();
+    test_scalar_multiply<Vector3<f32>>();
+    test_scalar_multiply<Vector4<f32>>();
 }
 
 template <IsVector V>
@@ -391,6 +410,9 @@ TEST(Vector, scalar_left_multiply) {
     test_scalar_left_multiply<Vector2<s32>>();
     test_scalar_left_multiply<Vector3<s32>>();
     test_scalar_left_multiply<Vector4<s32>>();
+    test_scalar_left_multiply<Vector2<f32>>();
+    test_scalar_left_multiply<Vector3<f32>>();
+    test_scalar_left_multiply<Vector4<f32>>();
 }
 
 template <IsVector V>
@@ -408,6 +430,9 @@ TEST(Vector, multiply_scalar_assign) {
     test_scalar_multiply_assign<Vector2<s32>>();
     test_scalar_multiply_assign<Vector3<s32>>();
     test_scalar_multiply_assign<Vector4<s32>>();
+    test_scalar_multiply_assign<Vector2<f32>>();
+    test_scalar_multiply_assign<Vector3<f32>>();
+    test_scalar_multiply_assign<Vector4<f32>>();
 }
 
 template <IsVector V>
@@ -425,6 +450,9 @@ TEST(Vector, divide_scalar) {
     test_scalar_divide<Vector2<s32>>();
     test_scalar_divide<Vector3<s32>>();
     test_scalar_divide<Vector4<s32>>();
+    test_scalar_divide<Vector2<f32>>();
+    test_scalar_divide<Vector3<f32>>();
+    test_scalar_divide<Vector4<f32>>();
 }
 
 template <IsVector V>
@@ -435,13 +463,16 @@ void test_unary_minus() {
         v[i] = i + 1;
 
     auto result = -v;
-    for (usize i = 0; i < V::size; ++i) EXPECT_EQ(result[i], -(i + 1));
+    for (s32 i = 0; i < V::size; ++i) EXPECT_EQ(result[i], -(i + 1));
 }
 
 TEST(Vector, unary_minus) {
     test_unary_minus<Vector2<s32>>();
     test_unary_minus<Vector3<s32>>();
     test_unary_minus<Vector4<s32>>();
+    test_unary_minus<Vector2<f32>>();
+    test_unary_minus<Vector3<f32>>();
+    test_unary_minus<Vector4<f32>>();
 }
 
 template <IsVector V>
@@ -463,6 +494,9 @@ TEST(Vector, equality) {
     test_equality<Vector2<s32>>();
     test_equality<Vector3<s32>>();
     test_equality<Vector4<s32>>();
+    test_equality<Vector2<f32>>();
+    test_equality<Vector3<f32>>();
+    test_equality<Vector4<f32>>();
 }
 
 template <IsVector V>
@@ -484,10 +518,13 @@ TEST(Vector, dot) {
     test_dot<Vector2<s32>>();
     test_dot<Vector3<s32>>();
     test_dot<Vector4<s32>>();
+    test_dot<Vector2<f32>>();
+    test_dot<Vector3<f32>>();
+    test_dot<Vector4<f32>>();
 }
 
 template <IsVector V>
-void test_length_sq() {
+void test_length_squared() {
     V v{};
 
     auto expected = 0;
@@ -497,13 +534,16 @@ void test_length_sq() {
         expected += v[i] * v[i];
     }
 
-    EXPECT_EQ(length_sq(v), expected);
+    EXPECT_EQ(length_squared(v), expected);
 }
 
 TEST(Vector, length_squared) {
-    test_length_sq<Vector2<s32>>();
-    test_length_sq<Vector3<s32>>();
-    test_length_sq<Vector4<s32>>();
+    test_length_squared<Vector2<s32>>();
+    test_length_squared<Vector3<s32>>();
+    test_length_squared<Vector4<s32>>();
+    test_length_squared<Vector2<f32>>();
+    test_length_squared<Vector3<f32>>();
+    test_length_squared<Vector4<f32>>();
 }
 
 TEST(Vector, structured_binding) {
@@ -528,26 +568,69 @@ TEST(Vector, structured_binding) {
     EXPECT_EQ(g, 4);
 }
 
+TEST(Vector, structured_binding_float) {
+    const auto [x, y] = Vector2<f32>{1.0f, 2.0f};
+
+    EXPECT_EQ(x, 1.0f);
+    EXPECT_EQ(y, 2.0f);
+
+
+    const auto [a, b, c] = Vector3<f32>{1.0f, 2.0f, 3.0f};
+
+    EXPECT_EQ(a, 1.0f);
+    EXPECT_EQ(b, 2.0f);
+    EXPECT_EQ(c, 3.0f);
+
+
+    const auto [d, e, f, g] = Vector4<f32>{1.0f, 2.0f, 3.0f, 4.0f};
+
+    EXPECT_EQ(d, 1.0f);
+    EXPECT_EQ(e, 2.0f);
+    EXPECT_EQ(f, 3.0f);
+    EXPECT_EQ(g, 4.0f);
+}
+
 TEST(Vector4, construct_from_vector3) {
-    Vector3<s32> v{1,2,3};
+    Vector3<s32> v{1, 2, 3};
 
-    Vector4<s32> result{v,4};
+    Vector4<s32> result{v, 4};
 
-    EXPECT_EQ(result.x,1);
-    EXPECT_EQ(result.y,2);
-    EXPECT_EQ(result.z,3);
-    EXPECT_EQ(result.w,4);
+    EXPECT_EQ(result.x, 1);
+    EXPECT_EQ(result.y, 2);
+    EXPECT_EQ(result.z, 3);
+    EXPECT_EQ(result.w, 4);
+}
+
+TEST(Vector4, construct_from_vector3_float) {
+    Vector3<f32> v{1.0f, 2.0f, 3.0f};
+
+    Vector4<f32> result{v, 4.0f};
+
+    EXPECT_EQ(result.x, 1.0f);
+    EXPECT_EQ(result.y, 2.0f);
+    EXPECT_EQ(result.z, 3.0f);
+    EXPECT_EQ(result.w, 4.0f);
 }
 
 
 TEST(Vector4, convert_to_vector3) {
-    Vector4<s32> v{1,2,3,4};
+    Vector4<s32> v{1, 2, 3, 4};
 
     Vector3<s32> result = static_cast<Vector3<s32>>(v);
 
-    EXPECT_EQ(result.x,1);
-    EXPECT_EQ(result.y,2);
-    EXPECT_EQ(result.z,3);
+    EXPECT_EQ(result.x, 1);
+    EXPECT_EQ(result.y, 2);
+    EXPECT_EQ(result.z, 3);
+}
+
+TEST(Vector4, convert_to_vector3_float) {
+    Vector4<f32> v{1.0f, 2.0f, 3.0f, 4.0f};
+
+    Vector3<f32> result = static_cast<Vector3<f32>>(v);
+
+    EXPECT_EQ(result.x, 1.0f);
+    EXPECT_EQ(result.y, 2.0f);
+    EXPECT_EQ(result.z, 3.0f);
 }
 
 #endif
