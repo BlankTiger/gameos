@@ -5,7 +5,7 @@
 #include <tuple>
 
 #include "kstd/array.hh"
-#include "kstd/int.hh"
+#include "kstd/numbers.hh"
 #include "kstd/time.hh"
 #include "kstd/gfx.hh"
 #include "kstd/ps2.hh"

@@ -3,7 +3,7 @@
 #include "string_view.hh"
 #include "array.hh"
 #include "assert.hh"
-#include "int.hh"
+#include "numbers.hh"
 
 namespace stacktrace {
 
