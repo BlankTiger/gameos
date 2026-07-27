@@ -12,6 +12,7 @@
 #include "kstd/time.hh"
 #include "kstd/gfx.hh"
 #include "kstd/serial.hh"
+#include "kstd/random.hh"
 
 /* Check if the compiler thinks you are targeting the wrong operating system. */
 #if defined(__linux__)
@@ -49,6 +50,8 @@ auto kernel_init(u32 magic, const boot::Multiboot2_Info* mbi) -> void {
     time::initialize();
     ps2::initialize();
     idt::enable_interrupts();
+
+    rand::initialize();
 }
 
 auto main() -> void {
