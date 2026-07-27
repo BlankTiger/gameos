@@ -105,7 +105,7 @@ struct Grid3 {
         return cells_in_layer * layer + row * cols + col;
     }
 
-    auto format() const -> string_view {
+    auto format() const -> string {
         string result;
         for (u32 layer_index = 0; layer_index < layers; ++layer_index) {
             for (u32 row_index = 0; row_index < rows; ++row_index) {
@@ -116,7 +116,6 @@ struct Grid3 {
                 }
                 result += "]\n";
             }
-
             result += "\n\n";
         }
         return result;

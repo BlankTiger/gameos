@@ -76,10 +76,6 @@ struct string_view {
         return data != nullptr;
     }
 
-    auto format() const -> string_view {
-        return *this;
-    }
-
     auto begin() const -> const char* { return data; }
     auto end() const -> const char* { return data + size; }
 };
