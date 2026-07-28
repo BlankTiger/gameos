@@ -4,7 +4,9 @@
 #include "gfx/3D.hh"
 #include "gfx/common.hh"
 
+
 namespace gfx {
+using namespace math;
 
 auto draw_frame() -> void {
     draw_world_3D();

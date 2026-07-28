@@ -17,6 +17,7 @@ enum struct Draw_Command_2D_Type: u8 {
     DRAW_LINE,
     DRAW_RECT,
     DRAW_SPRITE,
+    DRAW_TRIANGLE,
 };
 
 struct Char_Command {
@@ -51,6 +52,11 @@ struct Sprite_Command {
     u32 x, y;
 };
 
+struct Triangle_Command {
+    Vector4<f32> v1, v2, v3;
+    Color color;
+};
+
 struct Draw_Command_2D {
     Draw_Command_2D_Type type;
     u8 z;
@@ -63,6 +69,7 @@ struct Draw_Command_2D {
         Line_Command   line;
         Rect_Command   rectangle;
         Sprite_Command sprite;
+        Triangle_Command triangle;
     };
 };
 
@@ -371,6 +378,97 @@ auto draw_sprite(const Resource_View res, u32 x, u32 y, u8 z = 1, Render_Pass pa
     );
 }
 
+auto is_top_left(f32 dx, f32 dy) -> bool {
+    return dy > 0.f || (dy == 0.f && dx < 0.f);
+}
+
+auto is_inside(f32 e, bool top_left) -> bool {
+    return e > 0.f || (e == 0.f && top_left);
+};
+
+// Possible improvements:
+// - Iterate over chunks of pixels and check if bounding vertices are out of the triangle
+// - Barycentric coordinates & fragments?
+auto inner_draw_triangle(Vector4<f32> v1, Vector4<f32> v2, Vector4<f32> v3, Color color) -> void {
+    Rect bounding_box = Rect::create(v1, v2, v3);
+    bounding_box.clip(width(), height());
+
+    // Precompute edge deltas
+    f32 dx12 = v2.x - v1.x;
+    f32 dy12 = v2.y - v1.y;
+    f32 dx23 = v3.x - v2.x;
+    f32 dy23 = v3.y - v2.y;
+    f32 dx31 = v1.x - v3.x;
+    f32 dy31 = v1.y - v3.y;
+
+    // Compute the original determinant orientations once:
+    // det_xy(edge, point - start)
+    f32 start_x = bounding_box.x1 + 0.5f;
+    f32 start_y = bounding_box.y1 + 0.5f;
+    f32 e12 = dx12 * (start_y - v1.y) - dy12 * (start_x - v1.x);
+    f32 e23 = dx23 * (start_y - v2.y) - dy23 * (start_x - v2.x);
+    f32 e31 = dx31 * (start_y - v3.y) - dy31 * (start_x - v3.x);
+
+    // Top-left fill rule checking
+    bool tl12 = is_top_left(dx12, dy12);
+    bool tl23 = is_top_left(dx23, dy23);
+    bool tl31 = is_top_left(dx31, dy31);
+
+    // Increment edge values instead of recomputing determinants
+    f32 row12 = e12;
+    f32 row23 = e23;
+    f32 row31 = e31;
+    for (u32 y = bounding_box.y1; y < bounding_box.y2; ++y) {
+        f32 e12 = row12;
+        f32 e23 = row23;
+        f32 e31 = row31;
+        for (u32 x = bounding_box.x1; x < bounding_box.x2; ++x) {
+            if (is_inside(e12, tl12) && is_inside(e23, tl23) && is_inside(e31, tl31))
+                set_pixel(x, y, color);
+            // Move one pixel right
+            e12 += dx12;
+            e23 += dx23;
+            e31 += dx31;
+        }
+        // Move one pixel down
+        row12 -= dy12;
+        row23 -= dy23;
+        row31 -= dy31;
+    }
+}
+
+enum struct Cull_Mode : u8 {
+    NONE,
+    BACK_FACE,
+};
+inline auto cull_mode = Cull_Mode::BACK_FACE;
+
+auto draw_triangle(Vector4<f32> v1, Vector4<f32> v2, Vector4<f32> v3, Color color, u8 z = 1) -> void {
+    Vector4<f32> a = v2 - v1;
+    Vector4<f32> b = v3 - v1;
+    f32 det = det_xy(a, b);
+    bool is_counter_clockwise = det < 0.0f;
+
+    switch (cull_mode) {
+        case Cull_Mode::NONE: break;
+        case Cull_Mode::BACK_FACE: {
+            if (!is_counter_clockwise) return;
+        } break;
+    }
+
+    if (is_counter_clockwise) {
+        std::swap(v2, v3);
+        det = -det;
+    }
+    draw_commands.push_back(
+        Draw_Command{
+            .type = Draw_Command_Type::DRAW_TRIANGLE,
+            .z = z,
+            .triangle = Triangle_Command{v1, v2, v3, color},
+        }
+    );
+}
+
 template <bool z_sort = true>
 force_inline auto draw_ui() -> void {
     if (z_sort) {
@@ -408,6 +506,10 @@ force_inline auto draw_ui() -> void {
                 const Sprite_Command& cmd = command.sprite;
                 inner_draw_sprite(cmd.res, cmd.x, cmd.y);
             } break;
+            case DRAW_TRIANGLE: {
+                const Triangle_Command& cmd = command.triangle;
+                inner_draw_triangle(cmd.v1, cmd.v2, cmd.v3, cmd.color);
+            } break;
         }
     }
 
@@ -441,6 +543,10 @@ force_inline auto draw_world_2D() -> void {
             case DRAW_SPRITE: {
                 const Sprite_Command& cmd = command.sprite;
                 inner_draw_sprite(cmd.res, cmd.x, cmd.y, command.depth);
+            } break;
+            case DRAW_TRIANGLE: {
+                const Triangle_Command& cmd = command.triangle;
+                inner_draw_triangle(cmd.v1, cmd.v2, cmd.v3, cmd.color);
             } break;
         }
     }

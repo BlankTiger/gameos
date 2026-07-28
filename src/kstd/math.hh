@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <tuple>
 #include <type_traits>
 
@@ -9,6 +10,16 @@
 #include "string.hh"
 
 namespace math {
+
+force_inline auto floor(f32 x) -> s32 {
+    s32 i = static_cast<s32>(x);
+    return x < static_cast<f32>(i) ? i - 1 : i;
+}
+
+force_inline auto ceil(f32 x) -> s32 {
+    s32 i = static_cast<s32>(x);
+    return x > static_cast<f32>(i) ? i + 1 : i;
+}
 
 force_inline auto abs(s32 x) -> s32 {
     return (x ^ (x >> 31)) - (x >> 31);
@@ -21,27 +32,6 @@ force_inline auto abs_diff(u32 a, u32 b) {
 force_inline auto lerp(u8 a, u8 b, int pos, int max) -> u8 {
     return a + ((b - a) * pos) / max;
 }
-
-struct Rect {
-    u32 x1, x2;
-    u32 y1, y2;
-
-    static force_inline auto create(u32 x, u32 y, u32 w, u32 h) -> Rect {
-        return {
-            .x1 = x,
-            .x2 = x + w,
-            .y1 = y,
-            .y2 = y + h,
-        };
-    }
-
-    force_inline void clip(u32 screen_width, u32 screen_height) {
-        x1 = (x1 >= screen_width)  ? screen_width  - 1 : x1;
-        x2 = (x2 >= screen_width)  ? screen_width  - 1 : x2;
-        y1 = (y1 >= screen_height) ? screen_height - 1 : y1;
-        y2 = (y2 >= screen_height) ? screen_height - 1 : y2;
-    }
-};
 
 template<typename T>
 concept Numeric = std::integral<T> || std::floating_point<T>;
@@ -229,15 +219,20 @@ constexpr auto operator != (const V& a, const V& b) -> bool {
 }
 
 template <IsVector V>
-[[nodiscard]] constexpr auto dot(const V& a, const V& b) -> typename V::value_type {
+[[nodiscard]] force_inline constexpr auto dot(const V& a, const V& b) -> typename V::value_type {
     typename V::value_type result{};
     for (usize i = 0; i < V::size; i++) result += a[i] * b[i];
     return result;
 }
 
 template <IsVector V>
-[[nodiscard]] constexpr auto length_squared(const V& v) -> typename V::value_type {
+[[nodiscard]] force_inline constexpr auto length_squared(const V& v) -> typename V::value_type {
     return dot(v, v);
+}
+
+template <IsVector V>
+[[nodiscard]] force_inline constexpr auto det_xy(const V& v1, const V& v2) -> typename V::value_type {
+    return v1.x * v2.y - v1.y * v2.x;
 }
 
 #ifdef UNIT_TESTS
@@ -503,7 +498,7 @@ template <IsVector V>
 void test_dot() {
     V a{}, b{};
 
-    auto expected = 0;
+    typename V::value_type expected = 0;
 
     for (usize i = 0; i < V::size; ++i) {
         a[i] = i + 1;
@@ -527,7 +522,7 @@ template <IsVector V>
 void test_length_squared() {
     V v{};
 
-    auto expected = 0;
+    typename V::value_type expected = 0;
 
     for (usize i = 0; i < V::size; ++i) {
         v[i] = i + 1;
@@ -633,6 +628,51 @@ TEST(Vector4, convert_to_vector3_float) {
     EXPECT_EQ(result.z, 3.0f);
 }
 
+template <IsVector V>
+void test_det_xy_zero() {
+    V v1{}, v2{};
+
+    typename V::value_type expected = 0;
+
+    for (usize i = 0; i < V::size; ++i) {
+        v1[i] = i + 1;
+        v2[i] = i + 1;
+    }
+
+    EXPECT_EQ(det_xy(v1, v2), expected);
+}
+
+TEST(Vector, det_xy_is_zero_on_same_vectors) {
+    test_det_xy_zero<Vector2<s32>>();
+    test_det_xy_zero<Vector3<s32>>();
+    test_det_xy_zero<Vector4<s32>>();
+    test_det_xy_zero<Vector2<f32>>();
+    test_det_xy_zero<Vector3<f32>>();
+    test_det_xy_zero<Vector4<f32>>();
+}
+
+template <IsVector V>
+void test_det_xy_non_zero() {
+    V v1{}, v2{};
+
+    typename V::value_type expected = -1;
+
+    for (usize i = 0; i < V::size; ++i) {
+        v1[i] = i + 1;
+        v2[i] = i + 2;
+    }
+
+    EXPECT_EQ(det_xy(v1, v2), expected);
+}
+
+TEST(Vector, can_compute_det_xy) {
+    test_det_xy_non_zero<Vector2<s32>>();
+    test_det_xy_non_zero<Vector3<s32>>();
+    test_det_xy_non_zero<Vector4<s32>>();
+    test_det_xy_non_zero<Vector2<f32>>();
+    test_det_xy_non_zero<Vector3<f32>>();
+    test_det_xy_non_zero<Vector4<f32>>();
+}
 #endif
 
 // layers (top to bottom)
@@ -841,5 +881,50 @@ TEST(Grid3_bool, cant_move_lower_when_something_is_blocking_lower) {
 }
 
 #endif
+
+struct Rect {
+    u32 x1, x2;
+    u32 y1, y2;
+
+    template<IsVector V>
+    static force_inline auto create(V& v1, V& v2, V& v3) -> Rect
+    requires(std::is_integral_v<decltype(v1.x)>)
+    {
+        return {
+            static_cast<u32>(std::min({v1.x, v2.x, v3.x})),
+            static_cast<u32>(std::max({v1.x, v2.x, v3.x})),
+            static_cast<u32>(std::min({v1.y, v2.y, v3.y})),
+            static_cast<u32>(std::max({v1.y, v2.y, v3.y}))
+        };
+    }
+
+    template<IsVector V>
+    static force_inline auto create(V& v1, V& v2, V& v3) -> Rect
+    requires(std::is_floating_point_v<decltype(v1.x)>)
+    {
+        return {
+            static_cast<u32>(floor(std::min({v1.x, v2.x, v3.x}))),
+            static_cast<u32>(ceil(std::max({v1.x, v2.x, v3.x}))),
+            static_cast<u32>(floor(std::min({v1.y, v2.y, v3.y}))),
+            static_cast<u32>(ceil(std::max({v1.y, v2.y, v3.y})))
+        };
+    }
+
+    static force_inline auto create(u32 x, u32 y, u32 w, u32 h) -> Rect {
+        return {
+            .x1 = x,
+            .x2 = x + w,
+            .y1 = y,
+            .y2 = y + h,
+        };
+    }
+
+    force_inline void clip(u32 screen_width, u32 screen_height) {
+        x1 = std::clamp(x1, static_cast<u32>(0), screen_width);
+        x2 = std::clamp(x2, static_cast<u32>(0), screen_width);
+        y1 = std::clamp(y1, static_cast<u32>(0), screen_height);
+        y2 = std::clamp(y2, static_cast<u32>(0), screen_height);
+    }
+};
 
 }  // namespace math
