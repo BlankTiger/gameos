@@ -171,7 +171,13 @@ static force_inline auto set_pixel(u32 x, u32 y, Color color) -> void {
     }
 }
 
-enum class Draw_Command_Type: u8 {
+enum struct Render_Pass : u8 {
+    WORLD_2D,
+    WORLD_3D,
+    UI,
+}; 
+
+enum struct Draw_Command_2D_Type: u8 {
     DRAW_CHAR,
     DRAW_TEXT, // Probably we will need to copy text
     DRAW_CIRCLE,
@@ -212,21 +218,27 @@ struct Sprite_Command {
     u32 x, y;
 };
 
-struct Draw_Command {
-    Draw_Command_Type type;
+struct Draw_Command_2D {
+    Draw_Command_2D_Type type;
     u8 z;
 
     union {
-        Char_Command character;
-        Text_Command text;
+        Char_Command   character;
+        Text_Command   text;
         Circle_Command circle;
-        Line_Command line;
-        Rect_Command rectangle;
+        Line_Command   line;
+        Rect_Command   rectangle;
         Sprite_Command sprite;
     };
 };
 
-static Array<Draw_Command> draw_commands(512);
+struct Draw_Command_3D {
+
+};
+
+static Array<Draw_Command_2D> draw_commands_ui(512);
+static Array<Draw_Command_2D> draw_commands_world_2D(512);
+static Array<Draw_Command_3D> draw_commands_world_3D(512);
 
 template <bool IMMEDIATE>
 auto inner_draw_char(u32 x, u32 y, char c, Color fg, Color bg) -> void {
@@ -253,9 +265,9 @@ auto draw_char(Args&&... args, u8 z = 1) -> void {
     auto tuple = std::forward_as_tuple(std::forward<Args>(args)...);
     auto&& [x, y, c, fg, bg] = tuple;
     if (x >= width() || y >= height()) return;
-    draw_commands.push_back(
-        Draw_Command{
-            .type = Draw_Command_Type::DRAW_CHAR,
+    draw_commands_ui.push_back(
+        Draw_Command_2D{
+            .type = Draw_Command_2D_Type::DRAW_CHAR,
             .z = z,
             .character = Char_Command{x, y, c, fg, bg},
         }
@@ -293,9 +305,9 @@ auto inner_draw_text(u32 x, u32 y, string_view text, Color fg = WHITE, Color bg 
 }
 
 auto draw_text(u32 x, u32 y, const string_view text, Color fg = WHITE, Color bg = TRANSPARENT, u8 z = 1) -> void {
-    draw_commands.push_back(
-        Draw_Command{
-            .type = Draw_Command_Type::DRAW_TEXT,
+    draw_commands_ui.push_back(
+        Draw_Command_2D{
+            .type = Draw_Command_2D_Type::DRAW_TEXT,
             .z = z,
             .text = Text_Command{x, y, text, fg, bg},
         }
@@ -380,9 +392,9 @@ auto inner_draw_circle(u32 x, u32 y, u32 r, Color color) -> void {
 
 auto draw_circle(u32 x, u32 y, u32 r, Color color, u8 z = 1) -> void {
     if (x >= width() || y >= height()) return;
-    draw_commands.push_back(
-        Draw_Command{
-            .type = Draw_Command_Type::DRAW_CIRCLE,
+    draw_commands_ui.push_back(
+        Draw_Command_2D{
+            .type = Draw_Command_2D_Type::DRAW_CIRCLE,
             .z = z,
             .circle = Circle_Command{x, y, r, color},
         }
@@ -474,9 +486,9 @@ auto inner_draw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color) -> void {
 
 auto draw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color, u8 z = 1) -> void {
     if (x2 >= width() || y2 >= height()) return;
-    draw_commands.push_back(
-        Draw_Command{
-            .type = Draw_Command_Type::DRAW_LINE,
+    draw_commands_ui.push_back(
+        Draw_Command_2D{
+            .type = Draw_Command_2D_Type::DRAW_LINE,
             .z = z,
             .line = Line_Command{x1, y1, x2, y2, color}
         }
@@ -495,9 +507,9 @@ auto inner_draw_rect(u32 x, u32 y, u32 w, u32 h, Color color) -> void {
 
 auto draw_rect(u32 x, u32 y, u32 w, u32 h, Color color, u8 z = 1) -> void {
     if (x >= width() || y >= height()) return;
-    draw_commands.push_back(
-        Draw_Command{
-            .type = Draw_Command_Type::DRAW_RECT,
+    draw_commands_ui.push_back(
+        Draw_Command_2D{
+            .type = Draw_Command_2D_Type::DRAW_RECT,
             .z = z,
             .rectangle = Rect_Command{x, y, w, h, color},
         }
@@ -518,9 +530,9 @@ auto inner_draw_sprite(const Resource_View res, u32 x, u32 y) -> void {
 auto draw_sprite(const Resource_View res, u32 x, u32 y, u8 z = 1) -> void {
     if (res.width == 0 || res.height == 0) return;
     if (x >= width() || y >= height()) return;
-    draw_commands.push_back(
-        Draw_Command{
-            .type = Draw_Command_Type::DRAW_SPRITE,
+    draw_commands_ui.push_back(
+        Draw_Command_2D{
+            .type = Draw_Command_2D_Type::DRAW_SPRITE,
             .z = z,
             .sprite = Sprite_Command{res, x, y},
         }
@@ -528,16 +540,17 @@ auto draw_sprite(const Resource_View res, u32 x, u32 y, u8 z = 1) -> void {
 }
 
 template <bool z_sort = true>
-auto draw_frame() -> void {
+force_inline auto draw_ui() -> void {
     if (z_sort) {
-        std::stable_sort(draw_commands.begin(), draw_commands.end(),
-            [](const Draw_Command& a, const Draw_Command& b) {
+        std::stable_sort(draw_commands_ui.begin(), draw_commands_ui.end(),
+            [](const Draw_Command_2D& a, const Draw_Command_2D& b) {
                 return a.z < b.z;
             }
         );
     }
-    for (const auto& command: draw_commands) {
-        using enum Draw_Command_Type;
+
+    for (const auto& command: draw_commands_ui) {
+        using enum Draw_Command_2D_Type;
         switch (command.type) {
             case DRAW_CHAR: {
                 const Char_Command& cmd = command.character;
@@ -565,8 +578,13 @@ auto draw_frame() -> void {
             } break;
         }
     }
+
+    draw_commands_ui.clear();
+}
+
+auto draw_frame() -> void {
+    draw_ui();
     swap_buffers();
-    draw_commands.clear();
 }
 
 }  // namespace gfx
