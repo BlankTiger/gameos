@@ -2,6 +2,7 @@
 
 #include "enum_array.hh"
 #include "low_level_io.hh"
+#include "serial.hh"
 #include "term.hh"
 
 // PS/2 controller (Intel 8042) initialization.

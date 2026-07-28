@@ -505,7 +505,7 @@ auto draw_rect(u32 x, u32 y, u32 w, u32 h, Color color, u8 z = 1) -> void {
 }
 
 auto inner_draw_sprite(const Resource_View res, u32 x, u32 y) -> void {
-    const Color* colors = reinterpret_cast<const Color*>(res.data.data);
+    const auto* colors = reinterpret_cast<const Color*>(res.data.elements());
     u32 clipped_width  = (x + res.width  >= width())  ? (width() - x)  : res.width;
     u32 clipped_height = (y + res.height >= height()) ? (height() - y) : res.height;
     for (u32 py = 0; py < clipped_height; ++py) {

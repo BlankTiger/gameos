@@ -1,6 +1,7 @@
 #pragma once
 
 #include "basic.hh"
+#include "assert.hh"
 #include "gfx.hh"
 
 namespace term {
