@@ -243,9 +243,22 @@ struct Draw_Command_2D {
     };
 };
 
-struct Draw_Command_3D {
+using namespace math;
 
+struct Vertex {
+    Vector3<f32> position;
+    Color        color;
 };
+
+using Index = u32;
+
+struct Mesh {
+    Array<Vertex> vertices;
+    Array<Index>  indices;
+};
+
+
+struct Draw_Command_3D { };
 
 static Array<Draw_Command_2D> draw_commands_ui(512);
 static Array<Draw_Command_2D> draw_commands_world_2D(512);
