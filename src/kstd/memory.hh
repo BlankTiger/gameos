@@ -2,14 +2,15 @@
 
 #include <cstddef>
 
+#include "assert.hh"
 #include "array.hh"
 #include "multiboot2.hh"
 
 namespace mem {
 
 static constexpr int MULTIBOOT_MMAP_USABLE = 1u;
-static constexpr int PAGE_SIZE = 4096;
-static constexpr int MAX_MEMORY_REGIONS = 32;
+static constexpr int PAGE_SIZE             = 4096;
+static constexpr int MAX_MEMORY_REGIONS    = 128;
 
 struct Memory_Region {
     u64 base;
@@ -73,6 +74,7 @@ static auto reserve_range(Memory_Regions& regions, u64 start, u64 end) -> void {
             regions[i].size = start - region_start;
             i++;
         } else {
+            kstd_assert(false, "Memory_Regions overflow, increase MAX_MEMORY_REGIONS");
             regions[i].size = start - region_start;
             i++;
         }
