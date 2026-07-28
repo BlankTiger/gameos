@@ -883,41 +883,35 @@ TEST(Grid3_bool, cant_move_lower_when_something_is_blocking_lower) {
 #endif
 
 struct Rect {
-    u32 x1, x2;
-    u32 y1, y2;
+    u32 x1 = 0, y1 = 0;
+    u32 x2 = 0, y2 = 0;
+
+    constexpr Rect() = default;
+    constexpr Rect(u32 x1, u32 y1, u32 x2, u32 y2) : x1(x1), y1(y1), x2(x2), y2(y2) {}
 
     template<IsVector V>
-    static force_inline auto create(V& v1, V& v2, V& v3) -> Rect
+    constexpr Rect(const V& v1, const V& v2, const V& v3)
     requires(std::is_integral_v<decltype(v1.x)>)
-    {
-        return {
-            static_cast<u32>(std::min({v1.x, v2.x, v3.x})),
-            static_cast<u32>(std::max({v1.x, v2.x, v3.x})),
-            static_cast<u32>(std::min({v1.y, v2.y, v3.y})),
-            static_cast<u32>(std::max({v1.y, v2.y, v3.y}))
-        };
-    }
+        : x1(static_cast<u32>(std::min({v1.x, v2.x, v3.x}))),
+          y1(static_cast<u32>(std::min({v1.y, v2.y, v3.y}))),
+          x2(static_cast<u32>(std::max({v1.x, v2.x, v3.x}))),
+          y2(static_cast<u32>(std::max({v1.y, v2.y, v3.y}))) {}
 
     template<IsVector V>
-    static force_inline auto create(V& v1, V& v2, V& v3) -> Rect
+    constexpr Rect(const V& v1, const V& v2, const V& v3)
     requires(std::is_floating_point_v<decltype(v1.x)>)
-    {
-        return {
-            static_cast<u32>(floor(std::min({v1.x, v2.x, v3.x}))),
-            static_cast<u32>(ceil(std::max({v1.x, v2.x, v3.x}))),
-            static_cast<u32>(floor(std::min({v1.y, v2.y, v3.y}))),
-            static_cast<u32>(ceil(std::max({v1.y, v2.y, v3.y})))
-        };
+        : x1(static_cast<u32>(floor(std::min({v1.x, v2.x, v3.x})))),
+          y1(static_cast<u32>(floor(std::min({v1.y, v2.y, v3.y})))),
+          x2(static_cast<u32>(ceil(std::max({v1.x, v2.x, v3.x})))),
+          y2(static_cast<u32>(ceil(std::max({v1.y, v2.y, v3.y})))) {}
+
+    static constexpr auto from_size(u32 x, u32 y, u32 w, u32 h) -> Rect {
+        return Rect{ x, y, x + w, y + h };
     }
 
-    static force_inline auto create(u32 x, u32 y, u32 w, u32 h) -> Rect {
-        return {
-            .x1 = x,
-            .x2 = x + w,
-            .y1 = y,
-            .y2 = y + h,
-        };
-    }
+    constexpr auto width()  const -> u32 { return x2 - x1; }
+    constexpr auto height() const -> u32 { return y2 - y1; }
+    constexpr auto empty()  const -> u32 { return x1 >= x2 || y1 >= y2; }
 
     force_inline void clip(u32 screen_width, u32 screen_height) {
         x1 = std::clamp(x1, static_cast<u32>(0), screen_width);
