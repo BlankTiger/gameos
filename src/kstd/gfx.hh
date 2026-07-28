@@ -104,13 +104,11 @@ inline Framebuffer front_buffer;
 // @TODO(blanktiger): Should probably be runtime allocated cause this takes more than 6MB off of our stack.
 inline Static_Array<Pixel, GFX_PIXEL_COUNT> back_buffer;
 inline Static_Array<Depth, GFX_PIXEL_COUNT> depth_buffer;
-constexpr usize PIXEL_BUFFER_SIZE = GFX_PIXEL_COUNT * sizeof(Pixel);
-constexpr usize DEPTH_BUFFER_SIZE = GFX_PIXEL_COUNT * sizeof(Depth);
 inline bool __framebuffer_initialized;
 
 force_inline auto swap_buffers() -> void {
     kstd_debug_assert(front_buffer.pixels.data != nullptr);
-    kstd_memcpy(front_buffer.pixels.data, back_buffer.data, PIXEL_BUFFER_SIZE);
+    kstd_memcpy(front_buffer.pixels.data, back_buffer.data, front_buffer.pixels.size_in_bytes);
 }
 
 [[nodiscard]] auto initialize(const boot::Multiboot2_Info* mbi) -> bool {
@@ -138,10 +136,10 @@ force_inline auto swap_buffers() -> void {
         "Framebuffer_Format was not initialized"
     );
 
-    kstd_memset(back_buffer.data, 0, PIXEL_BUFFER_SIZE);
+    kstd_memset(back_buffer.data, 0, back_buffer.size_in_bytes);
     swap_buffers();
 
-    kstd_memset(depth_buffer.data, 0, PIXEL_BUFFER_SIZE);
+    kstd_memset(depth_buffer.data, 0, depth_buffer.size_in_bytes);
 
     __framebuffer_initialized = true;
     return true;
@@ -304,12 +302,14 @@ auto draw_text(u32 x, u32 y, const string_view text, Color fg = WHITE, Color bg 
     );
 }
 
+// @TODO(blanktiger): Optimize.
 auto clear(Color color) -> void {
     for (u32 y = 0; y < height(); ++y) {
         for (u32 x = 0; x < width(); ++x) {
             set_pixel(x, y, color);
         }
     }
+    kstd_memset(depth_buffer.data, 0, depth_buffer.size_in_bytes);
 }
 
 #ifndef AA_RES

@@ -14,6 +14,7 @@
 template <typename T, usize N>
 struct Array_View {
     static constexpr auto size = N;
+    static constexpr auto size_in_bytes = sizeof(T) * N;
     T* data;
 
     auto operator[](u64 index, const std::source_location& location = std::source_location::current()) -> T& {
@@ -58,6 +59,7 @@ struct Array_View<T, DYNAMIC_EXTENT> {
 template <typename T, usize N>
 struct Static_Array {
     static constexpr auto size = N;
+    static constexpr auto size_in_bytes = sizeof(T) * N;
     T data[N];
 
     auto operator[](u64 index, const std::source_location& location = std::source_location::current()) -> T& {
@@ -158,6 +160,7 @@ TEST(Static_Array, passes_implicitly_to_function_taking_array_view) {
 template <typename T, usize N>
 struct Bounded_Array {
     static constexpr auto MAX_SIZE = N;
+    static constexpr auto size_in_bytes = sizeof(T) * N;
     usize size = 0;
     // Raw byte storage avoids default-constructing every slot up front.
     // Without this, push_back's placement-new would run a second constructor
