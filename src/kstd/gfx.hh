@@ -90,7 +90,7 @@ struct Pixel {
 };
 
 struct Framebuffer {
-    Pixel* pixels;
+    Array_View<Pixel, GFX_PIXEL_COUNT> pixels;
     u32 pitch;
     u32 width;
     u32 height;
@@ -99,14 +99,18 @@ struct Framebuffer {
     usize stride;
 };
 
+using Depth = u32;
 inline Framebuffer front_buffer;
-inline Pixel back_buffer[GFX_PIXEL_COUNT];
-constexpr usize BUFFER_SIZE = GFX_PIXEL_COUNT * sizeof(Pixel);
+// @TODO(blanktiger): Should probably be runtime allocated cause this takes more than 6MB off of our stack.
+inline Static_Array<Pixel, GFX_PIXEL_COUNT> back_buffer;
+inline Static_Array<Depth, GFX_PIXEL_COUNT> depth_buffer;
+constexpr usize PIXEL_BUFFER_SIZE = GFX_PIXEL_COUNT * sizeof(Pixel);
+constexpr usize DEPTH_BUFFER_SIZE = GFX_PIXEL_COUNT * sizeof(Depth);
 inline bool __framebuffer_initialized;
 
 force_inline auto swap_buffers() -> void {
-    kstd_debug_assert(front_buffer.pixels != nullptr);
-    kstd_memcpy(front_buffer.pixels, back_buffer, BUFFER_SIZE);
+    kstd_debug_assert(front_buffer.pixels.data != nullptr);
+    kstd_memcpy(front_buffer.pixels.data, back_buffer.data, PIXEL_BUFFER_SIZE);
 }
 
 [[nodiscard]] auto initialize(const boot::Multiboot2_Info* mbi) -> bool {
@@ -115,22 +119,29 @@ force_inline auto swap_buffers() -> void {
     const auto* framebuffer_tag = boot::find_multiboot2_framebuffer_tag(mbi);
     if (framebuffer_tag == nullptr || framebuffer_tag->framebuffer_addr == 0) return false;
 
-    front_buffer.pixels         = reinterpret_cast<Pixel*>(framebuffer_tag->framebuffer_addr);
-    front_buffer.pitch          = framebuffer_tag->framebuffer_pitch;
-    front_buffer.width          = framebuffer_tag->framebuffer_width;
-    front_buffer.height         = framebuffer_tag->framebuffer_height;
-    front_buffer.bits_per_pixel = framebuffer_tag->framebuffer_bpp;
-    front_buffer.type           = framebuffer_tag->framebuffer_type;
-    front_buffer.stride         = front_buffer.pitch / sizeof(u32);
+    auto* frontbuffer_pixels = reinterpret_cast<Pixel*>(framebuffer_tag->framebuffer_addr);
+    front_buffer = {
+        .pixels         = Array_View<Pixel, GFX_PIXEL_COUNT>{frontbuffer_pixels},
+        .pitch          = framebuffer_tag->framebuffer_pitch,
+        .width          = framebuffer_tag->framebuffer_width,
+        .height         = framebuffer_tag->framebuffer_height,
+        .bits_per_pixel = framebuffer_tag->framebuffer_bpp,
+        .type           = framebuffer_tag->framebuffer_type,
+        .stride         = framebuffer_tag->framebuffer_pitch / sizeof(u32),
+    };
     kstd_assert(front_buffer.bits_per_pixel == 32, "Only 32BPP supported.");
+    kstd_assert(GFX_PIXEL_COUNT == front_buffer.width * front_buffer.height);
+
     framebuffer_fmt.init(*framebuffer_tag);
     kstd_assert(
         !(framebuffer_fmt.red_pos == 0 && framebuffer_fmt.green_pos == 0 && framebuffer_fmt.blue_pos == 0),
         "Framebuffer_Format was not initialized"
     );
 
-    kstd_memset(back_buffer, 0, BUFFER_SIZE);
+    kstd_memset(back_buffer.data, 0, PIXEL_BUFFER_SIZE);
     swap_buffers();
+
+    kstd_memset(depth_buffer.data, 0, PIXEL_BUFFER_SIZE);
 
     __framebuffer_initialized = true;
     return true;
@@ -494,7 +505,7 @@ auto draw_rect(u32 x, u32 y, u32 w, u32 h, Color color, u8 z = 1) -> void {
 }
 
 auto inner_draw_sprite(const Resource_View res, u32 x, u32 y) -> void {
-    const Color* colors = reinterpret_cast<const Color*>(res.data);
+    const Color* colors = reinterpret_cast<const Color*>(res.data.data);
     u32 clipped_width  = (x + res.width  >= width())  ? (width() - x)  : res.width;
     u32 clipped_height = (y + res.height >= height()) ? (height() - y) : res.height;
     for (u32 py = 0; py < clipped_height; ++py) {

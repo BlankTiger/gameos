@@ -36,6 +36,7 @@ base layer:
 - [ ] save floating point registers on an interrupt
 - [ ] save SIMD registers on an interrupt
 - [x] get random numbers for the seed in random.hh
+- [ ] should Array_View and Static_Array do bounds checking or not?
 
 utils:
 - [ ] todo list generator (gather notes from source code and generate a stable

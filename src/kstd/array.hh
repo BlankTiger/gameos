@@ -12,6 +12,50 @@
 #include "array_iterator.hh"
 
 template <typename T, usize N>
+struct Array_View {
+    static constexpr auto size = N;
+    T* data;
+
+    auto operator[](u64 index, const std::source_location& location = std::source_location::current()) -> T& {
+        kstd_assert(index < size, "index out of bounds", location);
+        return data[index];
+    }
+
+    constexpr auto operator[](u64 index, const std::source_location& location = std::source_location::current()) const
+        -> const T& {
+        kstd_assert(index < size, "index out of bounds", location);
+        return data[index];
+    }
+
+    auto elements()       -> T*       { return data; }
+    auto elements() const -> const T* { return data; }
+
+    ARRAY_ITERATOR()
+};
+
+template <typename T>
+struct Array_View<T, DYNAMIC_EXTENT> {
+    usize size;
+    T* data;
+
+    auto operator[](u64 index, const std::source_location& location = std::source_location::current()) -> T& {
+        kstd_assert(index < size, "index out of bounds", location);
+        return data[index];
+    }
+
+    constexpr auto operator[](u64 index, const std::source_location& location = std::source_location::current()) const
+        -> const T& {
+        kstd_assert(index < size, "index out of bounds", location);
+        return data[index];
+    }
+
+    auto elements()       -> T*       { return data; }
+    auto elements() const -> const T* { return data; }
+
+    ARRAY_ITERATOR()
+};
+
+template <typename T, usize N>
 struct Static_Array {
     static constexpr auto size = N;
     T data[N];
@@ -29,6 +73,9 @@ struct Static_Array {
 
     auto elements()       -> T*       { return data; }
     auto elements() const -> const T* { return data; }
+
+    operator Array_View<T, N>() { return Array_View<T, N>{data}; }
+    operator Array_View<T>()    { return Array_View<T>{size, data}; }
 
     ARRAY_ITERATOR()
 };
@@ -59,8 +106,51 @@ TEST(Static_Array, out_of_bounds_asserts) {
     EXPECT_DEATH(arr[2], "");
 }
 
-#endif
+TEST(Static_Array, converts_to_static_array_view) {
+    Static_Array<int, 3> arr{{1, 2, 3}};
 
+    Array_View<int, 3> view = arr;
+
+    EXPECT_EQ(view.size, 3);
+    EXPECT_EQ(view[0], 1);
+    EXPECT_EQ(view[1], 2);
+    EXPECT_EQ(view[2], 3);
+    EXPECT_EQ(view.data, arr.elements());
+}
+
+TEST(Static_Array, converts_to_array_view) {
+    Static_Array<int, 3> arr{{1, 2, 3}};
+
+    Array_View<int> view = arr;
+
+    EXPECT_EQ(view.size, 3);
+    EXPECT_EQ(view[0], 1);
+    EXPECT_EQ(view[1], 2);
+    EXPECT_EQ(view[2], 3);
+    EXPECT_EQ(view.data, arr.elements());
+}
+
+TEST(Static_Array, passes_implicitly_to_function_taking_static_array_view) {
+    Static_Array<int, 2> arr{{10, 20}};
+
+    auto sum = [](Array_View<int, 2> view) {
+        return view[0] + view[1];
+    };
+
+    EXPECT_EQ(sum(arr), 30);
+}
+
+TEST(Static_Array, passes_implicitly_to_function_taking_array_view) {
+    Static_Array<int, 2> arr{{10, 20}};
+
+    auto sum = [](Array_View<int> view) {
+        return view[0] + view[1];
+    };
+
+    EXPECT_EQ(sum(arr), 30);
+}
+
+#endif
 
 //
 // Use as a normal Array. The exception is this can't grow, because it's backed by static memory.
@@ -151,6 +241,8 @@ struct Bounded_Array {
     auto elements()       -> T*       { return slot(0); }
     auto elements() const -> const T* { return slot(0); }
 
+    operator Array_View<T>() { return Array_View<T>{size, slot(0)}; }
+
     ARRAY_ITERATOR()
 
 private:
@@ -188,6 +280,47 @@ TEST(Bounded_Array, push_back_past_max_size_asserts) {
     arr.push_back(2);
 
     EXPECT_DEATH(arr.push_back(3), "");
+}
+
+TEST(Bounded_Array, converts_to_array_view) {
+    Bounded_Array<int, 4> arr;
+
+    arr.push_back(1);
+    arr.push_back(2);
+
+    Array_View<int> view = arr;
+
+    EXPECT_EQ(view.size, 2);
+    EXPECT_EQ(view[0], 1);
+    EXPECT_EQ(view[1], 2);
+    EXPECT_EQ(view.data, arr.elements());
+}
+
+TEST(Bounded_Array, view_size_reflects_current_size_not_max_size) {
+    Bounded_Array<int, 4> arr;
+
+    arr.push_back(1);
+
+    Array_View<int> view = arr;
+
+    EXPECT_EQ(view.size, 1);
+    EXPECT_EQ(arr.MAX_SIZE, 4);
+}
+
+TEST(Bounded_Array, passes_implicitly_to_function_taking_array_view) {
+    Bounded_Array<int, 4> arr;
+
+    arr.push_back(6);
+    arr.push_back(7);
+
+    auto sum = [](Array_View<int> view) {
+        int total = 0;
+        for (usize i = 0; i < view.size; ++i)
+            total += view[i];
+        return total;
+    };
+
+    EXPECT_EQ(sum(arr), 13);
 }
 
 #endif
@@ -242,7 +375,7 @@ struct Array {
 
         capacity = from.capacity;
         size     = from.size;
-        data     = ::operator new(sizeof(T) * from.capacity);
+        data     = static_cast<T*>(::operator new(sizeof(T) * from.capacity));
 
         for (usize i = 0; i < size; ++i)
             ::new (data + i) T(from.data[i]);
@@ -342,6 +475,8 @@ struct Array {
 
     auto elements()       -> T*       { return data; }
     auto elements() const -> const T* { return data; }
+
+    operator Array_View<T>() { return Array_View<T>{size, data}; }
 
     ARRAY_ITERATOR()
 };
@@ -457,6 +592,50 @@ TEST(Array, move_assignment_transfers_ownership) {
 
     EXPECT_EQ(first.size, 0);
     EXPECT_EQ(first.data, nullptr);
+}
+
+TEST(Array, converts_to_array_view) {
+    Array<int> arr;
+
+    arr.push_back(1);
+    arr.push_back(2);
+    arr.push_back(3);
+
+    Array_View<int> view = arr;
+
+    EXPECT_EQ(view.size, 3);
+    EXPECT_EQ(view[0], 1);
+    EXPECT_EQ(view[1], 2);
+    EXPECT_EQ(view[2], 3);
+    EXPECT_EQ(view.data, arr.elements());
+}
+
+TEST(Array, view_size_matches_size_not_capacity) {
+    Array<int> arr(8);
+
+    arr.push_back(1);
+    arr.push_back(2);
+
+    Array_View<int> view = arr;
+
+    EXPECT_EQ(view.size, 2);
+    EXPECT_TRUE(arr.capacity >= 8);
+}
+
+TEST(Array, passes_implicitly_to_function_taking_array_view) {
+    Array<int> arr;
+
+    arr.push_back(4);
+    arr.push_back(5);
+
+    auto sum = [](Array_View<int> view) {
+        int total = 0;
+        for (usize i = 0; i < view.size; ++i)
+            total += view[i];
+        return total;
+    };
+
+    EXPECT_EQ(sum(arr), 9);
 }
 
 #endif

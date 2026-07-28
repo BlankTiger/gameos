@@ -1,16 +1,21 @@
 #pragma once
 
 #include <source_location>
+#include <type_traits>
 
 #include "basic.hh"
 #include "cstring.hh"
 
 //
 // Forward-declared instead of #include "array.hh": array.hh pulls in assert.hh
-// -> serial.hh -> format.hh -> string_view.hh (for printing string_view)
+// -> serial.hh -> format.hh -> string_view.hh (for printing string_view).
+// Default supplied here (rather than repeated in array.hh's definition,
+// which would be an illegal redefinition of the same default argument):
+// Array_View<T, N> is a view of exactly N elements, Array_View<T> (N
+// defaulted to DYNAMIC_EXTENT) carries its own runtime size.
 //
-template <typename T, usize N>
-struct Static_Array;
+template <typename T, usize N = DYNAMIC_EXTENT>
+struct Array_View;
 
 struct string_view;
 
@@ -47,8 +52,14 @@ struct string_view {
     constexpr string_view(const char* data, usize size) : data(data), size(size) {}
 
     template <usize N>
-    explicit constexpr string_view(const Static_Array<u8, N>& bytes)
+    explicit constexpr string_view(const Array_View<u8, N>& bytes)
         : data(reinterpret_cast<const char*>(bytes.data)), size(N) {}
+
+    template <typename T>
+    explicit constexpr string_view(const Array_View<T>& bytes)
+        : data(reinterpret_cast<const char*>(bytes.data)), size(bytes.size) {
+        static_assert(std::is_same_v<T, u8>, "string_view can only be constructed from an Array_View<u8>");
+    }
 
     // Intentionally not `explicit`: this lets string_view/string APIs accept plain
     // string literals directly, matching how const char* is used elsewhere
