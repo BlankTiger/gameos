@@ -1,5 +1,5 @@
 {
-  description = "Development shell with i686 cross-compiler and fish";
+  description = "Development shell with i686 cross-compiler";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -23,7 +23,6 @@
                 ninja
                 gcc
                 pkgsCross.i686-embedded.buildPackages.gcc
-                fish
                 grub2
                 qemu
                 xorriso
