@@ -3,8 +3,7 @@
 #include "array.hh"
 
 struct Resource_View {
-    const u8* data;
-    u32 size;
+    Array_View<const u8> data;
     u32 width;
     u32 height;
 };
@@ -16,7 +15,7 @@ struct Resource {
     const u32 height;
 
     constexpr auto view() const -> Resource_View {
-        return { data.elements(), data.size, width, height };
+        return { Array_View<const u8>{data.size, data.elements()}, width, height };
     }
 
     operator const Resource_View() const {
