@@ -103,7 +103,7 @@ using Depth = u32;
 inline Framebuffer front_buffer;
 // @TODO(blanktiger): Should probably be runtime allocated cause this takes more than 6MB off of our stack.
 inline Static_Array<Pixel, GFX_PIXEL_COUNT> back_buffer;
-inline Static_Array<Depth, GFX_PIXEL_COUNT> depth_buffer;
+inline Static_Array<Depth, GFX_PIXEL_COUNT> depth_buffer; // smaller means closer
 inline bool __framebuffer_initialized;
 
 force_inline auto swap_buffers() -> void {
@@ -168,6 +168,17 @@ static force_inline auto set_pixel(u32 x, u32 y, Color color) -> void {
         back_buffer[index].blend_with(color);
     } else {
         back_buffer[index].blend_with(color);
+    }
+}
+
+static force_inline auto set_pixel(u32 x, u32 y, Depth z, Color color) -> void {
+    kstd_assert(x < width());
+    kstd_assert(y < height());
+
+    auto index = y * front_buffer.stride + x;
+    if (depth_buffer[index] < z) {
+        back_buffer[index]  = color;
+        depth_buffer[index] = z;
     }
 }
 
