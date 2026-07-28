@@ -5,7 +5,6 @@
 #include "kstd/interrupts.hh"
 #include "kstd/memory.hh"
 #include "kstd/multiboot2.hh"
-#include "kstd/operator_new.hh"
 #include "kstd/programmable_interrupt_controller.hh"
 #include "kstd/ps2.hh"
 #include "kstd/term.hh"

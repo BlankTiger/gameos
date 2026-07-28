@@ -1,14 +1,7 @@
-#pragma once
-
 #include <new>
 
 #include "assert.hh"
 #include "memory.hh"
-
-// Include exactly once in the program (main.cc does). Unlike every other kstd
-// header these definitions cannot be `inline`: [replacement.functions] forbids
-// it for replacement allocation functions. Would be a .cc if the allocator it
-// forwards to weren't header-only.
 
 auto operator new(usize size) -> void* {
     if (void* ptr = mem::__global_allocator->alloc(size)) return ptr;
