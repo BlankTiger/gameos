@@ -232,6 +232,24 @@ struct Array {
             ::new (data + i) T(from.data[i]);
     }
 
+    auto operator=(const Array& from) -> Array& {
+        if (this == &from) return *this;
+        for (usize i = 0; i < size; ++i)
+            data[i].~T();
+        // @TODO: Consider not deleting this if it's big enough. Also look at
+        //        other constructors and do the same.
+        ::operator delete(data);
+
+        capacity = from.capacity;
+        size     = from.size;
+        data     = ::operator new(sizeof(T) * from.capacity);
+
+        for (usize i = 0; i < size; ++i)
+            ::new (data + i) T(from.data[i]);
+        
+        return *this;
+    }
+
     Array(Array&& from) noexcept
         : capacity(from.capacity),
           size(from.size),
@@ -250,12 +268,12 @@ struct Array {
         ::operator delete(data);
 
         capacity = from.capacity;
-        size      = from.size;
-        data      = from.data;
+        size     = from.size;
+        data     = from.data;
 
         from.capacity = 0;
-        from.size      = 0;
-        from.data      = nullptr;
+        from.size     = 0;
+        from.data     = nullptr;
 
         return *this;
     }
