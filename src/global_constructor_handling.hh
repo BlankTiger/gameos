@@ -2,6 +2,10 @@
 
 #include "kstd/numbers.hh"
 
+// Include exactly once in the program (main.cc does): these are Itanium ABI
+// glue and boot.S entry points, so they need one strong definition each rather
+// than the `inline` (comdat) definitions the rest of kstd uses.
+
 using Init_Function = void (*)();
 
 struct At_Exit_Entry {

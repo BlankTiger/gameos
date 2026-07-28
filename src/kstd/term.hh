@@ -1,6 +1,7 @@
 #pragma once
 
 #include "basic.hh"
+#include "assert.hh"
 #include "gfx.hh"
 
 namespace term {
@@ -45,7 +46,7 @@ struct Backend {
 
 inline Backend backend;
 
-auto print(const char* format) -> int {
+kstd_h auto print(const char* format) -> int {
     return fmt::print(backend, format);
 }
 
@@ -54,7 +55,7 @@ auto print(const char* format, T&& value, Rest&&... rest) -> int {
     return fmt::print(backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
 }
 
-auto println() -> int {
+kstd_h auto println() -> int {
     return fmt::println(backend);
 }
 
@@ -68,7 +69,7 @@ auto println(T&& value) -> int {
     return fmt::println(backend, std::forward<T>(value));
 }
 
-auto println(const char* format) -> int {
+kstd_h auto println(const char* format) -> int {
     return fmt::println(backend, format);
 }
 
@@ -77,7 +78,7 @@ auto println(const char* format, T&& value, Rest&&... rest) -> int {
     return fmt::println(backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
 }
 
-[[nodiscard]] auto initialize() -> bool {
+[[nodiscard]] kstd_h auto initialize() -> bool {
     __state = {0, 0};
     auto is_initialized = gfx::is_initialized();
     if (is_initialized) {

@@ -3,123 +3,80 @@
 #include <source_location>
 
 #include "basic.hh"
-#include "string_view.hh"
+
+//
+// Bottom of the dependency stack: this header knows nothing but basic.hh, so
+// *any* header (string_view.hh included) can assert without risking an include
+// cycle. Messages are plain `const char*` here.
+//
+// In a freestanding build the panic machinery is only *declared* here and
+// defined in assert.cc, which needs the whole printing stack
+// (halt.hh -> serial.hh -> format.hh -> string_view.hh) to report a panic.
+//
 
 #if defined(__STDC_HOSTED__) && __STDC_HOSTED__
 #include <cstdio>
 #include <cstdlib>
 
-constexpr force_inline auto kstd_assert(
-    bool predicate,
-    const string_view message = {},
-    const std::source_location& location = std::source_location::current()
-) -> void {
-    if (predicate) return;
-    const string_view msg = message ? message : "assertion failed";
+[[noreturn]] force_inline auto
+halt_forever(const char* message, usize size, const std::source_location& location) -> void {
     std::fprintf(
         stderr, "%s:%u:%u: %.*s\n",
         location.file_name(), location.line(), location.column(),
-        static_cast<int>(msg.size), msg.data
+        static_cast<int>(size), message
     );
     std::abort();
 }
+
+[[noreturn]] force_inline auto halt_forever(
+    const char* message = nullptr,
+    const std::source_location& location = std::source_location::current()
+) -> void {
+    const char* msg = message != nullptr ? message : "assertion failed";
+    usize size = 0;
+    while (msg[size] != '\0') ++size;
+    halt_forever(msg, size, location);
+}
 #else
-#include "serial.hh"
 
 using Halt_Print_Fn = auto (*)(char) -> void;
 
-constexpr auto MAX_HALT_PRINT_COUNT     = 10;
-inline    auto current_halt_print_count = 0;
-inline Halt_Print_Fn __halt_print_fns[MAX_HALT_PRINT_COUNT];
+// Sized overload: takes the message as pointer + length so this header stays
+// independent of string_view (which needs to assert itself).
+[[noreturn]] auto halt_forever(const char* message, usize size, const std::source_location& location) -> void;
 
-namespace halt {
+[[noreturn]] auto halt_forever(
+    const char* message = nullptr,
+    const std::source_location& location = std::source_location::current()
+) -> void;
 
-struct Halt_Printer_Backend {
-    static auto put_char(char c) -> void {
-        serial::print(c);
-        for (int idx = 0; idx < current_halt_print_count; ++idx) {
-            __halt_print_fns[idx](c);
-        }
-    }
+// Registers an extra sink for panic output (term does this once it can draw).
+auto halt_add_printer(Halt_Print_Fn fn) -> void;
 
-    static auto new_line() -> void {
-        Halt_Printer_Backend::put_char('\n');
-    }
-};
+// Writes one character to serial and to every registered printer. Declared
+// here so halt.hh's print helpers can reach it without seeing the printer
+// table, which stays private to assert.cc.
+auto halt_put_char(char c) -> void;
 
-inline Halt_Printer_Backend backend;
-
-auto print(const char* format) -> int {
-    return fmt::print(backend, format);
-}
-
-template <typename T, typename... Rest>
-auto print(const char* format, T&& value, Rest&&... rest) -> int {
-    return fmt::print(backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
-}
-
-auto println() -> int {
-    return fmt::println(backend);
-}
-
-template <typename T>
-auto print(T&& value) -> int {
-    return fmt::print(backend, std::forward<T>(value));
-}
-
-template <typename T>
-auto println(T&& value) -> int {
-    return fmt::println(backend, std::forward<T>(value));
-}
-
-auto println(const char* format) -> int {
-    return fmt::println(backend, format);
-}
-
-template <typename T, typename... Rest>
-auto println(const char* format, T&& value, Rest&&... rest) -> int {
-    return fmt::println(backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
-}
-
-} // namespace halt
-
-static bool __panicking = false;
-
-[[noreturn]] static auto
-halt_forever(const string_view message, const std::source_location& location = std::source_location::current()) -> void {
-    if (__panicking) {
-        for (;;) asm volatile("hlt");
-    }
-    __panicking = true;
-
-    // Always safe: no dependency on mem/gfx/term.
-    halt::print("%:%:%", location.file_name(), location.line(), location.column());
-    if (message != nullptr) halt::println(": %", message);
-
-    for (;;) asm volatile("hlt");
-}
+#endif
 
 constexpr force_inline auto kstd_assert(
     bool predicate,
-    const string_view message = {},
+    const char* message = nullptr,
     const std::source_location& location = std::source_location::current()
 ) -> void {
     if (!predicate) halt_forever(message, location);
 }
 
-force_inline auto halt_add_printer(Halt_Print_Fn fn) -> void {
-    if (current_halt_print_count >= MAX_HALT_PRINT_COUNT) halt_forever("Reached the maximum halt printer count.");
-    __halt_print_fns[current_halt_print_count++] = fn;
-}
-
-#endif
-
 constexpr force_inline auto kstd_debug_assert(
     bool predicate,
-    const string_view message = {},
+    const char* message = nullptr,
     const std::source_location& location = std::source_location::current()
 ) -> void {
 #ifdef NDEBUG
+    (void)predicate;
+    (void)message;
+    (void)location;
     return;
 #else
     kstd_assert(predicate, message, location);
@@ -127,8 +84,8 @@ constexpr force_inline auto kstd_debug_assert(
 }
 
 constexpr force_inline auto unimplemented(
-    const string_view message = {},
+    const char* message = nullptr,
     const std::source_location& location = std::source_location::current()
 ) -> void {
-    kstd_assert(false, message ? message : "unimplemented", location);
+    kstd_assert(false, message != nullptr ? message : "unimplemented", location);
 }

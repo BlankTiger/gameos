@@ -1,7 +1,9 @@
 #pragma once
 
 #include "basic.hh"
+#include "assert.hh"
 #include "array.hh"
+#include "serial.hh"
 #include "low_level_io.hh"
 #include "time.hh"
 #include "programmable_interrupt_controller.hh"
@@ -106,7 +108,7 @@ enum struct Interrupt_Vector_Type : u8 {
 };
 
 #define ISR_NO_ERROR_CODE(NAME, NUMBER)                                                                         \
-    __attribute__((naked)) auto _isr_handle_##NAME() -> void {                                                  \
+    __attribute__((naked)) kstd_h auto _isr_handle_##NAME() -> void {                                                  \
         asm volatile(                                                                                           \
             "push $0\n\t"             /* dummy error code to make the stack uniform with `isr_handler_error` */ \
             "push $" #NUMBER "\n\t"   /* vector number                                                       */ \
@@ -123,7 +125,7 @@ enum struct Interrupt_Vector_Type : u8 {
     }
 
 #define ISR_ERROR_CODE(NAME, NUMBER)                                                               \
-    __attribute__((naked)) auto _isr_handle_##NAME() -> void {                                     \
+    __attribute__((naked)) kstd_h auto _isr_handle_##NAME() -> void {                                     \
         asm volatile(                                                                              \
             "push $" #NUMBER "\n\t"   /* vector number                                          */ \
             "pusha\n\t"               /* save cpu registers                                     */ \
@@ -190,25 +192,25 @@ ISR_NO_ERROR_CODE (fpu,             45)  // IRQ13
 ISR_NO_ERROR_CODE (primary_ata,     46)  // IRQ14
 ISR_NO_ERROR_CODE (secondary_ata,   47)  // IRQ15
 
-auto isr_unimplemented_handler(Interrupt_Vector_Type type, u32 error) -> void {
+kstd_h auto isr_unimplemented_handler(Interrupt_Vector_Type type, u32 error) -> void {
     serial::println("Tell me why (%): %", type, error);
     halt_forever("Unimplemented interrupt fired.");
 }
 
-auto isr_handle_divide_error() -> void {
+kstd_h auto isr_handle_divide_error() -> void {
     halt_forever("Try not dividing by 0 m8.. glhf");
 }
 
-auto isr_handle_double_fault(u32 error) -> void {
+kstd_h auto isr_handle_double_fault(u32 error) -> void {
     serial::println("Double fault, caused by IDT entry: %", error);
     halt_forever("");
 }
 
-auto isr_handle_timer() -> void {
+kstd_h auto isr_handle_timer() -> void {
     time::on_tick();
 }
 
-extern "C" auto isr_dispatch(u32* registers_pointer) -> void {
+extern "C" __attribute__((used)) kstd_h auto isr_dispatch(u32* registers_pointer) -> void {
     static constexpr auto VECTOR_TYPE_OFFSET = 8;
     static constexpr auto ERROR_OFFSET       = 9;
 
@@ -232,7 +234,7 @@ extern "C" auto isr_dispatch(u32* registers_pointer) -> void {
 
 }
 
-auto set_gate(Interrupt_Vector_Type vector_type, void(*handler_function)()) -> void {
+kstd_h auto set_gate(Interrupt_Vector_Type vector_type, void(*handler_function)()) -> void {
     auto& gate = table[static_cast<u8>(vector_type)];
     kstd_debug_assert(gate.selector == KERNEL_CODE_SEGMENT);
     kstd_debug_assert(gate.zero     == 0);
@@ -243,7 +245,7 @@ auto set_gate(Interrupt_Vector_Type vector_type, void(*handler_function)()) -> v
     gate.handler_address_high = static_cast<u16>(0xFFFF & (handler_address >> 16));
 }
 
-auto initialize() -> void {
+kstd_h auto initialize() -> void {
     {
         using enum Interrupt_Vector_Type;
 

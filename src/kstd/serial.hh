@@ -37,7 +37,7 @@ force_inline auto transmit_empty() -> bool {
     return (status & LSR_THR_EMPTY) != 0;
 }
 
-auto initialize() -> void {
+kstd_h auto initialize() -> void {
     low_level_io::outb(COM1 + REG_IER, 0x00);
     low_level_io::outb(COM1 + REG_LCR, LCR_DLAB);
     low_level_io::outb(COM1 + REG_DIVISOR_LOW,  BAUD_DIVISOR_38400 & 0xFF);
@@ -47,7 +47,7 @@ auto initialize() -> void {
     low_level_io::outb(COM1 + REG_MCR, MCR_DTR | MCR_RTS | MCR_OUT2);
 }
 
-auto put_char(char c) -> void {
+kstd_h auto put_char(char c) -> void {
     // If serial is somehow not available it's better to drop a byte than lock everything.
     for (int spins = 0; spins < 100000 && !transmit_empty(); ++spins) {}
     low_level_io::outb(COM1, (u8)c);
@@ -65,7 +65,7 @@ struct Backend {
 
 inline Backend backend;
 
-auto print(const char* format) -> int {
+kstd_h auto print(const char* format) -> int {
     return fmt::print(backend, format);
 }
 
@@ -74,11 +74,11 @@ auto print(const char* format, T&& value, Rest&&... rest) -> int {
     return fmt::print(backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
 }
 
-auto println() -> int {
+kstd_h auto println() -> int {
     return fmt::println(backend);
 }
 
-auto println(const char* format) -> int {
+kstd_h auto println(const char* format) -> int {
     return fmt::println(backend, format);
 }
 

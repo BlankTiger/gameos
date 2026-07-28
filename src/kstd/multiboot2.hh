@@ -120,7 +120,7 @@ struct Multiboot2_Framebuffer_Tag {
     } framebuffer_info;
 } __attribute__((packed));
 
-auto find_multiboot2_framebuffer_tag(const Multiboot2_Info* mbi) -> const Multiboot2_Framebuffer_Tag* {
+kstd_h auto find_multiboot2_framebuffer_tag(const Multiboot2_Info* mbi) -> const Multiboot2_Framebuffer_Tag* {
     auto* tag = mbi->first_tag();
     const auto* end = mbi->end_tag();
 

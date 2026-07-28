@@ -1,45 +1,10 @@
 #pragma once
 
 #include <source_location>
-#include <type_traits>
 
 #include "basic.hh"
-#include "cstring.hh"
-
-//
-// Forward-declared instead of #include "array.hh": array.hh pulls in assert.hh
-// -> serial.hh -> format.hh -> string_view.hh (for printing string_view).
-// Default supplied here (rather than repeated in array.hh's definition,
-// which would be an illegal redefinition of the same default argument):
-// Array_View<T, N> is a view of exactly N elements, Array_View<T> (N
-// defaulted to DYNAMIC_EXTENT) carries its own runtime size.
-//
-template <typename T, usize N = DYNAMIC_EXTENT>
-struct Array_View;
-
-struct string_view;
-
-//
-// Forward-declared instead of #include "assert.hh": assert.hh pulls in
-// serial.hh -> format.hh -> string_view.hh (for printing string_view), which
-// would cycle right back here. Forward-declared unconditionally (rather than
-// only in a UNIT_TESTS-less branch) since whichever header reaches this one
-// first in the cycle (assert.hh -> string_view.hh, or string_view.hh ->
-// assert.hh under UNIT_TESTS) needs kstd_assert visible for operator[]
-// below before the other header's #include of this one returns.
-//
-constexpr force_inline auto kstd_assert(
-    bool predicate,
-    const string_view message,
-    const std::source_location& location
-) -> void;
-
-// Under UNIT_TESTS this header can also be the entry point on its own, so
-// pull in assert.hh directly for a real definition of kstd_assert rather
-// than relying on something else to provide it.
-#ifdef UNIT_TESTS
 #include "assert.hh"
-#endif
+#include "cstring.hh"
 
 // A non-owning view over existing char memory: a pointer plus a length.
 // Never null-terminated by contract (use c_str() on a string if a
@@ -51,15 +16,9 @@ struct string_view {
     constexpr string_view() = default;
     constexpr string_view(const char* data, usize size) : data(data), size(size) {}
 
-    template <usize N>
-    explicit constexpr string_view(const Array_View<u8, N>& bytes)
-        : data(reinterpret_cast<const char*>(bytes.data)), size(N) {}
-
-    template <typename T>
-    explicit constexpr string_view(const Array_View<T>& bytes)
-        : data(reinterpret_cast<const char*>(bytes.data)), size(bytes.size) {
-        static_assert(std::is_same_v<T, u8>, "string_view can only be constructed from an Array_View<u8>");
-    }
+    // Construction from an Array_View<u8> lives on the Array_View side (see
+    // array.hh's `operator string_view()`): array.hh has to include this header
+    // to assert, so this header must not need to know about arrays.
 
     // Intentionally not `explicit`: this lets string_view/string APIs accept plain
     // string literals directly, matching how const char* is used elsewhere
@@ -67,7 +26,7 @@ struct string_view {
     constexpr string_view(const char* cstr) : data(cstr), size(cstr != nullptr ? kstd_strlen(cstr) : 0) {}
 
     auto operator[](usize index) const -> char {
-        kstd_assert(index < size, "string_view index out of bounds", std::source_location::current());
+        kstd_assert(index < size, "string_view index out of bounds");
         return data[index];
     }
 

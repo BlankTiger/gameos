@@ -3,6 +3,7 @@
 #include "string_view.hh"
 #include "array.hh"
 #include "assert.hh"
+#include "halt.hh"
 #include "numbers.hh"
 
 namespace stacktrace {
@@ -18,7 +19,7 @@ struct Frame {
     u32         line_number;
 };
 
-auto get_function_name(psize address) -> string_view {
+kstd_h auto get_function_name(psize address) -> string_view {
     (void)address;
     return "implement me!";
 }
@@ -29,7 +30,7 @@ constexpr auto SKIP_FRAME_COUNT = 0;
 // Arbitrary.
 constexpr auto DEFAULT_FRAME_COUNT = 10;
 
-auto get_stack_trace(u32 max_frame_count = DEFAULT_FRAME_COUNT, u32 skip_frame_count = SKIP_FRAME_COUNT) -> Array<Frame> {
+kstd_h auto get_stack_trace(u32 max_frame_count = DEFAULT_FRAME_COUNT, u32 skip_frame_count = SKIP_FRAME_COUNT) -> Array<Frame> {
     Array<Frame> traces(max_frame_count);
 
     Stacktrace* stacktrace;
@@ -45,7 +46,7 @@ auto get_stack_trace(u32 max_frame_count = DEFAULT_FRAME_COUNT, u32 skip_frame_c
     return traces;
 }
 
-auto print_stack_trace(u32 max_frame_count = DEFAULT_FRAME_COUNT, u32 skip_frame_count = SKIP_FRAME_COUNT) -> void {
+kstd_h auto print_stack_trace(u32 max_frame_count = DEFAULT_FRAME_COUNT, u32 skip_frame_count = SKIP_FRAME_COUNT) -> void {
     Stacktrace* stacktrace;
     asm volatile("movl %%ebp,%0" : "=r"(stacktrace) ::);
     halt::println("Stack trace:");

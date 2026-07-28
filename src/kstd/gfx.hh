@@ -111,7 +111,7 @@ force_inline auto swap_buffers() -> void {
     kstd_memcpy(front_buffer.pixels.data, back_buffer.data, front_buffer.pixels.size_in_bytes);
 }
 
-[[nodiscard]] auto initialize(const boot::Multiboot2_Info* mbi) -> bool {
+[[nodiscard]] kstd_h auto initialize(const boot::Multiboot2_Info* mbi) -> bool {
     if (__framebuffer_initialized) return true;
 
     const auto* framebuffer_tag = boot::find_multiboot2_framebuffer_tag(mbi);
@@ -267,7 +267,7 @@ auto draw_char_immediate(Args&&... args) -> void {
     inner_draw_char<true>(std::forward<Args>(args)...);
 }
 
-auto inner_draw_text(u32 x, u32 y, string_view text, Color fg = WHITE, Color bg = TRANSPARENT) -> void {
+kstd_h auto inner_draw_text(u32 x, u32 y, string_view text, Color fg = WHITE, Color bg = TRANSPARENT) -> void {
     u32 cx = x;
     u32 cy = y;
     u32 frame_width = front_buffer.width;
@@ -303,7 +303,7 @@ auto draw_text(u32 x, u32 y, const string_view text, Color fg = WHITE, Color bg 
 }
 
 // @TODO(blanktiger): Optimize.
-auto clear(Color color) -> void {
+kstd_h auto clear(Color color) -> void {
     for (u32 y = 0; y < height(); ++y) {
         for (u32 x = 0; x < width(); ++x) {
             set_pixel(x, y, color);
@@ -322,7 +322,7 @@ constexpr static u32 AA_RES1_POW2 = AA_RES1 * AA_RES1;
 static Static_Array<Color, AA_RES_POW2 + 1> colors_table;
 
 // TODO: Can we make generic AA?
-auto inner_draw_circle(u32 x, u32 y, u32 r, Color color) -> void {
+kstd_h auto inner_draw_circle(u32 x, u32 y, u32 r, Color color) -> void {
     u32 x1 = (x > r) ? x - r: 0;
     u32 y1 = (y > r) ? y - r: 0;
     u32 x2 = x + r + 1;
@@ -378,7 +378,7 @@ auto inner_draw_circle(u32 x, u32 y, u32 r, Color color) -> void {
     }
 }
 
-auto draw_circle(u32 x, u32 y, u32 r, Color color, u8 z = 1) -> void {
+kstd_h auto draw_circle(u32 x, u32 y, u32 r, Color color, u8 z = 1) -> void {
     if (x >= width() || y >= height()) return;
     draw_commands.push_back(
         Draw_Command{
@@ -408,7 +408,7 @@ force_inline u8 alpha(s32 x) {
     return static_cast<u8>((x * 255) >> FIXED_POINT_SHIFT);
 }
 
-auto inner_draw_line_endpoint(u32 x, u32 y, bool steep, Color color) -> s32 {
+kstd_h auto inner_draw_line_endpoint(u32 x, u32 y, bool steep, Color color) -> s32 {
     s32 sy = static_cast<s32>(y) << FIXED_POINT_SHIFT;
     s32 _y = fixed_point_floor(sy);
     s32 rev_frac_sy_alpha = alpha(reverse_fractional_part(sy));
@@ -426,7 +426,7 @@ auto inner_draw_line_endpoint(u32 x, u32 y, bool steep, Color color) -> s32 {
     return sy;
 }
 
-auto inner_draw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color) -> void {
+kstd_h auto inner_draw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color) -> void {
     bool steep = math::abs_diff(y1, y2) > math::abs_diff(x1, x2);
     if (steep) {
         std::swap(x1, y1);
@@ -472,7 +472,7 @@ auto inner_draw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color) -> void {
     }
 }
 
-auto draw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color, u8 z = 1) -> void {
+kstd_h auto draw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color, u8 z = 1) -> void {
     if (x2 >= width() || y2 >= height()) return;
     draw_commands.push_back(
         Draw_Command{
@@ -483,7 +483,7 @@ auto draw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color, u8 z = 1) -> void {
     );
 }
 
-auto inner_draw_rect(u32 x, u32 y, u32 w, u32 h, Color color) -> void {
+kstd_h auto inner_draw_rect(u32 x, u32 y, u32 w, u32 h, Color color) -> void {
     u32 clipped_width  = (x + w  >= width())  ? (width() - x)  : w;
     u32 clipped_height = (y + h >= height())  ? (height() - y) : h;
     for (u32 _y = y; _y < y +  clipped_height; ++_y) {
@@ -493,7 +493,7 @@ auto inner_draw_rect(u32 x, u32 y, u32 w, u32 h, Color color) -> void {
     }
 }
 
-auto draw_rect(u32 x, u32 y, u32 w, u32 h, Color color, u8 z = 1) -> void {
+kstd_h auto draw_rect(u32 x, u32 y, u32 w, u32 h, Color color, u8 z = 1) -> void {
     if (x >= width() || y >= height()) return;
     draw_commands.push_back(
         Draw_Command{
@@ -504,7 +504,7 @@ auto draw_rect(u32 x, u32 y, u32 w, u32 h, Color color, u8 z = 1) -> void {
     );
 }
 
-auto inner_draw_sprite(const Resource_View res, u32 x, u32 y) -> void {
+kstd_h auto inner_draw_sprite(const Resource_View res, u32 x, u32 y) -> void {
     const Color* colors = reinterpret_cast<const Color*>(res.data.data);
     u32 clipped_width  = (x + res.width  >= width())  ? (width() - x)  : res.width;
     u32 clipped_height = (y + res.height >= height()) ? (height() - y) : res.height;
@@ -515,7 +515,7 @@ auto inner_draw_sprite(const Resource_View res, u32 x, u32 y) -> void {
     }
 }
 
-auto draw_sprite(const Resource_View res, u32 x, u32 y, u8 z = 1) -> void {
+kstd_h auto draw_sprite(const Resource_View res, u32 x, u32 y, u8 z = 1) -> void {
     if (res.width == 0 || res.height == 0) return;
     if (x >= width() || y >= height()) return;
     draw_commands.push_back(

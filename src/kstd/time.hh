@@ -35,7 +35,7 @@ constexpr Command INIT_CMD = {
     .channel_select  = 0,     // channel 0
 };
 
-auto initialize() -> void {
+kstd_h auto initialize() -> void {
     using namespace low_level_io;
 
     tick_counter = 0;

@@ -9,9 +9,12 @@
 #include "basic.hh"
 #include "cstring.hh"
 #include "assert.hh"
+#include "string_view.hh"
 #include "array_iterator.hh"
 
-template <typename T, usize N>
+inline constexpr usize DYNAMIC_EXTENT = static_cast<usize>(-1);
+
+template <typename T, usize N = DYNAMIC_EXTENT>
 struct Array_View {
     static constexpr auto size = N;
     static constexpr auto size_in_bytes = sizeof(T) * N;
@@ -30,6 +33,13 @@ struct Array_View {
 
     auto elements()       -> T*       { return data; }
     auto elements() const -> const T* { return data; }
+
+    // Byte views can be reinterpreted as text. Defined on this side (rather
+    // than as a string_view constructor) so string_view.hh never has to know
+    // about arrays: it is included by this header for its own asserts.
+    explicit operator string_view() const requires std::is_same_v<std::remove_const_t<T>, u8> {
+        return string_view(reinterpret_cast<const char*>(data), N);
+    }
 
     ARRAY_ITERATOR()
 };
@@ -52,6 +62,10 @@ struct Array_View<T, DYNAMIC_EXTENT> {
 
     auto elements()       -> T*       { return data; }
     auto elements() const -> const T* { return data; }
+
+    explicit operator string_view() const requires std::is_same_v<std::remove_const_t<T>, u8> {
+        return string_view(reinterpret_cast<const char*>(data), size);
+    }
 
     ARRAY_ITERATOR()
 };
@@ -382,7 +396,7 @@ struct Array {
 
         for (usize i = 0; i < size; ++i)
             ::new (data + i) T(from.data[i]);
-        
+
         return *this;
     }
 

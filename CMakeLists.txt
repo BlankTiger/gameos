@@ -42,9 +42,19 @@ file(GLOB_RECURSE source_files CONFIGURE_DEPENDS
     ${CMAKE_SOURCE_DIR}/src/*
 )
 
+file(GLOB_RECURSE source_cc_files CONFIGURE_DEPENDS
+    ${CMAKE_SOURCE_DIR}/src/*.cc
+)
+
+set(generated_cc_files "")
+foreach(src_cc ${source_cc_files})
+    file(RELATIVE_PATH rel ${CMAKE_SOURCE_DIR}/src ${src_cc})
+    list(APPEND generated_cc_files ${GENERATED_DIR}/src/${rel})
+endforeach()
+
 set(GENERATED_SOURCES
     ${GENERATED_DIR}/src/boot.S
-    ${GENERATED_DIR}/src/main.cc
+    ${generated_cc_files}
 )
 
 file(GLOB_RECURSE preprocessor_sources CONFIGURE_DEPENDS

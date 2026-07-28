@@ -2,6 +2,7 @@
 
 #include "enum_array.hh"
 #include "low_level_io.hh"
+#include "serial.hh"
 #include "term.hh"
 
 // PS/2 controller (Intel 8042) initialization.
@@ -61,7 +62,7 @@ union Controller_Config {
 constexpr u32 PS2_TIMEOUT_ITERS = 100'000;
 
 // Returns true if the input buffer became ready, false on timeout.
-auto wait_input_ready() -> bool {
+kstd_h auto wait_input_ready() -> bool {
     Controller_Status_Register s;
     for (u32 i = 0; i < PS2_TIMEOUT_ITERS; ++i) {
         s.raw = inb(PS2_STATUS_PORT);
@@ -71,7 +72,7 @@ auto wait_input_ready() -> bool {
 }
 
 // Returns true if the output buffer has data ready to read, false on timeout.
-auto wait_output_ready() -> bool {
+kstd_h auto wait_output_ready() -> bool {
     Controller_Status_Register s;
     for (u32 i = 0; i < PS2_TIMEOUT_ITERS; ++i) {
         s.raw = inb(PS2_STATUS_PORT);
@@ -81,26 +82,26 @@ auto wait_output_ready() -> bool {
 }
 
 // Returns false if the controller did not become ready in time.
-auto send_cmd(Cmd cmd) -> bool {
+kstd_h auto send_cmd(Cmd cmd) -> bool {
     if (!wait_input_ready()) return false;
     outb(PS2_CMD_PORT, static_cast<u8>(cmd));
     return true;
 }
 
 // Returns false if the controller did not become ready in time.
-auto send_data(u8 data) -> bool {
+kstd_h auto send_data(u8 data) -> bool {
     if (!wait_input_ready()) return false;
     outb(PS2_DATA_PORT, data);
     return true;
 }
 
 // Returns the byte read, or 0xFF on timeout (0xFF is an invalid ACK value).
-auto read_data() -> u8 {
+kstd_h auto read_data() -> u8 {
     if (!wait_output_ready()) return 0xFF;
     return inb(PS2_DATA_PORT);
 }
 
-auto initialize() -> void {
+kstd_h auto initialize() -> void {
     // 1. Enable the second PS/2 port (mouse) - disabled by default on reset.
     //    Any step that times out means there is no functional PS/2 controller;
     //    bail out early so we don't hang.
@@ -221,7 +222,7 @@ force_inline auto is_pressed(Scancode code) -> bool {
     return keys[code];
 }
 
-auto isr_handle_ps2_keyboard() -> void {
+kstd_h auto isr_handle_ps2_keyboard() -> void {
     u8 scancode_value = inb(PS2_DATA_PORT);
     u8 key_value = scancode_value;
     bool key_up = key_value >= KEY_UP_RANGE_START;
@@ -232,7 +233,7 @@ auto isr_handle_ps2_keyboard() -> void {
     serial::println("Keyboard interrupt, scancode: %, pressed: %", scancode, is_pressed(scancode));
 }
 
-auto isr_handle_ps2_mouse() -> void {
+kstd_h auto isr_handle_ps2_mouse() -> void {
     u8 scancode = inb(PS2_DATA_PORT);
     term::println("Mouse interrupt, scancode: %", scancode);
 }

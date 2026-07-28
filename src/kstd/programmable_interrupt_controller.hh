@@ -87,7 +87,7 @@ union IMR_Slave {
 constexpr u8 END_OF_INTERRUPT     = 0x20;
 constexpr u8 VECTOR_OFFSET_MASTER = 32;
 
-auto send_eoi(u8 vector) -> void {
+kstd_h auto send_eoi(u8 vector) -> void {
     kstd_debug_assert(vector >= VECTOR_OFFSET_MASTER);
 
     using namespace low_level_io;
@@ -130,7 +130,7 @@ constexpr ICW4 CPU_MODE_DATA = {
     ._reserved  = 0,
 };
 
-auto initialize() -> void {
+kstd_h auto initialize() -> void {
     using namespace low_level_io;
 
     // Save current IMRs.
@@ -182,7 +182,7 @@ auto initialize() -> void {
     outb_with_delay(PIC_DATA_PORT_SLAVE,  slave_mask.raw);
 }
 
-auto disable() -> void {
+kstd_h auto disable() -> void {
     using namespace low_level_io;
 
     // Mask all interrupts.

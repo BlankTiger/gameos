@@ -138,7 +138,7 @@ static auto reserve_multiboot2_data(Memory_Regions& regions, const boot::Multibo
     }
 }
 
-auto floor_pow2(u64 n) -> u64 {
+kstd_h auto floor_pow2(u64 n) -> u64 {
     if (n == 0) return 0;
     n |= n >> 1;
     n |= n >> 2;
@@ -368,10 +368,10 @@ struct Arena_Allocator final : Allocator {
     };
 };
 
-mem::Allocator* __global_allocator;
-mem::Buddy_Allocator __buddy;
+kstd_h mem::Allocator* __global_allocator;
+kstd_h mem::Buddy_Allocator __buddy;
 
-auto initialize(const boot::Multiboot2_Info* mbi) -> void {
+kstd_h auto initialize(const boot::Multiboot2_Info* mbi) -> void {
     parse_multiboot2_memory_map(__regions, mbi);
     reserve_multiboot2_data(__regions, mbi);
 

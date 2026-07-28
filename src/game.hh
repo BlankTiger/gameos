@@ -70,7 +70,7 @@ struct Game {
     Game(u32 rows = 3, u32 cols = 3, u32 layers = 7) : grid(math::Grid3<Block_Type>(rows, cols, layers)) {}
 };
 
-auto create_new_falling_body(Body blocks) -> Falling_Body {
+kstd_h auto create_new_falling_body(Body blocks) -> Falling_Body {
     Falling_Body body;
 
     for (const auto& block : blocks) {
@@ -83,7 +83,7 @@ auto create_new_falling_body(Body blocks) -> Falling_Body {
 
 // there was available space -> true
 // otherwise                 -> false
-auto produce_new_falling_body(Game& game) -> bool {
+kstd_h auto produce_new_falling_body(Game& game) -> bool {
     const auto body_index = rand::generate(0, available_bodies.size());
     const auto body       = available_bodies.begin()[body_index];
 
@@ -102,7 +102,7 @@ auto produce_new_falling_body(Game& game) -> bool {
     return true;
 }
 
-auto falling_body_can_go_lower(const Game& game) -> bool {
+kstd_h auto falling_body_can_go_lower(const Game& game) -> bool {
     for (const auto& [row, col, layer] : game.falling_body.blocks) {
         if (game.grid.can_move_lower(row, col, layer)) continue;
 
@@ -122,7 +122,7 @@ auto falling_body_can_go_lower(const Game& game) -> bool {
     return true;
 }
 
-auto update(Game& game) -> void {
+kstd_h auto update(Game& game) -> void {
     // Handle layer destruction.
     {
         Array<bool> layer_destroyed(game.grid.layers, false);
@@ -197,7 +197,7 @@ auto update(Game& game) -> void {
     }
 }
 
-auto draw(const Game& game) -> void {
+kstd_h auto draw(const Game& game) -> void {
     gfx::clear(gfx::BLACK);
 
     const auto fps_text = sprint("FPS: %", game.fps);
@@ -209,7 +209,7 @@ auto draw(const Game& game) -> void {
     gfx::draw_frame();
 }
 
-auto game_main() -> void {
+kstd_h auto game_main() -> void {
     Game game;
     for (u32 row = 0; row < game.grid.rows; ++row) {
         for (u32 col = 0; col < game.grid.cols; ++col) {

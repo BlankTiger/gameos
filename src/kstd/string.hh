@@ -276,7 +276,7 @@ struct String_Print_Backend {
     }
 };
 
-auto sprint(const char* format) -> string {
+kstd_h auto sprint(const char* format) -> string {
     String_Print_Backend backend;
     fmt::print(backend, format);
     return backend.target;

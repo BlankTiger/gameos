@@ -14,7 +14,7 @@ force_inline auto rol64(u64 x, int k) -> u64 {
     return (x << k) | (x >> (64 - k));
 }
 
-auto xoshiro256pp(Xoshiro_256pp_State* state) -> u64 {
+kstd_h auto xoshiro256pp(Xoshiro_256pp_State* state) -> u64 {
 	u64* s = state->s;
 	const u64 result = rol64(s[0] + s[3], 23) + s[0];
 	const u64 t = s[1] << 17;
@@ -77,7 +77,7 @@ force_inline auto hardware_seed() -> u64 {
     return rdtsc();
 }
 
-auto initialize() -> void {
+kstd_h auto initialize() -> void {
     u64 seed = hardware_seed();
 
     xoshiro256pp_state.s[0] = splitmix64(&seed);
