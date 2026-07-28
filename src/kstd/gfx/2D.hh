@@ -3,12 +3,15 @@
 #include <algorithm>
 
 #include "kstd/font8x16.hh"
+#include "kstd/math.hh"
 #include "kstd/resource.hh"
 #include "kstd/string_view.hh"
 
 #include "common.hh"
 
 namespace gfx {
+
+using namespace math;
 
 enum struct Draw_Command_2D_Type: u8 {
     DRAW_CHAR,
@@ -272,7 +275,7 @@ auto inner_draw_line_endpoint(u32 x, u32 y, bool steep, Color color, Depth depth
 }
 
 auto inner_draw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color, Depth depth = DEPTH_FAR) -> void {
-    bool steep = math::abs_diff(y1, y2) > math::abs_diff(x1, x2);
+    bool steep = abs_diff(y1, y2) > abs_diff(x1, x2);
     if (steep) {
         std::swap(x1, y1);
         std::swap(x2, y2);
@@ -390,7 +393,7 @@ auto is_inside(f32 e, bool top_left) -> bool {
 // - Iterate over chunks of pixels and check if bounding vertices are out of the triangle
 // - Barycentric coordinates & fragments?
 auto inner_draw_triangle(Vector4<f32> v1, Vector4<f32> v2, Vector4<f32> v3, Color color) -> void {
-    Rect bounding_box = Rect::create(v1, v2, v3);
+    Rect bounding_box{v1, v2, v3};
     bounding_box.clip(width(), height());
 
     // Precompute edge deltas
@@ -460,9 +463,9 @@ auto draw_triangle(Vector4<f32> v1, Vector4<f32> v2, Vector4<f32> v3, Color colo
         std::swap(v2, v3);
         det = -det;
     }
-    draw_commands.push_back(
-        Draw_Command{
-            .type = Draw_Command_Type::DRAW_TRIANGLE,
+    draw_commands_world_2D.push_back(
+        Draw_Command_2D{
+            .type = Draw_Command_2D_Type::DRAW_TRIANGLE,
             .z = z,
             .triangle = Triangle_Command{v1, v2, v3, color},
         }
