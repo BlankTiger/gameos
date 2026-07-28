@@ -28,11 +28,7 @@ struct string_view;
 // assert.hh under UNIT_TESTS) needs kstd_assert visible for operator[]
 // below before the other header's #include of this one returns.
 //
-constexpr force_inline auto kstd_assert(
-    bool predicate,
-    const string_view message,
-    const std::source_location& location
-) -> void;
+constexpr force_inline auto kstd_assert(bool predicate, const char* message, const std::source_location& location) -> void;
 
 // Under UNIT_TESTS this header can also be the entry point on its own, so
 // pull in assert.hh directly for a real definition of kstd_assert rather
@@ -51,15 +47,9 @@ struct string_view {
     constexpr string_view() = default;
     constexpr string_view(const char* data, usize size) : data(data), size(size) {}
 
-    template <usize N>
-    explicit constexpr string_view(const Array_View<u8, N>& bytes)
-        : data(reinterpret_cast<const char*>(bytes.data)), size(N) {}
-
-    template <typename T>
-    explicit constexpr string_view(const Array_View<T>& bytes)
-        : data(reinterpret_cast<const char*>(bytes.data)), size(bytes.size) {
-        static_assert(std::is_same_v<T, u8>, "string_view can only be constructed from an Array_View<u8>");
-    }
+    // Construction from an Array_View<u8> lives on the Array_View side (see
+    // array.hh's `operator string_view()`): array.hh has to include this header
+    // to assert, so this header must not need to know about arrays.
 
     // Intentionally not `explicit`: this lets string_view/string APIs accept plain
     // string literals directly, matching how const char* is used elsewhere

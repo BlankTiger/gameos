@@ -195,6 +195,8 @@ static force_inline auto print_value(Backend& backend, T&& value) -> int {
 
     if constexpr (requires { value.format(); }) {
         return print_string_view(backend, value.format());
+    } else if constexpr (std::is_same_v<U, string_view>) {
+        return print_string_view(backend, value);
     } else if constexpr (std::is_same_v<U, bool>) {
         return print_value(backend, (bool)value);
     } else if constexpr (std::is_same_v<U, char>) {
@@ -329,3 +331,42 @@ auto println(Backend& backend, const char* format, T&& value, Rest&&... rest) ->
 }
 
 }  // namespace fmt
+
+#ifdef UNIT_TESTS
+
+namespace fmt_test {
+
+struct Capture_Backend {
+    char  buffer[64] = {};
+    usize length     = 0;
+
+    auto put_char(char c) -> void {
+        if (length + 1 < sizeof(buffer)) buffer[length++] = c;
+    }
+
+    auto new_line() -> void { put_char('\n'); }
+};
+
+} // namespace fmt_test
+
+// string_view exposes `data` as a member variable, which used to make it fall
+// through every `value.data()` branch of print_value and get printed as a
+// pointer.
+TEST(fmt, prints_string_view_contents_not_its_address) {
+    fmt_test::Capture_Backend backend;
+
+    fmt::print(backend, "%", string_view("hello world", 5));
+
+    EXPECT_STREQ(backend.buffer, "hello");
+}
+
+TEST(fmt, prints_string_view_lvalue) {
+    fmt_test::Capture_Backend backend;
+    const string_view value = "abc";
+
+    fmt::print(backend, "[%]", value);
+
+    EXPECT_STREQ(backend.buffer, "[abc]");
+}
+
+#endif
