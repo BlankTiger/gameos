@@ -1,15 +1,79 @@
 #pragma once
 
 #include <algorithm>
+#include <bit>
 #include <tuple>
 #include <type_traits>
+#include <utility>
 
 #include "basic.hh"
 #include "array.hh"
 #include "assert.hh"
 #include "string.hh"
 
-namespace math {
+// Bit-level helpers backing math::sqrt/math::tan below. Not part of the
+// public API (kept out of namespace math on purpose), just the frexp/ldexp
+// range-reduction steps that the Cephes single-precision routines need,
+// reimplemented with std::bit_cast instead of Cephes' original union-based
+// frexpf/ldexpf.
+namespace math_detail {
+
+// Decompose f into mantissa * 2^exponent, with mantissa in [0.5, 1.0).
+constexpr auto frexp_f32(f32 f) -> std::pair<f32, int> {
+    if (f == 0.0f) return { 0.0f, 0 };
+
+    u32 bits     = std::bit_cast<u32>(f);
+    u32 exp_bits = (bits >> 23) & 0xFFu;
+
+    if (exp_bits == 0) {
+        // Subnormal input: not perf-critical, so just re-normalize by
+        // scaling up first and correcting the returned exponent after.
+        auto [mantissa, exponent] = frexp_f32(f * 16777216.0f);  // * 2^24
+        return { mantissa, exponent - 24 };
+    }
+
+    if (exp_bits == 0xFFu) return { f, 0 };  // inf/nan: pass through unchanged.
+
+    // f = 1.mantissa * 2^(exp_bits-127) = (1.mantissa/2) * 2^(exp_bits-126).
+    int exponent      = static_cast<int>(exp_bits) - 126;
+    u32 mantissa_bits = (bits & 0x807FFFFFu) | (126u << 23);  // force exponent field to 126, i.e. 2^-1.
+
+    return { std::bit_cast<f32>(mantissa_bits), exponent };
+}
+
+// Compute mantissa * 2^e, undoing frexp_f32's range reduction. Best-effort
+// (returns signed zero/infinity) on under/overflow, since that's not a case
+// sqrtf/tanf's internal usage below ever actually hits.
+constexpr auto ldexp_f32(f32 mantissa, int e) -> f32 {
+    if (mantissa == 0.0f) return mantissa;
+
+    u32 bits     = std::bit_cast<u32>(mantissa);
+    int exp_bits = static_cast<int>((bits >> 23) & 0xFFu) + e;
+
+    if (exp_bits <= 0)    return std::bit_cast<f32>(bits & 0x80000000u);                   // underflow -> signed zero.
+    if (exp_bits >= 0xFF) return std::bit_cast<f32>((bits & 0x80000000u) | (0xFFu << 23)); // overflow  -> signed infinity.
+
+    return std::bit_cast<f32>((bits & 0x807FFFFFu) | (static_cast<u32>(exp_bits) << 23));
+}
+
+}  // namespace math_detail
+
+force_inline auto abs(s32 x) -> s32 {
+    return (x ^ (x >> 31)) - (x >> 31);
+}
+
+template <std::floating_point T>
+force_inline constexpr auto abs(T x) -> T {
+    return x < T(0) ? -x : x;
+}
+
+force_inline auto abs_diff(u32 a, u32 b) {
+    return (a > b) ? (a - b) : (b - a);
+}
+
+force_inline auto lerp(u8 a, u8 b, int pos, int max) -> u8 {
+    return a + ((b - a) * pos) / max;
+}
 
 force_inline auto floor(f32 x) -> s32 {
     s32 i = static_cast<s32>(x);
@@ -21,16 +85,208 @@ force_inline auto ceil(f32 x) -> s32 {
     return x > static_cast<f32>(i) ? i + 1 : i;
 }
 
-force_inline auto abs(s32 x) -> s32 {
-    return (x ^ (x >> 31)) - (x >> 31);
+// Square root, ported from the Cephes single-precision math library (sqrtf.c,
+// Stephen L. Moshier, public domain, netlib.org/cephes). Range-reduces via
+// frexp to a minimax polynomial evaluated over [0.5, sqrt(2)], then rescales
+// via ldexp.
+force_inline auto sqrt(f32 xx) -> f32 {
+    if (xx <= 0.0f) return 0.0f;  // Domain error (x < 0) also returns 0, matching Cephes.
+
+    auto [x, e] = math_detail::frexp_f32(xx);  // xx = x * 2^e, 0.5 <= x < 1.0
+
+    if (e & 1) {  // If the power of 2 is odd, double x and decrement it, so e is even.
+        x = x + x;
+        e -= 1;
+    }
+    e >>= 1;  // The power of 2 of the square root.
+
+    f32 y;
+    if (x > 1.41421356237f) {
+        // x is between sqrt(2) and 2.
+        x = x - 2.0f;
+        y = (((((-9.8843065718E-4f  * x
+              +   7.9479950957E-4f) * x
+              -   3.5890535377E-3f) * x
+              +   1.1028809744E-2f) * x
+              -   4.4195203560E-2f) * x
+              +   3.5355338194E-1f) * x
+              +   1.41421356237E0f;
+    } else if (x > 0.707106781187f) {
+        // x is between sqrt(2)/2 and sqrt(2).
+        x = x - 1.0f;
+        y = (((((1.35199291026E-2f  * x
+              -   2.26657767832E-2f) * x
+              +   2.78720776889E-2f) * x
+              -   3.89582788321E-2f) * x
+              +   6.24811144548E-2f) * x
+              -   1.25001503933E-1f) * x * x
+              +   0.5f * x
+              +   1.0f;
+    } else {
+        // x is between 0.5 and sqrt(2)/2.
+        x = x - 0.5f;
+        y = (((((-3.9495006054E-1f  * x
+              +   5.1743034569E-1f) * x
+              -   4.3214437330E-1f) * x
+              +   3.5310730460E-1f) * x
+              -   3.5354581892E-1f) * x
+              +   7.0710676017E-1f) * x
+              +   7.07106781187E-1f;
+    }
+
+    return math_detail::ldexp_f32(y, e);
 }
 
-force_inline auto abs_diff(u32 a, u32 b) {
-    return (a > b) ? (a - b) : (b - a);
+// Tangent, ported from the Cephes single-precision math library (tanf.c's
+// tancotf with cotflg=0, i.e. cotf support dropped, Stephen L. Moshier, public
+// domain, netlib.org/cephes). Range-reduces modulo pi/4 via Cody-Waite
+// reduction, then a degree-6 odd minimax polynomial in z^2 for tan(z) on [0, pi/4].
+force_inline auto tan(f32 xx) -> f32 {
+    constexpr f32 FOPI   = 1.27323954473516f;         // 4 /pi
+    constexpr f32 DP1    = 0.78515625f;               // pi/4, split into 3 constants for
+    constexpr f32 DP2    = 2.4187564849853515625E-4f; // extended-precision Cody-Waite
+    constexpr f32 DP3    = 3.77489497744594108E-8f;   // range reduction.
+    constexpr f32 LOSSTH = 8192.0f;
+
+    f32 sign = xx   < 0.0f ? -1.0f : 1.0f;
+    f32 x    = sign < 0.0f ? -xx   : xx;
+
+    if (x > LOSSTH) return 0.0f;  // Total loss of precision; no error-reporting mechanism here.
+
+    s32 j = static_cast<s32>(FOPI * x);  // Integer part of x / (pi/4).
+    f32 y = static_cast<f32>(j);
+
+    if (j & 1) {  // Map zeros and singularities to the origin.
+        j += 1;
+        y += 1.0f;
+    }
+
+    f32 z  = ((x - y * DP1) - y * DP2) - y * DP3;
+    f32 zz = z * z;
+
+    if (x > 1.0e-4f) {
+        y = (((((9.38540185543E-3f  * zz
+              +  3.11992232697E-3f) * zz
+              +  2.44301354525E-2f) * zz
+              +  5.34112807005E-2f) * zz
+              +  1.33387994085E-1f) * zz
+              +  3.33331568548E-1f) * zz * z
+              +  z;
+    } else {
+        y = z;
+    }
+
+    if (j & 2) y = -1.0f / y;  // Undo the reduction (cotflg=0 branch only).
+
+    return sign < 0.0f ? -y : y;
 }
 
-force_inline auto lerp(u8 a, u8 b, int pos, int max) -> u8 {
-    return a + ((b - a) * pos) / max;
+// Sine, ported from the Cephes single-precision math library (sinf.c,
+// Stephen L. Moshier, public domain, netlib.org/cephes). Range-reduces
+// modulo pi/4 via Cody-Waite reduction, then either a degree-3 odd
+// minimax poly in z^2 for sin(z) or a degree-3 even poly for cos(z) on
+// [0, pi/4], selected by octant.
+force_inline auto sin(f32 xx) -> f32 {
+    constexpr f32 FOPI  = 1.27323954473516f;         // 4/pi
+    constexpr f32 DP1   = 0.78515625f;               // pi/4, split into 3 constants for
+    constexpr f32 DP2   = 2.4187564849853515625E-4f; // extended-precision Cody-Waite
+    constexpr f32 DP3   = 3.77489497744594108E-8f;   // range reduction.
+    constexpr f32 T24M1 = 16777215.0f;
+
+    f32 sign = 1.0f;
+    f32 x    = xx;
+    if (xx < 0.0f) {
+        sign = -1.0f;
+        x    = -xx;
+    }
+
+    if (x > T24M1) return 0.0f;  // Total loss of precision; no error-reporting mechanism here.
+
+    s32 j = static_cast<s32>(FOPI * x);  // Integer part of x / (pi/4).
+    f32 y = static_cast<f32>(j);
+
+    if (j & 1) {  // Map zeros to the origin.
+        j += 1;
+        y += 1.0f;
+    }
+
+    j &= 7;  // Octant modulo 360 degrees.
+    if (j > 3) {  // Reflect in x axis.
+        sign = -sign;
+        j   -= 4;
+    }
+
+    // Extended-precision Cody-Waite reduction.
+    f32 reduced = ((x - y * DP1) - y * DP2) - y * DP3;
+    f32 z       = reduced * reduced;
+
+    if ((j == 1) || (j == 2)) {
+        // cos(z) poly on [0, pi/4].
+        y = ((  2.443315711809948E-005f * z
+            -   1.388731625493765E-003f) * z
+            +   4.166664568298827E-002f) * z * z;
+        y = y - 0.5f * z + 1.0f;
+    } else {
+        // sin(z) poly on [0, pi/4].
+        y = ((-1.9515295891E-4f * z
+            +  8.3321608736E-3f) * z
+            -  1.6666654611E-1f) * z * reduced
+            +  reduced;
+    }
+
+    return sign < 0.0f ? -y : y;
+}
+
+// Cosine, ported from the Cephes single-precision math library (cosf.c,
+// Stephen L. Moshier, public domain, netlib.org/cephes). Same reduction and
+// polynomials as sin; octant handling differs (cos is even in the input,
+// and the sin/cos poly selection is swapped relative to sin).
+force_inline auto cos(f32 xx) -> f32 {
+    constexpr f32 FOPI  = 1.27323954473516f;         // 4/pi
+    constexpr f32 DP1   = 0.78515625f;               // pi/4, split into 3 constants for
+    constexpr f32 DP2   = 2.4187564849853515625E-4f; // extended-precision Cody-Waite
+    constexpr f32 DP3   = 3.77489497744594108E-8f;   // range reduction.
+    constexpr f32 T24M1 = 16777215.0f;
+
+    f32 sign = 1.0f;
+    f32 x    = xx < 0.0f ? -xx : xx;  // cos is even.
+
+    if (x > T24M1) return 0.0f;  // Total loss of precision; no error-reporting mechanism here.
+
+    s32 j = static_cast<s32>(FOPI * x);  // Integer part of x / (pi/4).
+    f32 y = static_cast<f32>(j);
+
+    if (j & 1) {  // Map zeros to the origin.
+        j += 1;
+        y += 1.0f;
+    }
+
+    j &= 7;  // Octant modulo 360 degrees.
+    if (j > 3) {
+        j   -= 4;
+        sign = -sign;
+    }
+    if (j > 1) sign = -sign;
+
+    // Extended-precision Cody-Waite reduction.
+    f32 reduced = ((x - y * DP1) - y * DP2) - y * DP3;
+    f32 z       = reduced * reduced;
+
+    if ((j == 1) || (j == 2)) {
+        // sin(z) poly on [0, pi/4].
+        y = ((-1.9515295891E-4f * z
+            +  8.3321608736E-3f) * z
+            -  1.6666654611E-1f) * z * reduced
+            +  reduced;
+    } else {
+        // cos(z) poly on [0, pi/4].
+        y = ((  2.443315711809948E-005f * z
+            -   1.388731625493765E-003f) * z
+            +   4.166664568298827E-002f) * z * z;
+        y = y - 0.5f * z + 1.0f;
+    }
+
+    return sign < 0.0f ? -y : y;
 }
 
 template<typename T>
@@ -673,6 +929,56 @@ TEST(Vector, can_compute_det_xy) {
     test_det_xy_non_zero<Vector3<f32>>();
     test_det_xy_non_zero<Vector4<f32>>();
 }
+
+TEST(Math, sqrt) {
+    EXPECT_EQ(sqrt(0.0f), 0.0f);
+    EXPECT_EQ(sqrt(-1.0f), 0.0f);
+    EXPECT_NEAR(sqrt(4.0f), 2.0f, 1e-6f);
+    EXPECT_NEAR(sqrt(2.0f), 1.41421356f, 1e-6f);
+    EXPECT_NEAR(sqrt(0.5f), 0.70710678f, 1e-6f);
+    EXPECT_NEAR(sqrt(100.0f), 10.0f, 1e-4f);
+    EXPECT_NEAR(sqrt(1.0e10f), 1.0e5f, 1.0f);
+}
+
+TEST(Math, tan) {
+    constexpr f32 PI_OVER_4 = 0.78539816339f;
+
+    EXPECT_NEAR(tan(0.0f), 0.0f, 1e-6f);
+    EXPECT_NEAR(tan(PI_OVER_4), 1.0f, 1e-5f);
+    EXPECT_NEAR(tan(-PI_OVER_4), -1.0f, 1e-5f);
+    EXPECT_NEAR(tan(1.0f), 1.55740772f, 1e-5f);
+}
+
+TEST(Math, sin) {
+    constexpr f32 PI        = 3.14159265359f;
+    constexpr f32 PI_OVER_2 = 1.57079632679f;
+    constexpr f32 PI_OVER_4 = 0.78539816339f;
+    constexpr f32 PI_OVER_6 = 0.52359877559f;
+
+    EXPECT_NEAR(sin(0.0f), 0.0f, 1e-6f);
+    EXPECT_NEAR(sin(PI_OVER_6), 0.5f, 1e-5f);
+    EXPECT_NEAR(sin(PI_OVER_4), 0.70710678f, 1e-5f);
+    EXPECT_NEAR(sin(PI_OVER_2), 1.0f, 1e-5f);
+    EXPECT_NEAR(sin(PI), 0.0f, 1e-5f);
+    EXPECT_NEAR(sin(-PI_OVER_2), -1.0f, 1e-5f);
+    EXPECT_NEAR(sin(1.0f), 0.84147098f, 1e-5f);
+}
+
+TEST(Math, cos) {
+    constexpr f32 PI        = 3.14159265359f;
+    constexpr f32 PI_OVER_2 = 1.57079632679f;
+    constexpr f32 PI_OVER_3 = 1.04719755120f;
+    constexpr f32 PI_OVER_4 = 0.78539816339f;
+
+    EXPECT_NEAR(cos(0.0f), 1.0f, 1e-6f);
+    EXPECT_NEAR(cos(PI_OVER_4), 0.70710678f, 1e-5f);
+    EXPECT_NEAR(cos(PI_OVER_3), 0.5f, 1e-5f);
+    EXPECT_NEAR(cos(PI_OVER_2), 0.0f, 1e-5f);
+    EXPECT_NEAR(cos(PI), -1.0f, 1e-5f);
+    EXPECT_NEAR(cos(-PI_OVER_4), 0.70710678f, 1e-5f);
+    EXPECT_NEAR(cos(1.0f), 0.54030231f, 1e-5f);
+}
+
 #endif
 
 // layers (top to bottom)
