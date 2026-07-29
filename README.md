@@ -23,15 +23,6 @@ unit as `<gtest/gtest.h>` without colliding with `<cassert>`/ `<cstring>`.
 print + `abort()` instead of halting the CPU, so anything that halts can be
 tested with `EXPECT_DEATH`.
 
-# Terminal interface (switched by using a different namespace)
-
-Must implement all forward declared functions in `kstd/term.hh`. Management of
-the current row, column, scrolling should be handled internally.
-
-# TODO:
-
-8-bit slowly drifting
-
 # Abbreviations used
 
 ## Serial / UART registers / signals
