@@ -13,11 +13,15 @@ struct Terminal_State {
     u32 current_row;
 };
 
-static Terminal_State __state;
+namespace hidden {
+    inline Terminal_State state;
+}
 
 static auto next_line() -> void {
-    __state.current_row += 1;
-    __state.current_col = 0;
+    using namespace hidden;
+
+    state.current_row += 1;
+    state.current_col = 0;
 }
 
 static auto max_cols() -> u32 {
@@ -26,17 +30,21 @@ static auto max_cols() -> u32 {
 
 struct Backend {
     static auto put_char(char c) -> void {
+        using namespace hidden;
+
         if (c == '\n') {
             next_line();
             return;
         }
-        if (__state.current_col >= max_cols()) {
+
+        if (state.current_col >= max_cols()) {
             next_line();
         }
-        u32 x = DEFAULT_PADDING + __state.current_col * font::GLYPH_WIDTH;
-        u32 y = DEFAULT_PADDING + __state.current_row * font::GLYPH_HEIGHT;
+
+        u32 x = DEFAULT_PADDING + state.current_col * font::GLYPH_WIDTH;
+        u32 y = DEFAULT_PADDING + state.current_row * font::GLYPH_HEIGHT;
         gfx::draw_char_immediate(x, y, c, gfx::WHITE, gfx::TRANSPARENT);
-        __state.current_col++;
+        state.current_col++;
     }
 
     static auto new_line() -> void {
@@ -44,42 +52,44 @@ struct Backend {
     }
 };
 
-inline Backend backend;
+namespace hidden {
+    inline Backend backend;
+}
 
 auto print(const char* format) -> int {
-    return fmt::print(backend, format);
+    return fmt::print(hidden::backend, format);
 }
 
 template <typename T, typename... Rest>
 auto print(const char* format, T&& value, Rest&&... rest) -> int {
-    return fmt::print(backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
+    return fmt::print(hidden::backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
 }
 
 auto println() -> int {
-    return fmt::println(backend);
+    return fmt::println(hidden::backend);
 }
 
 template <typename T>
 auto print(T&& value) -> int {
-    return fmt::print(backend, std::forward<T>(value));
+    return fmt::print(hidden::backend, std::forward<T>(value));
 }
 
 template <typename T>
 auto println(T&& value) -> int {
-    return fmt::println(backend, std::forward<T>(value));
+    return fmt::println(hidden::backend, std::forward<T>(value));
 }
 
 auto println(const char* format) -> int {
-    return fmt::println(backend, format);
+    return fmt::println(hidden::backend, format);
 }
 
 template <typename T, typename... Rest>
 auto println(const char* format, T&& value, Rest&&... rest) -> int {
-    return fmt::println(backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
+    return fmt::println(hidden::backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
 }
 
 [[nodiscard]] auto initialize() -> bool {
-    __state = {0, 0};
+    hidden::state = {0, 0};
     auto is_initialized = gfx::is_initialized();
     if (is_initialized) {
         halt::add_printer(Backend::put_char);
