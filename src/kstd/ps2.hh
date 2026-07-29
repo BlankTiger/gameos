@@ -126,7 +126,11 @@ auto initialize() -> void {
 
 constexpr u8 KEY_UP_RANGE_START = 128;
 
-enum class Scancode : u8 {
+// Extended (0xE0-prefix) scancodes add this offset to distinguish from base
+// scancodes.  E.g. scancode set 1 Right Arrow is E0 4D -> 0x4D + 0x80 = 0xCD.
+constexpr u8 KEY_EXTENDED_OFFSET = 0x80;
+
+enum class Scancode : u16 {
     ESCAPE          = 0x01,
     DIGIT_1         = 0x02,
     DIGIT_2         = 0x03,
@@ -212,10 +216,18 @@ enum class Scancode : u8 {
     KEYPAD_PERIOD   = 0x53,
     F11             = 0x57,
     F12             = 0x58,
-    COUNT           = KEY_UP_RANGE_START, // MUST BE THE LAST ELEMENT
+
+    // Extended (0xE0 prefix) scancodes; stored at base + KEY_EXTENDED_OFFSET.
+    RIGHT_ARROW     = 0x4D + KEY_EXTENDED_OFFSET,
+    LEFT_ARROW      = 0x4B + KEY_EXTENDED_OFFSET,
+    UP_ARROW        = 0x48 + KEY_EXTENDED_OFFSET,
+    DOWN_ARROW      = 0x50 + KEY_EXTENDED_OFFSET,
+
+    COUNT           = KEY_UP_RANGE_START + KEY_EXTENDED_OFFSET, // MUST BE THE LAST ELEMENT
 };
 
 inline Enum_Array<Scancode, bool> keys;
+inline bool extended_pending = false;
 
 force_inline auto is_pressed(Scancode code) -> bool {
     return keys[code];
@@ -223,9 +235,21 @@ force_inline auto is_pressed(Scancode code) -> bool {
 
 auto isr_handle_ps2_keyboard() -> void {
     u8 scancode_value = inb(PS2_DATA_PORT);
+
+    // Handle 0xE0 extended prefix.
+    if (scancode_value == 0xE0) {
+        extended_pending = true;
+        return;
+    }
+
     u8 key_value = scancode_value;
-    bool key_up = key_value >= KEY_UP_RANGE_START;
+    bool key_up  = key_value >= KEY_UP_RANGE_START;
     if (key_up) key_value -= KEY_UP_RANGE_START;
+
+    if (extended_pending) {
+        key_value        += KEY_EXTENDED_OFFSET;
+        extended_pending  = false;
+    }
 
     Scancode scancode = static_cast<Scancode>(key_value);
     keys[scancode] = !key_up;

@@ -97,19 +97,25 @@ struct Framebuffer {
 using Depth = u32;
 constexpr Depth DEPTH_FAR = static_cast<Depth>(-1); // 0xFFFFFFFF, memset-able with 0xFF
 
-inline Framebuffer front_buffer;
-// @TODO(blanktiger): Should probably be runtime allocated cause this takes more than 6MB off of our stack.
-inline Static_Array<Pixel, GFX_PIXEL_COUNT> back_buffer;
-inline Static_Array<Depth, GFX_PIXEL_COUNT> depth_buffer; // smaller means closer
-inline bool __framebuffer_initialized;
+namespace hidden {
+    inline Framebuffer front_buffer;
+    // @TODO(blanktiger): Should probably be runtime allocated cause this takes more than 6MB off of our stack.
+    inline Static_Array<Pixel, GFX_PIXEL_COUNT> back_buffer;
+    inline Static_Array<Depth, GFX_PIXEL_COUNT> depth_buffer; // smaller means closer
+    inline bool framebuffer_initialized;
+}
 
 force_inline auto swap_buffers() -> void {
+    using namespace hidden;
+
     kstd_debug_assert(front_buffer.pixels.data != nullptr);
     kstd_memcpy(front_buffer.pixels.data, back_buffer.data, front_buffer.pixels.size_in_bytes);
 }
 
 [[nodiscard]] auto initialize(const boot::Multiboot2_Info* mbi) -> bool {
-    if (__framebuffer_initialized) return true;
+    using namespace hidden;
+
+    if (framebuffer_initialized) return true;
 
     const auto* framebuffer_tag = boot::find_multiboot2_framebuffer_tag(mbi);
     if (framebuffer_tag == nullptr || framebuffer_tag->framebuffer_addr == 0) return false;
@@ -138,26 +144,28 @@ force_inline auto swap_buffers() -> void {
 
     kstd_memset(depth_buffer.data, 0xFF, depth_buffer.size_in_bytes); // DEPTH_FAR
 
-    __framebuffer_initialized = true;
+    framebuffer_initialized = true;
     return true;
 }
 
 force_inline auto is_initialized() -> bool {
-    return __framebuffer_initialized;
+    return hidden::framebuffer_initialized;
 }
 
 force_inline auto width() -> u32 {
-    return front_buffer.width;
+    return hidden::front_buffer.width;
 }
 
 force_inline auto height() -> u32 {
-    return front_buffer.height;
+    return hidden::front_buffer.height;
 }
 
 template <bool IMMEDIATE>
 static force_inline auto set_pixel(u32 x, u32 y, Color color) -> void {
     kstd_assert(x < width());
     kstd_assert(y < height());
+
+    using namespace hidden;
 
     auto index = y * front_buffer.stride + x;
     if constexpr(IMMEDIATE) {
@@ -175,6 +183,8 @@ static force_inline auto set_pixel(u32 x, u32 y, Color color, Depth depth = DEPT
     kstd_assert(x < width());
     kstd_assert(y < height());
 
+    using namespace hidden;
+
     auto index = y * front_buffer.stride + x;
     if (depth != DEPTH_FAR && depth >= depth_buffer[index]) return;
 
@@ -189,7 +199,7 @@ auto clear(Color color) -> void {
             set_pixel(x, y, color);
         }
     }
-    kstd_memset(depth_buffer.data, 0xFF, depth_buffer.size_in_bytes); // DEPTH_FAR
+    kstd_memset(hidden::depth_buffer.data, 0xFF, hidden::depth_buffer.size_in_bytes); // DEPTH_FAR
 }
 
 enum struct Render_Pass : u8 {

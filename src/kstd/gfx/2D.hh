@@ -12,6 +12,7 @@
 namespace gfx {
 
 using namespace math;
+namespace hidden = gfx::hidden;
 
 enum struct Draw_Command_2D_Type: u8 {
     DRAW_CHAR,
@@ -86,12 +87,12 @@ auto inner_draw_char(u32 x, u32 y, char c, Color fg, Color bg, Depth depth = DEP
 
     for (u32 row = 0; row < font::GLYPH_HEIGHT; ++row) {
         const u32 py = y + row;
-        if (py >= front_buffer.height) break;
+        if (py >= hidden::front_buffer.height) break;
 
         const font::Glyph_Width bits = glyph[row];
         for (u32 col = 0; col < font::GLYPH_WIDTH; ++col) {
             const u32 px = x + col;
-            if (px >= front_buffer.width) break;
+            if (px >= hidden::front_buffer.width) break;
 
             const auto color = bits & (0b1000'0000 >> col) ? fg : bg;
             if constexpr (IMMEDIATE) {
@@ -124,8 +125,8 @@ auto draw_char_immediate(Args&&... args) -> void {
 auto inner_draw_text(u32 x, u32 y, string_view text, Color fg = WHITE, Color bg = TRANSPARENT, Depth depth = DEPTH_FAR) -> void {
     u32 cx = x;
     u32 cy = y;
-    u32 frame_width = front_buffer.width;
-    u32 frame_height = front_buffer.height;
+    u32 frame_width  = hidden::front_buffer.width;
+    u32 frame_height = hidden::front_buffer.height;
 
     for (const auto c: text) {
         if (c == '\n') {
