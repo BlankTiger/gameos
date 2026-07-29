@@ -194,16 +194,16 @@ ISR_NO_ERROR_CODE (secondary_ata,   47)  // IRQ15
 
 auto isr_unimplemented_handler(Interrupt_Vector_Type type, u32 error) -> void {
     serial::println("Tell me why (%): %", type, error);
-    halt_forever("Unimplemented interrupt fired.");
+    halt::forever("Unimplemented interrupt fired.");
 }
 
 auto isr_handle_divide_error() -> void {
-    halt_forever("Try not dividing by 0 m8.. glhf");
+    halt::forever("Try not dividing by 0 m8.. glhf");
 }
 
 auto isr_handle_double_fault(u32 error) -> void {
     serial::println("Double fault, caused by IDT entry: %", error);
-    halt_forever("");
+    halt::forever("");
 }
 
 auto isr_handle_timer() -> void {

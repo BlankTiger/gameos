@@ -391,12 +391,12 @@ auto initialize(const boot::Multiboot2_Info* mbi) -> void {
 
 auto operator new(usize size) -> void* {
     if (void* ptr = mem::hidden::global_allocator->alloc(size)) return ptr;
-    halt_forever("new failed");
+    halt::forever("new failed");
 }
 
 auto operator new[](usize size) -> void* {
     if (void* ptr = mem::hidden::global_allocator->alloc(size)) return ptr;
-    halt_forever("new[] failed");
+    halt::forever("new[] failed");
 }
 
 auto operator delete(void* ptr) noexcept -> void {

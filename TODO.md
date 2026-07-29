@@ -38,6 +38,8 @@ base layer:
 - [x] get random numbers for the seed in random.hh
 - [ ] should Array_View and Static_Array do bounds checking or not?
 - [ ] String_Builder
+- [ ] keep allocator on structures that allocate
+- [ ] fix halt::Backend (look at the todo there)
 
 utils:
 - [ ] todo list generator (gather notes from source code and generate a stable

@@ -82,7 +82,7 @@ auto println(const char* format, T&& value, Rest&&... rest) -> int {
     __state = {0, 0};
     auto is_initialized = gfx::is_initialized();
     if (is_initialized) {
-        halt_add_printer(Backend::put_char);
+        halt::add_printer(Backend::put_char);
     }
     return is_initialized;
 }
