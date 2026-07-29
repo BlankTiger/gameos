@@ -294,7 +294,7 @@ concept Numeric = std::integral<T> || std::floating_point<T>;
 
 template <Numeric T>
 struct Vector2 {
-    using value_type = T;
+    using Value_Type = T;
     static constexpr auto size = 2;
     union {
         struct { T x, y; };
@@ -309,7 +309,7 @@ struct Vector2 {
 
 template <Numeric T>
 struct Vector3 {
-    using value_type = T;
+    using Value_Type = T;
     static constexpr auto size = 3;
     union {
         struct { T x, y, z; };
@@ -324,7 +324,7 @@ struct Vector3 {
 
 template <Numeric T>
 struct Vector4 {
-    using value_type = T;
+    using Value_Type = T;
     static constexpr auto size = 4;
     union {
         struct { T x, y, z, w; };
@@ -339,7 +339,7 @@ struct Vector4 {
     constexpr auto operator [] (usize i) const -> const T& { return data[i]; }
     explicit constexpr operator Vector3<T>() const { return Vector3<T>{ x, y, z }; }
     [[nodiscard]] static constexpr auto zero() -> Vector4 { return Vector4{ T(0), T(0), T(0), T(0) }; }
-    [[nodiscard]] static constexpr auto one() -> Vector4 { return Vector4{ T(1), T(1), T(1), T(1) }; }
+    [[nodiscard]] static constexpr auto one()  -> Vector4 { return Vector4{ T(1), T(1), T(1), T(1) }; }
 };
 
 template <typename T>
@@ -358,13 +358,13 @@ template <typename T>
 concept IsVector = is_vec<std::remove_cvref_t<T>>::value;
 
 template<usize I, IsVector V>
-constexpr auto get(V& v) -> typename V::value_type& {
+constexpr auto get(V& v) -> @T(V::Value_Type)& {
     static_assert(I < V::size);
     return v.data[I];
 }
 
 template<usize I, IsVector V>
-constexpr auto get(const V& v) -> const typename V::value_type& {
+constexpr auto get(const V& v) -> const @T(V::Value_Type)& {
     static_assert(I < V::size);
     return v.data[I];
 }
@@ -428,25 +428,25 @@ constexpr auto operator -= (V& a, const V& b) -> V& {
 }
 
 template <IsVector V>
-[[nodiscard]] constexpr auto operator * (const V& v, typename V::value_type scalar) -> V {
+[[nodiscard]] constexpr auto operator * (const V& v, @T(V::Value_Type) scalar) -> V {
     V result{};
     for (usize i = 0; i < V::size; ++i) result[i] = v[i] * scalar;
     return result;
 }
 
 template <IsVector V>
-constexpr auto operator *= (V& a, typename V::value_type scalar) -> V& {
+constexpr auto operator *= (V& a, @T(V::Value_Type) scalar) -> V& {
     for (usize i = 0; i < V::size; ++i) a[i] *= scalar;
     return a;
 }
 
 template <IsVector V>
-[[nodiscard]] constexpr auto operator * (typename V::value_type scalar, const V& v) -> V {
+[[nodiscard]] constexpr auto operator * (@T(V::Value_Type) scalar, const V& v) -> V {
     return v * scalar;
 }
 
 template <IsVector V>
-[[nodiscard]] constexpr auto operator / (const V& v, typename V::value_type scalar) -> V {
+[[nodiscard]] constexpr auto operator / (const V& v, @T(V::Value_Type) scalar) -> V {
     V result{};
     for (usize i = 0; i < V::size; i++) result[i] = v[i] / scalar;
     return result;
@@ -475,26 +475,26 @@ constexpr auto operator != (const V& a, const V& b) -> bool {
 }
 
 template <IsVector V>
-[[nodiscard]] force_inline constexpr auto dot(const V& a, const V& b) -> typename V::value_type {
-    typename V::value_type result{};
+[[nodiscard]] force_inline constexpr auto dot(const V& a, const V& b) -> @T(V::Value_Type) {
+    @T(V::Value_Type) result{};
     for (usize i = 0; i < V::size; i++) result += a[i] * b[i];
     return result;
 }
 
 template <IsVector V>
-[[nodiscard]] force_inline constexpr auto length_squared(const V& v) -> typename V::value_type {
+[[nodiscard]] force_inline constexpr auto length_squared(const V& v) -> @T(V::Value_Type) {
     return dot(v, v);
 }
 
 template <IsVector V>
-[[nodiscard]] force_inline constexpr auto det_xy(const V& v1, const V& v2) -> typename V::value_type {
+[[nodiscard]] force_inline constexpr auto det_xy(const V& v1, const V& v2) -> @T(V::Value_Type) {
     return v1.x * v2.y - v1.y * v2.x;
 }
 
 #ifdef UNIT_TESTS
 
 template <IsVector V>
-void expect_values(const V& v, std::initializer_list<typename V::value_type> values) {
+void expect_values(const V& v, std::initializer_list<@T(V::Value_Type)> values) {
     EXPECT_EQ(V::size, values.size());
     for (int i = 0; i < V::size; i++) {
         EXPECT_EQ(v[i], values.begin()[i]);
@@ -754,7 +754,7 @@ template <IsVector V>
 void test_dot() {
     V a{}, b{};
 
-    typename V::value_type expected = 0;
+    @T(V::Value_Type) expected = 0;
 
     for (usize i = 0; i < V::size; ++i) {
         a[i] = i + 1;
@@ -778,7 +778,7 @@ template <IsVector V>
 void test_length_squared() {
     V v{};
 
-    typename V::value_type expected = 0;
+    @T(V::Value_Type) expected = 0;
 
     for (usize i = 0; i < V::size; ++i) {
         v[i] = i + 1;
@@ -888,7 +888,7 @@ template <IsVector V>
 void test_det_xy_zero() {
     V v1{}, v2{};
 
-    typename V::value_type expected = 0;
+    @T(V::Value_Type) expected = 0;
 
     for (usize i = 0; i < V::size; ++i) {
         v1[i] = i + 1;
@@ -911,7 +911,7 @@ template <IsVector V>
 void test_det_xy_non_zero() {
     V v1{}, v2{};
 
-    typename V::value_type expected = -1;
+    @T(V::Value_Type) expected = -1;
 
     for (usize i = 0; i < V::size; ++i) {
         v1[i] = i + 1;
