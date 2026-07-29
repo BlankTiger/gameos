@@ -35,7 +35,7 @@ struct Guard {
     }
 
     Guard(const Guard&) = delete;
-    auto operator=(const Guard&) -> Guard& = delete;
+    auto operator = (const Guard&) -> Guard& = delete;
 };
 
 }  // namespace critical_section

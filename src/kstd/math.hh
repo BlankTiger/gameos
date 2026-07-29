@@ -45,8 +45,8 @@ struct Vector2 {
         T data[size];
     };
 
-    constexpr auto operator[](usize i) -> T& { return data[i]; }
-    constexpr auto operator[](usize i) const -> const T& { return data[i]; }
+    constexpr auto operator [] (usize i) -> T& { return data[i]; }
+    constexpr auto operator [] (usize i) const -> const T& { return data[i]; }
     [[nodiscard]] static constexpr auto zero() -> Vector2 { return Vector2{ T(0), T(0) }; }
     [[nodiscard]] static constexpr auto one()  -> Vector2 { return Vector2{ T(1), T(1) }; }
 };
@@ -60,8 +60,8 @@ struct Vector3 {
         T data[size];
     };
 
-    constexpr auto operator[](usize i) -> T& { return data[i]; }
-    constexpr auto operator[](usize i) const -> const T& { return data[i]; }
+    constexpr auto operator [] (usize i) -> T& { return data[i]; }
+    constexpr auto operator [] (usize i) const -> const T& { return data[i]; }
     [[nodiscard]] static constexpr auto zero() -> Vector3 { return Vector3{ T(0), T(0), T(0) }; }
     [[nodiscard]] static constexpr auto one()  -> Vector3 { return Vector3{ T(1), T(1), T(1) }; }
 };
@@ -79,8 +79,8 @@ struct Vector4 {
     constexpr Vector4(T x, T y, T z, T w): x(x), y(y), z(z), w(w) {}
     constexpr Vector4(const Vector3<T>& v, T w) : x(v.x), y(v.y), z(v.z), w(w) {}
 
-    constexpr auto operator[](usize i) -> T& { return data[i]; }
-    constexpr auto operator[](usize i) const -> const T& { return data[i]; }
+    constexpr auto operator [] (usize i) -> T& { return data[i]; }
+    constexpr auto operator [] (usize i) const -> const T& { return data[i]; }
     explicit constexpr operator Vector3<T>() const { return Vector3<T>{ x, y, z }; }
     [[nodiscard]] static constexpr auto zero() -> Vector4 { return Vector4{ T(0), T(0), T(0), T(0) }; }
     [[nodiscard]] static constexpr auto one() -> Vector4 { return Vector4{ T(1), T(1), T(1), T(1) }; }

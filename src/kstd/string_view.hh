@@ -56,12 +56,12 @@ struct string_view {
     // in the codebase (e.g. term::print, fmt::print).
     constexpr string_view(const char* cstr) : data(cstr), size(cstr != nullptr ? kstd_strlen(cstr) : 0) {}
 
-    auto operator[](usize index) const -> char {
+    auto operator [] (usize index) const -> char {
         kstd_assert(index < size, "string_view index out of bounds", std::source_location::current());
         return data[index];
     }
 
-    auto operator==(const string_view& other) const -> bool {
+    auto operator == (const string_view& other) const -> bool {
         if (size != other.size) return false;
         for (usize i = 0; i < size; ++i) {
             if (data[i] != other.data[i]) return false;
@@ -69,7 +69,7 @@ struct string_view {
         return true;
     }
 
-    auto operator!=(const string_view& other) const -> bool {
+    auto operator != (const string_view& other) const -> bool {
         return !(*this == other);
     }
 
