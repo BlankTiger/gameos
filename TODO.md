@@ -16,6 +16,7 @@ fonts:
 
 sound:
 - [ ] figure out what to actually do here
+- [ ] 8-bit slowly drifting
 
 base layer:
 - [x] timers
