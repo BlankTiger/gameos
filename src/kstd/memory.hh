@@ -149,7 +149,9 @@ auto floor_pow2(u64 n) -> u64 {
     return n & ~(n >> 1);
 }
 
-static Memory_Regions __regions{};
+namespace hidden {
+    static Memory_Regions regions{};
+}
 
 struct Allocator {
     virtual auto alloc(usize size, usize alignment = alignof(std::max_align_t)) -> void* = 0;
@@ -241,7 +243,7 @@ struct Buddy_Allocator final : Allocator {
     auto init() -> void {
         clear();
 
-        for (const auto& region : __regions) {
+        for (const auto& region : hidden::regions) {
             add_region(region.base, region.size);
         }
     }
@@ -368,15 +370,47 @@ struct Arena_Allocator final : Allocator {
     };
 };
 
-mem::Allocator* __global_allocator;
-mem::Buddy_Allocator __buddy;
+namespace hidden {
+    Allocator*      global_allocator;
+    Buddy_Allocator buddy;
+}
 
 auto initialize(const boot::Multiboot2_Info* mbi) -> void {
-    parse_multiboot2_memory_map(__regions, mbi);
-    reserve_multiboot2_data(__regions, mbi);
+    using namespace hidden;
 
-    __buddy.init();
-    __global_allocator = &__buddy;
+    parse_multiboot2_memory_map(regions, mbi);
+    reserve_multiboot2_data(regions, mbi);
+
+    buddy.init();
+    global_allocator = &buddy;
 }
 
 }  // namespace mem
+
+#include <new>
+
+auto operator new(usize size) -> void* {
+    if (void* ptr = mem::hidden::global_allocator->alloc(size)) return ptr;
+    halt_forever("new failed");
+}
+
+auto operator new[](usize size) -> void* {
+    if (void* ptr = mem::hidden::global_allocator->alloc(size)) return ptr;
+    halt_forever("new[] failed");
+}
+
+auto operator delete(void* ptr) noexcept -> void {
+    mem::hidden::global_allocator->free(ptr, 0);
+}
+
+auto operator delete[](void* ptr) noexcept -> void {
+    mem::hidden::global_allocator->free(ptr, 0);
+}
+
+auto operator delete(void* ptr, usize size) noexcept -> void {
+    mem::hidden::global_allocator->free(ptr, size);
+}
+
+auto operator delete[](void* ptr, usize size) noexcept -> void {
+    mem::hidden::global_allocator->free(ptr, size);
+}
