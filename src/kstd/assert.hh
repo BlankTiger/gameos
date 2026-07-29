@@ -24,19 +24,25 @@ constexpr force_inline auto kstd_assert(
 #else
 #include "serial.hh"
 
-using Halt_Print_Fn = auto (*)(char) -> void;
-
-constexpr auto MAX_HALT_PRINT_COUNT     = 10;
-inline    auto current_halt_print_count = 0;
-inline Halt_Print_Fn __halt_print_fns[MAX_HALT_PRINT_COUNT];
 
 namespace halt {
 
+using Halt_Print_Fn = auto (*)(char) -> void;
+constexpr auto MAX_HALT_PRINT_COUNT = 10;
+
+namespace hidden {
+    inline bool panicking = false;
+
+    inline auto current_halt_print_count = 0;
+    inline Halt_Print_Fn halt_print_fns[MAX_HALT_PRINT_COUNT];
+}
+
+// @TODO(blanktiger): ehhh, this is wrong, backend should always fully print to one source before printing to the next one.
 struct Halt_Printer_Backend {
     static auto put_char(char c) -> void {
         serial::print(c);
-        for (int idx = 0; idx < current_halt_print_count; ++idx) {
-            __halt_print_fns[idx](c);
+        for (int idx = 0; idx < hidden::current_halt_print_count; ++idx) {
+            hidden::halt_print_fns[idx](c);
         }
     }
 
@@ -45,68 +51,69 @@ struct Halt_Printer_Backend {
     }
 };
 
-inline Halt_Printer_Backend backend;
+namespace hidden {
+    inline Halt_Printer_Backend backend;
+}
 
 auto print(const char* format) -> int {
-    return fmt::print(backend, format);
+    return fmt::print(hidden::backend, format);
 }
 
 template <typename T, typename... Rest>
 auto print(const char* format, T&& value, Rest&&... rest) -> int {
-    return fmt::print(backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
+    return fmt::print(hidden::backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
 }
 
 auto println() -> int {
-    return fmt::println(backend);
+    return fmt::println(hidden::backend);
 }
 
 template <typename T>
 auto print(T&& value) -> int {
-    return fmt::print(backend, std::forward<T>(value));
+    return fmt::print(hidden::backend, std::forward<T>(value));
 }
 
 template <typename T>
 auto println(T&& value) -> int {
-    return fmt::println(backend, std::forward<T>(value));
+    return fmt::println(hidden::backend, std::forward<T>(value));
 }
 
 auto println(const char* format) -> int {
-    return fmt::println(backend, format);
+    return fmt::println(hidden::backend, format);
 }
 
 template <typename T, typename... Rest>
 auto println(const char* format, T&& value, Rest&&... rest) -> int {
-    return fmt::println(backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
+    return fmt::println(hidden::backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
+}
+
+[[noreturn]] static auto
+forever(const char* message, const std::source_location& location = std::source_location::current()) -> void {
+    if (hidden::panicking) {
+        for (;;) asm volatile("hlt");
+    }
+    hidden::panicking = true;
+
+    print("%:%:%", location.file_name(), location.line(), location.column());
+    if (message != nullptr) println(": %", message);
+
+    for (;;) asm volatile("hlt");
+}
+
+force_inline auto add_printer(Halt_Print_Fn fn) -> void {
+    if (hidden::current_halt_print_count >= MAX_HALT_PRINT_COUNT) forever("Reached the maximum halt printer count.");
+    hidden::halt_print_fns[hidden::current_halt_print_count++] = fn;
 }
 
 } // namespace halt
 
-static bool __panicking = false;
-
-[[noreturn]] static auto
-halt_forever(const char* message, const std::source_location& location = std::source_location::current()) -> void {
-    if (__panicking) {
-        for (;;) asm volatile("hlt");
-    }
-    __panicking = true;
-
-    halt::print("%:%:%", location.file_name(), location.line(), location.column());
-    if (message != nullptr) halt::println(": %", message);
-
-    for (;;) asm volatile("hlt");
-}
 
 constexpr force_inline auto kstd_assert(
     bool predicate,
     const char* message = nullptr,
     const std::source_location& location = std::source_location::current()
 ) -> void {
-    if (!predicate) halt_forever(message, location);
-}
-
-force_inline auto halt_add_printer(Halt_Print_Fn fn) -> void {
-    if (current_halt_print_count >= MAX_HALT_PRINT_COUNT) halt_forever("Reached the maximum halt printer count.");
-    __halt_print_fns[current_halt_print_count++] = fn;
+    if (!predicate) halt::forever(message, location);
 }
 
 #endif
