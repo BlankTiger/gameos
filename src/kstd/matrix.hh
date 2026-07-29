@@ -112,15 +112,23 @@ struct Matrix4x3 {
     }
 };
 
-// Dimension check only - C++ concepts can't require named fields _11..
-// Callers must pass types that actually have those fields (all 4 above do).
 template <typename T>
-concept IsMatrix = requires {
-    @T(T::Value_Type);
-    T::rows;
-    T::cols;
-    T::size;
-};
+struct is_matrix : std::false_type {};
+
+template <std::floating_point T>
+struct is_matrix<Matrix2<T>> : std::true_type {};
+
+template <std::floating_point T>
+struct is_matrix<Matrix3<T>> : std::true_type {};
+
+template <std::floating_point T>
+struct is_matrix<Matrix4<T>> : std::true_type {};
+
+template <std::floating_point T>
+struct is_matrix<Matrix4x3<T>> : std::true_type {};
+
+template <typename T>
+concept IsMatrix = is_matrix<std::remove_cvref_t<T>>::value;
 
 template <typename T>
 concept AnyMatrix3x3 = IsMatrix<T> && (T::rows >= 3) && (T::cols >= 3);
@@ -195,6 +203,21 @@ constexpr auto transform_point(const M& m, const Vector3<@T(M::Value_Type)>& v) 
         m._21 * v.x + m._22 * v.y + m._23 * v.z + m._24,
         m._31 * v.x + m._32 * v.y + m._33 * v.z + m._34
     };
+}
+
+template <AnyMatrix4x3Ish M>
+constexpr auto transform_point(const M& m, const Vector4<@T(M::Value_Type)>& v) -> Vector4<@T(M::Value_Type)> {
+    using T = @T(M::Value_Type);
+    if constexpr (M::rows == 4) {
+        return multiply(m, v);
+    } else {
+        return Vector4<T>{
+            m._11 * v.x + m._12 * v.y + m._13 * v.z + m._14 * v.w,
+            m._21 * v.x + m._22 * v.y + m._23 * v.z + m._24 * v.w,
+            m._31 * v.x + m._32 * v.y + m._33 * v.z + m._34 * v.w,
+            v.w
+        };
+    }
 }
 
 template <AnyMatrix3x3 M>
@@ -645,9 +668,6 @@ constexpr auto make_matrix_from_columns(const Vector3<T>& xprime, const Vector3<
     return make_matrix_from_columns<Matrix4<T>>(xprime, yprime, zprime);
 }
 
-//
-// Graphics-centric matrix routines: look-at, projections, etc.
-//
 template <bool x_is_forward = true, std::floating_point T>
 constexpr auto make_look_at_matrix(const Vector3<T>& viewpoint, const Vector3<T>& look_at, const Vector3<T>& reference_up_vector) -> Matrix4<T> {
     Vector3<T> forward = look_at - viewpoint;
@@ -827,38 +847,6 @@ constexpr auto inverse(const Matrix4<T>& m, @T(Matrix4<T>::Value_Type) epsilon =
     t *= inv_det;
     u *= inv_det;
     v *= inv_det;
-
-    Vector3<T> r0 = cross(b, v) + t * y;
-    Vector3<T> r1 = cross(v, a) - t * x;
-    Vector3<T> r2 = cross(d, u) + s * w;
-    Vector3<T> r3 = cross(u, c) - s * z;
-
-    return Matrix4<T>{
-        r0.x, r0.y, r0.z, -dot(b, t),
-        r1.x, r1.y, r1.z,  dot(a, t),
-        r2.x, r2.y, r2.z, -dot(d, s),
-        r3.x, r3.y, r3.z,  dot(c, s)
-    };
-}
-
-// adj(m) = inv(m) * det(m). Always exists, cheaper than inverse.
-// Ref: Lengyel, Foundations of Game Dev Math, 1.7.5.
-template <std::floating_point T>
-constexpr auto adjugate(const Matrix4<T>& m) -> Matrix4<T> {
-    Vector3<T> a{ m._11, m._21, m._31 };
-    Vector3<T> b{ m._12, m._22, m._32 };
-    Vector3<T> c{ m._13, m._23, m._33 };
-    Vector3<T> d{ m._14, m._24, m._34 };
-
-    T x = m._41;
-    T y = m._42;
-    T z = m._43;
-    T w = m._44;
-
-    Vector3<T> s = cross(a, b);
-    Vector3<T> t = cross(c, d);
-    Vector3<T> u = a * y - b * x;
-    Vector3<T> v = c * w - d * z;
 
     Vector3<T> r0 = cross(b, v) + t * y;
     Vector3<T> r1 = cross(v, a) - t * x;
@@ -1305,19 +1293,6 @@ TEST(Matrix, inverse_matrix4_round_trip) {
 
     auto product = m * (*inv);
     EXPECT_TRUE(product == Matrix4<f32>::identity());
-}
-
-TEST(Matrix, adjugate_matches_determinant_times_inverse) {
-    auto m = make_translation_matrix4(Vector3<f32>{ 1, 2, 3 });
-
-    auto adj = adjugate(m);
-    auto det = determinant(m);
-    auto inv = inverse(m);
-    ASSERT_TRUE(inv.has_value());
-
-    for (usize i = 0; i < Matrix4<f32>::size; ++i) {
-        EXPECT_NEAR(adj.floats[i], inv->floats[i] * det, 1e-4f);
-    }
 }
 
 TEST(Matrix, determinant_identity_is_one) {
