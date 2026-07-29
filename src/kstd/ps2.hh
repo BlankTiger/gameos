@@ -2,7 +2,6 @@
 
 #include "enum_array.hh"
 #include "low_level_io.hh"
-#include "serial.hh"
 #include "term.hh"
 
 // PS/2 controller (Intel 8042) initialization.
@@ -230,7 +229,6 @@ auto isr_handle_ps2_keyboard() -> void {
 
     Scancode scancode = static_cast<Scancode>(key_value);
     keys[scancode] = !key_up;
-    serial::println("Keyboard interrupt, scancode: %, pressed: %", scancode, is_pressed(scancode));
 }
 
 auto isr_handle_ps2_mouse() -> void {
