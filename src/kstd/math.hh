@@ -491,6 +491,17 @@ template <IsVector V>
     return v1.x * v2.y - v1.y * v2.x;
 }
 
+// Distinct type on purpose: quaternions must not pick up IsVector operations
+// (component multiplication != Hamilton product), identity is (0,0,0,1) not
+// one()/zero(), float-only, and rotations stay unmixed with Vector4 data.
+template <std::floating_point T>
+struct Quaternion {
+    using Value_Type = T;
+    T x{}, y{}, z{}, w{};
+
+    [[nodiscard]] static constexpr auto identity() -> Quaternion { return Quaternion{ T(0), T(0), T(0), T(1) }; }
+};
+
 #ifdef UNIT_TESTS
 
 template <IsVector V>
@@ -928,6 +939,16 @@ TEST(Vector, can_compute_det_xy) {
     test_det_xy_non_zero<Vector2<f32>>();
     test_det_xy_non_zero<Vector3<f32>>();
     test_det_xy_non_zero<Vector4<f32>>();
+}
+
+
+TEST(Quaternion, identity) {
+    auto q = Quaternion<f32>::identity();
+
+    EXPECT_EQ(q.x, 0.0f);
+    EXPECT_EQ(q.y, 0.0f);
+    EXPECT_EQ(q.z, 0.0f);
+    EXPECT_EQ(q.w, 1.0f);
 }
 
 TEST(Math, sqrt) {
