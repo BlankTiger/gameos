@@ -166,6 +166,10 @@ private:
             embed_state();
             return;
         }
+        else if (match("@T(")) {
+            typename_state();
+            return;
+        }
         else if (peek() == '"') {
             output += get();
             state = State::String;
@@ -251,6 +255,22 @@ private:
         Resource* resource = pool.find_or_create(asset_path, embed_identifier(path));
 
         output += resource->name; // replace @embed with resource name
+    }
+
+    void typename_state() {
+        std::string expr;
+        int depth = 1;
+        while (peek() != '\0') {
+            char c = get();
+            if (c == '(') depth++;
+            else if (c == ')') {
+                if (--depth == 0) break;
+            }
+            expr += c;
+        }
+        assert(depth == 0 && "Unterminated @T");
+
+        output += "typename " + expr; // replace @T(expr) with "typename expr"
     }
 };
 
