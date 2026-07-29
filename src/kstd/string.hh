@@ -37,7 +37,7 @@ struct string {
         append(other.view());
     }
 
-    auto operator=(const string& other) -> string& {
+    auto operator = (const string& other) -> string& {
         if (this == &other) return *this;
         clear();
         append(other.view());
@@ -51,7 +51,7 @@ struct string {
         other.capacity = 0;
     }
 
-    auto operator=(string&& other) noexcept -> string& {
+    auto operator = (string&& other) noexcept -> string& {
         if (this == &other) return *this;
         delete[] data;
         data     = other.data;
@@ -87,12 +87,12 @@ struct string {
         size += view.size;
     }
 
-    auto operator+=(T c) -> string& {
+    auto operator += (T c) -> string& {
         push_back(c);
         return *this;
     }
 
-    auto operator+=(string_view view) -> string& {
+    auto operator += (string_view view) -> string& {
         append(view);
         return *this;
     }
@@ -113,27 +113,27 @@ struct string {
         return string_view(data, size);
     }
 
-    auto operator==(const string& other) const -> bool {
+    auto operator == (const string& other) const -> bool {
         return view() == other.view();
     }
 
-    auto operator!=(const string& other) const -> bool {
+    auto operator != (const string& other) const -> bool {
         return !(*this == other);
     }
 
-    auto operator==(const string_view& other) const -> bool {
+    auto operator == (const string_view& other) const -> bool {
         return view() == other;
     }
 
-    auto operator!=(const string_view& other) const -> bool {
+    auto operator != (const string_view& other) const -> bool {
         return !(*this == other);
     }
 
-    auto operator==(const char* other) const -> bool {
+    auto operator == (const char* other) const -> bool {
         return view() == string_view{other};
     }
 
-    auto operator!=(const char* other) const -> bool {
+    auto operator != (const char* other) const -> bool {
         return !(*this == other);
     }
 
@@ -142,7 +142,7 @@ struct string {
         return result;
     }
 
-    auto operator[](usize index) const -> T {
+    auto operator [] (usize index) const -> T {
         kstd_assert(index < size, "string index out of bounds", std::source_location::current());
         return data[index];
     }

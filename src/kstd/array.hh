@@ -18,12 +18,12 @@ struct Array_View {
     static constexpr auto size_in_bytes = sizeof(T) * N;
     T* data;
 
-    auto operator[](u64 index, const std::source_location& location = std::source_location::current()) -> T& {
+    auto operator [] (u64 index, const std::source_location& location = std::source_location::current()) -> T& {
         kstd_assert(index < size, "index out of bounds", location);
         return data[index];
     }
 
-    constexpr auto operator[](u64 index, const std::source_location& location = std::source_location::current()) const
+    constexpr auto operator [] (u64 index, const std::source_location& location = std::source_location::current()) const
         -> const T& {
         kstd_assert(index < size, "index out of bounds", location);
         return data[index];
@@ -47,12 +47,12 @@ struct Array_View<T, DYNAMIC_EXTENT> {
     usize size;
     T* data;
 
-    auto operator[](u64 index, const std::source_location& location = std::source_location::current()) -> T& {
+    auto operator [] (u64 index, const std::source_location& location = std::source_location::current()) -> T& {
         kstd_assert(index < size, "index out of bounds", location);
         return data[index];
     }
 
-    constexpr auto operator[](u64 index, const std::source_location& location = std::source_location::current()) const
+    constexpr auto operator [] (u64 index, const std::source_location& location = std::source_location::current()) const
         -> const T& {
         kstd_assert(index < size, "index out of bounds", location);
         return data[index];
@@ -74,12 +74,12 @@ struct Static_Array {
     static constexpr auto size_in_bytes = sizeof(T) * N;
     T data[N];
 
-    auto operator[](u64 index, const std::source_location& location = std::source_location::current()) -> T& {
+    auto operator [] (u64 index, const std::source_location& location = std::source_location::current()) -> T& {
         kstd_assert(index < size, "index out of bounds", location);
         return data[index];
     }
 
-    constexpr auto operator[](u64 index, const std::source_location& location = std::source_location::current()) const
+    constexpr auto operator [] (u64 index, const std::source_location& location = std::source_location::current()) const
         -> const T& {
         kstd_assert(index < size, "index out of bounds", location);
         return data[index];
@@ -199,7 +199,7 @@ struct Bounded_Array {
         from.size = 0;
     }
 
-    auto operator=(const Bounded_Array& from) -> Bounded_Array& {
+    auto operator = (const Bounded_Array& from) -> Bounded_Array& {
         if (this == &from)
             return *this;
 
@@ -213,7 +213,7 @@ struct Bounded_Array {
         return *this;
     }
 
-    auto operator=(Bounded_Array&& from) noexcept -> Bounded_Array& {
+    auto operator = (Bounded_Array&& from) noexcept -> Bounded_Array& {
         if (this == &from)
             return *this;
 
@@ -230,12 +230,12 @@ struct Bounded_Array {
         return *this;
     }
 
-    auto operator[](u64 index, const std::source_location& location = std::source_location::current()) -> T& {
+    auto operator [] (u64 index, const std::source_location& location = std::source_location::current()) -> T& {
         kstd_assert(index < size, "index out of bounds", location);
         return *slot(index);
     }
 
-    auto operator[](u64 index, const std::source_location& location = std::source_location::current()) const
+    auto operator [] (u64 index, const std::source_location& location = std::source_location::current()) const
         -> const T& {
         kstd_assert(index < size, "index out of bounds", location);
         return *slot(index);
@@ -380,7 +380,7 @@ struct Array {
             ::new (data + i) T(from.data[i]);
     }
 
-    auto operator=(const Array& from) -> Array& {
+    auto operator = (const Array& from) -> Array& {
         if (this == &from) return *this;
         for (usize i = 0; i < size; ++i)
             data[i].~T();
@@ -407,7 +407,7 @@ struct Array {
         from.data     = nullptr;
     }
 
-    auto operator=(Array&& from) noexcept -> Array& {
+    auto operator = (Array&& from) noexcept -> Array& {
         if (this == &from)
             return *this;
 
@@ -426,12 +426,12 @@ struct Array {
         return *this;
     }
 
-    auto operator[](u64 index, const std::source_location& location = std::source_location::current()) -> T& {
+    auto operator [] (u64 index, const std::source_location& location = std::source_location::current()) -> T& {
         kstd_assert(index < size, "index out of bounds", location);
         return data[index];
     }
 
-    auto operator[](u64 index, const std::source_location& location = std::source_location::current()) const
+    auto operator [] (u64 index, const std::source_location& location = std::source_location::current()) const
         -> const T& {
         kstd_assert(index < size, "index out of bounds", location);
         return data[index];
