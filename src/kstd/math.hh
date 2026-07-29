@@ -491,6 +491,34 @@ template <IsVector V>
     return v1.x * v2.y - v1.y * v2.x;
 }
 
+// 2D "cross" = signed parallelogram area (same as det_xy).
+template <Numeric T>
+[[nodiscard]] force_inline constexpr auto cross(const Vector2<T>& a, const Vector2<T>& b) -> T {
+    return a.x * b.y - a.y * b.x;
+}
+
+template <Numeric T>
+[[nodiscard]] force_inline constexpr auto cross(const Vector3<T>& a, const Vector3<T>& b) -> Vector3<T> {
+    return Vector3<T>{
+        a.y * b.z - a.z * b.y,
+        a.z * b.x - a.x * b.z,
+        a.x * b.y - a.y * b.x
+    };
+}
+
+// In-place normalize. If v is the zero vector (division by zero), v is set
+// to fallback instead.
+template <IsVector V>
+requires std::floating_point<@T(V::Value_Type)>
+force_inline auto normalize(V& v, const V& fallback = V::zero()) -> void {
+    @T(V::Value_Type) len_sq = length_squared(v);
+    if (len_sq == @T(V::Value_Type)(0)) {
+        v = fallback;
+        return;
+    }
+    v = v / static_cast<@T(V::Value_Type)>(sqrt(static_cast<f32>(len_sq)));
+}
+
 // Distinct type on purpose: quaternions must not pick up IsVector operations
 // (component multiplication != Hamilton product), identity is (0,0,0,1) not
 // one()/zero(), float-only, and rotations stay unmixed with Vector4 data.
@@ -941,6 +969,67 @@ TEST(Vector, can_compute_det_xy) {
     test_det_xy_non_zero<Vector4<f32>>();
 }
 
+TEST(Vector, cross2) {
+    Vector2<f32> a{1, 0};
+    Vector2<f32> b{0, 1};
+
+    EXPECT_EQ(cross(a, b), 1.0f);
+    EXPECT_EQ(cross(b, a), -1.0f);
+    EXPECT_EQ(cross(a, a), 0.0f);
+}
+
+TEST(Vector, cross3) {
+    Vector3<f32> x{1, 0, 0};
+    Vector3<f32> y{0, 1, 0};
+
+    EXPECT_TRUE(cross(x, y) == (Vector3<f32>{0, 0, 1}));
+    EXPECT_TRUE(cross(y, x) == (Vector3<f32>{0, 0, -1}));
+    EXPECT_TRUE(cross(x, x) == Vector3<f32>::zero());
+}
+
+TEST(Vector, normalize2) {
+    Vector2<f32> v{3, 4};
+    normalize(v);
+
+    EXPECT_NEAR(v.x, 0.6f, 1e-6f);
+    EXPECT_NEAR(v.y, 0.8f, 1e-6f);
+    EXPECT_NEAR(length_squared(v), 1.0f, 1e-6f);
+}
+
+TEST(Vector, normalize3) {
+    Vector3<f32> v{3, 0, 4};
+    normalize(v);
+
+    EXPECT_NEAR(v.x, 0.6f, 1e-6f);
+    EXPECT_NEAR(v.y, 0.0f, 1e-6f);
+    EXPECT_NEAR(v.z, 0.8f, 1e-6f);
+    EXPECT_NEAR(length_squared(v), 1.0f, 1e-6f);
+}
+
+TEST(Vector, normalize4) {
+    Vector4<f32> v{0, 3, 0, 4};
+    normalize(v);
+
+    EXPECT_NEAR(v.x, 0.0f, 1e-6f);
+    EXPECT_NEAR(v.y, 0.6f, 1e-6f);
+    EXPECT_NEAR(v.z, 0.0f, 1e-6f);
+    EXPECT_NEAR(v.w, 0.8f, 1e-6f);
+    EXPECT_NEAR(length_squared(v), 1.0f, 1e-6f);
+}
+
+TEST(Vector, normalize_zero_uses_fallback) {
+    Vector2<f32> v2{0, 0};
+    normalize(v2, Vector2<f32>{0, 1});
+    EXPECT_TRUE(v2 == (Vector2<f32>{0, 1}));
+
+    Vector3<f32> v3{0, 0, 0};
+    normalize(v3, Vector3<f32>{0, 0, 1});
+    EXPECT_TRUE(v3 == (Vector3<f32>{0, 0, 1}));
+
+    Vector4<f32> v4{0, 0, 0, 0};
+    normalize(v4, Vector4<f32>{0, 0, 0, 1});
+    EXPECT_TRUE(v4 == (Vector4<f32>{0, 0, 0, 1}));
+}
 
 TEST(Quaternion, identity) {
     auto q = Quaternion<f32>::identity();
@@ -949,6 +1038,12 @@ TEST(Quaternion, identity) {
     EXPECT_EQ(q.y, 0.0f);
     EXPECT_EQ(q.z, 0.0f);
     EXPECT_EQ(q.w, 1.0f);
+}
+
+TEST(Math, abs_float) {
+    EXPECT_EQ(abs(3.0f), 3.0f);
+    EXPECT_EQ(abs(-3.0f), 3.0f);
+    EXPECT_EQ(abs(0.0f), 0.0f);
 }
 
 TEST(Math, sqrt) {
