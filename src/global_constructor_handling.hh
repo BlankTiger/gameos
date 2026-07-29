@@ -11,8 +11,11 @@ struct At_Exit_Entry {
 };
 
 static constexpr usize MAX_AT_EXIT_ENTRIES = 32;
-static At_Exit_Entry __at_exit_entries[MAX_AT_EXIT_ENTRIES];
-static usize __at_exit_entry_count;
+
+namespace constructors::hidden {
+    static inline At_Exit_Entry at_exit_entries[MAX_AT_EXIT_ENTRIES];
+    static inline usize         at_exit_entry_count;
+}
 
 extern "C" {
 __attribute__((visibility("hidden"))) void* __dso_handle = nullptr;
@@ -24,23 +27,27 @@ extern "C" Init_Function __ctors_start[];
 extern "C" Init_Function __ctors_end[];
 
 extern "C" int __cxa_atexit(void (*destructor)(void*), void* object, void* dso_handle) {
-    if (__at_exit_entry_count == MAX_AT_EXIT_ENTRIES) return -1;
+    using namespace constructors::hidden;
 
-    __at_exit_entries[__at_exit_entry_count++] = {destructor, object, dso_handle};
+    if (at_exit_entry_count == MAX_AT_EXIT_ENTRIES) return -1;
+
+    at_exit_entries[at_exit_entry_count++] = {destructor, object, dso_handle};
     return 0;
 }
 
 extern "C" void __cxa_finalize(void* dso_handle) {
+    using namespace constructors::hidden;
+
     if (dso_handle == nullptr) {
-        while (__at_exit_entry_count != 0) {
-            At_Exit_Entry entry = __at_exit_entries[--__at_exit_entry_count];
+        while (at_exit_entry_count != 0) {
+            At_Exit_Entry entry = at_exit_entries[--at_exit_entry_count];
             if (entry.destructor != nullptr) entry.destructor(entry.object);
         }
         return;
     }
 
-    for (usize i = __at_exit_entry_count; i != 0; --i) {
-        At_Exit_Entry& entry = __at_exit_entries[i - 1];
+    for (usize i = at_exit_entry_count; i != 0; --i) {
+        At_Exit_Entry& entry = at_exit_entries[i - 1];
         if (entry.destructor == nullptr || entry.dso_handle != dso_handle) continue;
 
         auto destructor = entry.destructor;
