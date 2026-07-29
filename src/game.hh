@@ -1,8 +1,6 @@
 #pragma once
 
-#include <algorithm>
 #include <initializer_list>
-#include <tuple>
 
 #include "kstd/array.hh"
 #include "kstd/numbers.hh"
