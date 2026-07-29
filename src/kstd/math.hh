@@ -11,12 +11,13 @@
 #include "assert.hh"
 #include "string.hh"
 
-// Bit-level helpers backing math::sqrt/math::tan below. Not part of the
-// public API (kept out of namespace math on purpose), just the frexp/ldexp
-// range-reduction steps that the Cephes single-precision routines need,
-// reimplemented with std::bit_cast instead of Cephes' original union-based
-// frexpf/ldexpf.
-namespace math_detail {
+namespace math {
+
+// Bit-level helpers backing sqrt/tan below. Internal to this TU only
+// (anonymous namespace), just the frexp/ldexp range-reduction steps that the
+// Cephes single-precision routines need, reimplemented with std::bit_cast
+// instead of Cephes' original union-based frexpf/ldexpf.
+namespace {
 
 // Decompose f into mantissa * 2^exponent, with mantissa in [0.5, 1.0).
 constexpr auto frexp_f32(f32 f) -> std::pair<f32, int> {
@@ -56,7 +57,8 @@ constexpr auto ldexp_f32(f32 mantissa, int e) -> f32 {
     return std::bit_cast<f32>((bits & 0x807FFFFFu) | (static_cast<u32>(exp_bits) << 23));
 }
 
-}  // namespace math_detail
+}  // namespace
+
 
 force_inline auto abs(s32 x) -> s32 {
     return (x ^ (x >> 31)) - (x >> 31);
@@ -92,7 +94,7 @@ force_inline auto ceil(f32 x) -> s32 {
 force_inline auto sqrt(f32 xx) -> f32 {
     if (xx <= 0.0f) return 0.0f;  // Domain error (x < 0) also returns 0, matching Cephes.
 
-    auto [x, e] = math_detail::frexp_f32(xx);  // xx = x * 2^e, 0.5 <= x < 1.0
+    auto [x, e] = frexp_f32(xx);  // xx = x * 2^e, 0.5 <= x < 1.0
 
     if (e & 1) {  // If the power of 2 is odd, double x and decrement it, so e is even.
         x = x + x;
@@ -134,7 +136,7 @@ force_inline auto sqrt(f32 xx) -> f32 {
               +   7.07106781187E-1f;
     }
 
-    return math_detail::ldexp_f32(y, e);
+    return ldexp_f32(y, e);
 }
 
 // Tangent, ported from the Cephes single-precision math library (tanf.c's
@@ -148,8 +150,8 @@ force_inline auto tan(f32 xx) -> f32 {
     constexpr f32 DP3    = 3.77489497744594108E-8f;   // range reduction.
     constexpr f32 LOSSTH = 8192.0f;
 
-    f32 sign = xx   < 0.0f ? -1.0f : 1.0f;
-    f32 x    = sign < 0.0f ? -xx   : xx;
+    f32 x    = abs(xx);
+    f32 sign = xx < 0.0f ? -1.0f : 1.0f;
 
     if (x > LOSSTH) return 0.0f;  // Total loss of precision; no error-reporting mechanism here.
 
@@ -476,7 +478,8 @@ constexpr auto operator != (const V& a, const V& b) -> bool {
 
 template <IsVector V>
 [[nodiscard]] force_inline constexpr auto dot(const V& a, const V& b) -> @T(V::Value_Type) {
-    @T(V::Value_Type) result{};
+    using T = @T(V::Value_Type);
+    T result{};
     for (usize i = 0; i < V::size; i++) result += a[i] * b[i];
     return result;
 }
@@ -488,13 +491,14 @@ template <IsVector V>
 
 template <IsVector V>
 [[nodiscard]] force_inline constexpr auto det_xy(const V& v1, const V& v2) -> @T(V::Value_Type) {
-    return v1.x * v2.y - v1.y * v2.x;
+    using T = @T(V::Value_Type);
+    return static_cast<T>(v1.x * v2.y - v1.y * v2.x);
 }
 
 // 2D "cross" = signed parallelogram area (same as det_xy).
 template <Numeric T>
 [[nodiscard]] force_inline constexpr auto cross(const Vector2<T>& a, const Vector2<T>& b) -> T {
-    return a.x * b.y - a.y * b.x;
+    return det_xy(a, b);
 }
 
 template <Numeric T>
@@ -511,12 +515,14 @@ template <Numeric T>
 template <IsVector V>
 requires std::floating_point<@T(V::Value_Type)>
 force_inline auto normalize(V& v, const V& fallback = V::zero()) -> void {
-    @T(V::Value_Type) len_sq = length_squared(v);
-    if (len_sq == @T(V::Value_Type)(0)) {
+    using T = @T(V::Value_Type);
+    T len_sq = length_squared(v);
+    if (len_sq == T(0)) {
         v = fallback;
         return;
     }
-    v = v / static_cast<@T(V::Value_Type)>(sqrt(static_cast<f32>(len_sq)));
+    f32 len = sqrt(static_cast<f32>(len_sq));
+    v = v / static_cast<T>(len);
 }
 
 // Distinct type on purpose: quaternions must not pick up IsVector operations
