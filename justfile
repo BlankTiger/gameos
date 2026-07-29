@@ -17,7 +17,7 @@ check-headers: preprocess
     cmake --build {{build_dir}} --target check_headers
 
 run: build
-    qemu-system-i386 -serial stdio -cdrom {{build_dir}}/gameos.iso
+    qemu-system-i386 -enable-kvm -cpu host -m 512M -serial stdio -cdrom {{build_dir}}/gameos.iso
 
 test: configure-tests
     cmake --build {{test_build_dir}}

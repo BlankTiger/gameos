@@ -39,12 +39,23 @@ force_inline auto kstd_memset(void* buffer, int value, usize length) -> void* {
 #if defined(__STDC_HOSTED__) && __STDC_HOSTED__
     return std::memset(buffer, value, length);
 #else
-    u8* dst = (u8*)buffer;
+    void* dst = buffer;
+    usize bytes = length;
+    asm volatile("rep stosb" : "+D"(dst), "+c"(bytes) : "a"(static_cast<u8>(value)) : "memory");
+    return buffer;
+#endif
+}
 
-    while (length--) {
-        *dst++ = (u8)value;
-    }
-
+// Fill `count` dwords with `value` (rep stosl on freestanding i686).
+force_inline auto kstd_memset32(void* buffer, u32 value, usize count) -> void* {
+#if defined(__STDC_HOSTED__) && __STDC_HOSTED__
+    auto* dst = static_cast<u32*>(buffer);
+    for (usize i = 0; i < count; ++i) dst[i] = value;
+    return buffer;
+#else
+    void* dst = buffer;
+    usize n = count;
+    asm volatile("rep stosl" : "+D"(dst), "+c"(n) : "a"(value) : "memory");
     return buffer;
 #endif
 }
