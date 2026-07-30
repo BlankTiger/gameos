@@ -900,7 +900,7 @@ constexpr auto isometry_inverse(const Matrix4<T>& m) -> Matrix4<T> {
     return result;
 }
 
-#ifdef UNIT_TESTS
+#ifdef UNIT_TESTS_KSTD_MATRIX
 
 TEST(Matrix, identity) {
     auto m2 = Matrix2<f32>::identity();

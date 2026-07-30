@@ -537,7 +537,7 @@ struct Quaternion {
     [[nodiscard]] static constexpr auto identity() -> Quaternion { return Quaternion{ T(0), T(0), T(0), T(1) }; }
 };
 
-#ifdef UNIT_TESTS
+#ifdef UNIT_TESTS_KSTD_MATH
 
 template <IsVector V>
 void expect_values(const V& v, std::initializer_list<@T(V::Value_Type)> values) {
@@ -1229,7 +1229,7 @@ struct Grid3 {
     }
 };
 
-#ifdef UNIT_TESTS
+#ifdef UNIT_TESTS_KSTD_MATH
 
 TEST(Grid3_bool, can_set_a_custom_default_value) {
     {

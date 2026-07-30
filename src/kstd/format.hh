@@ -13,6 +13,10 @@
 // Forward declare: assert.hh pulls serial.hh → format.hh.
 constexpr force_inline auto kstd_assert(bool predicate, const char* message, const std::source_location& location) -> void;
 
+#ifdef UNIT_TESTS_KSTD_FORMAT
+#include "assert.hh"
+#endif
+
 //
 // Backend-agnostic formatting utilities.
 //
@@ -434,7 +438,7 @@ auto println(Backend& backend, T&& value) -> int
 
 }  // namespace fmt
 
-#ifdef UNIT_TESTS
+#ifdef UNIT_TESTS_KSTD_FORMAT
 
 namespace fmt_test {
 

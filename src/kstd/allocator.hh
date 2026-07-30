@@ -470,7 +470,7 @@ struct Push_Allocator {
 // Named RAII so dtor runs at scope exit.
 #define PUSH_ALLOCATOR(allocator) mem::Push_Allocator DEFER_UNIQ(_push_allocator_)(allocator)
 
-#ifdef UNIT_TESTS
+#ifdef UNIT_TESTS_KSTD_ALLOCATOR
 
 TEST(Debug_Allocator, allows_destruction_when_all_freed) {
     mem::Hosted_Allocator hosted{};

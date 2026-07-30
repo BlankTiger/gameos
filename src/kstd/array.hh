@@ -95,7 +95,7 @@ struct Static_Array {
     ARRAY_ITERATOR()
 };
 
-#ifdef UNIT_TESTS
+#ifdef UNIT_TESTS_KSTD_ARRAY
 
 TEST(Static_Array, stores_values) {
     Static_Array<int, 3> arr{{1, 2, 3}};
@@ -270,7 +270,7 @@ private:
     }
 };
 
-#ifdef UNIT_TESTS
+#ifdef UNIT_TESTS_KSTD_ARRAY
 
 TEST(Bounded_Array, default_is_empty) {
     Bounded_Array<int, 4> arr;
@@ -538,7 +538,7 @@ private:
 };
 
 
-#ifdef UNIT_TESTS
+#ifdef UNIT_TESTS_KSTD_ARRAY
 
 TEST(Array, default_is_empty) {
     Array<int> arr;
