@@ -1,12 +1,17 @@
 #pragma once
 
+#include <source_location>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 
 #include "basic.hh"
 #include "cstring.hh"
 #include "enum_name.hh"
-#include "string_view.hh"
+#include "string.hh"
+
+// Forward declare: assert.hh pulls serial.hh → format.hh.
+constexpr force_inline auto kstd_assert(bool predicate, const char* message, const std::source_location& location) -> void;
 
 //
 // Backend-agnostic formatting utilities.
@@ -15,16 +20,25 @@
 //   auto put_char(char c) -> void;
 //   auto new_line() -> void;
 //
+// Optional (used for bulk literal runs when present):
+//   auto append(const char* bytes, usize length) -> void;
+//
 // put_char/new_line may be static (stateless backends, e.g. serial::Backend)
 // or regular instance methods backed by member data (stateful backends,
-// e.g. sprint's target string). Either way an instance is passed by
+// e.g. String_Builder). Either way an instance is passed by
 // reference into fmt::print/fmt::println; for stateless backends that's just
 // a throwaway default-constructed value at the call site.
 //
-
+// Format rules:
+//   % / %0     next arg (implicit index)
+//   %1, %2, …  1-based arg index; sets next implicit to N+1
+//              leading zeros ok (%01 == %1); out-of-range asserts
+//   %00        empty insert (%000… too)
+//   %%         literal %  (also char 31)
 //
 // For a custom type to be easily displayed by anything implementing fmt
-// implement a `format` method on it:
+// implement a `format` method on it. Return type must convert to string.
+// Lifetime must cover the print call (temp until reset is fine for tprint):
 //
 // struct A {
 //     const char* message;
@@ -182,7 +196,7 @@ static force_inline auto print_value(Backend& backend, const void* value) -> int
 }
 
 template <typename Backend>
-static force_inline auto print_string_view(Backend& backend, const string_view s) -> int {
+static force_inline auto print_string(Backend& backend, const string s) -> int {
     for (auto c : s) {
         backend.put_char(c);
     }
@@ -194,9 +208,9 @@ static force_inline auto print_value(Backend& backend, T&& value) -> int {
     using U = std::remove_cvref_t<T>;
 
     if constexpr (requires { value.format(); }) {
-        return print_string_view(backend, value.format());
-    } else if constexpr (std::is_same_v<U, string_view>) {
-        return print_string_view(backend, value);
+        return print_string(backend, value.format());
+    } else if constexpr (std::is_same_v<U, string>) {
+        return print_string(backend, value);
     } else if constexpr (std::is_same_v<U, bool>) {
         return print_value(backend, (bool)value);
     } else if constexpr (std::is_same_v<U, char>) {
@@ -210,9 +224,9 @@ static force_inline auto print_value(Backend& backend, T&& value) -> int {
             return print_value(backend, (u64)value);
         }
     } else if constexpr (std::is_enum_v<U>) {
-        string_view name = enum_name(value);
+        string name = enum_name(value);
         if (name.size > 0) {
-            return print_string_view(backend, name);
+            return print_string(backend, name);
         }
         using Underlying = std::underlying_type_t<U>;
         return print_value(backend, (Underlying)value);
@@ -258,56 +272,131 @@ static force_inline auto print_value(Backend& backend, T&& value) -> int {
 // -- format string parsing --
 
 template <typename Backend>
-auto print(Backend& backend, const char* format) -> int {
-    int written = 0;
-    for (const char* it = format; *it != '\0'; ++it) {
-        if (*it == '%' && it[1] == '%') {
-            backend.put_char('%');
-            ++written;
-            ++it;
-        } else {
-            backend.put_char(*it);
-            ++written;
-        }
+force_inline auto write_literal(Backend& backend, const char* data, usize length) -> int {
+    if (length == 0) return 0;
+    if constexpr (requires { backend.append(data, length); }) {
+        backend.append(data, length);
+    } else {
+        for (usize i = 0; i < length; ++i)
+            backend.put_char(data[i]);
     }
+    return static_cast<int>(length);
+}
+
+force_inline auto is_digit(char c) -> bool {
+    return c >= '0' && c <= '9';
+}
+
+template <usize I = 0, typename Backend, typename Tuple>
+force_inline auto print_arg_at(Backend& backend, Tuple& args, usize index) -> int {
+    if constexpr (I < std::tuple_size_v<Tuple>) {
+        if (I == index)
+            return print_value(backend, std::get<I>(args));
+        return print_arg_at<I + 1>(backend, args, index);
+    }
+    return 0;
+}
+
+template <typename Backend, typename Tuple>
+auto print_impl(Backend& backend, string format, Tuple& args) -> int {
+    constexpr usize arg_count = std::tuple_size_v<Tuple>;
+
+    usize implicit_index_cursor = 0;
+    usize cursor                = 0;
+    usize printed               = 0;
+    int   written               = 0;
+
+    while (cursor < format.size) {
+        char c = format.data[cursor];
+
+        if (c != '%') {
+            // Byte 31 in the format string becomes a literal '%'.
+            if (static_cast<u8>(c) == 31) {
+                written += write_literal(backend, format.data + printed, cursor - printed);
+                backend.put_char('%');
+                written += 1;
+                cursor  += 1;
+                printed  = cursor;
+                continue;
+            }
+            cursor += 1;
+            continue;
+        }
+
+        written += write_literal(backend, format.data + printed, cursor - printed);
+        cursor += 1;  // skip '%'
+
+        usize value = implicit_index_cursor;
+
+        if (cursor < format.size) {
+            char next = format.data[cursor];
+            if (next == '%') {
+                // %% → literal %
+                backend.put_char('%');
+                written += 1;
+                cursor  += 1;
+                printed  = cursor;
+                continue;
+            }
+            if (is_digit(next)) {
+                usize start = cursor;
+                usize sum   = 0;
+                while (cursor < format.size && is_digit(format.data[cursor])) {
+                    sum = sum * 10 + static_cast<usize>(format.data[cursor] - '0');
+                    cursor += 1;
+                }
+                usize digit_count = cursor - start;
+                if (sum == 0) {
+                    if (digit_count >= 2) {
+                        // %00, %000, … → empty insert
+                        printed = cursor;
+                        continue;
+                    }
+                    // %0 → same as bare %
+                } else {
+                    value = sum - 1;  // 1-based → 0-based
+                }
+            }
+        }
+
+        if (value >= arg_count) {
+            kstd_assert(false, "format arg index out of range", std::source_location::current());
+            printed = cursor;
+            continue;
+        }
+
+        written += print_arg_at(backend, args, value);
+        implicit_index_cursor = value + 1;
+        printed               = cursor;
+    }
+
+    written += write_literal(backend, format.data + printed, cursor - printed);
     return written;
 }
 
+template <typename Backend, typename... Args>
+auto print(Backend& backend, string format, Args&&... args) -> int {
+    auto tuple = std::forward_as_tuple(std::forward<Args>(args)...);
+    return print_impl(backend, format, tuple);
+}
+
+template <typename Backend, typename... Args>
+auto print(Backend& backend, const char* format, Args&&... args) -> int {
+    return print(backend, string(format), std::forward<Args>(args)...);
+}
+
+// Single value, no format string.
 template <typename Backend, typename T>
-auto print(Backend& backend, T&& value) -> int {
+auto print(Backend& backend, T&& value) -> int
+    requires(
+        !std::is_same_v<std::remove_cvref_t<T>, string> &&
+        !std::is_same_v<std::remove_cvref_t<T>, char*> &&
+        !std::is_same_v<std::remove_cvref_t<T>, const char*> &&
+        !(std::is_array_v<std::remove_cvref_t<T>> &&
+          std::is_same_v<std::remove_extent_t<std::remove_cvref_t<T>>, char>)
+    )
+{
     return print_value(backend, std::forward<T>(value));
-}
-
-template <typename Backend, typename T>
-auto println(Backend& backend, T&& value) -> int {
-    int written = print_value(backend, std::forward<T>(value));
-    backend.new_line();
-    return written + 1;
-}
-
-template <typename Backend, typename T, typename... Rest>
-auto print(Backend& backend, const char* format, T&& value, Rest&&... rest) -> int {
-    int written = 0;
-
-    for (const char* it = format; *it != '\0'; ++it) {
-        if (*it != '%') {
-            backend.put_char(*it);
-            ++written;
-            continue;
-        }
-
-        if (it[1] == '%') {
-            backend.put_char('%');
-            ++written;
-            ++it;
-            continue;
-        }
-
-        written += print_value(backend, std::forward<T>(value));
-        return written + print(backend, it + 1, std::forward<Rest>(rest)...);
-    }
-
-    return written;
 }
 
 template <typename Backend>
@@ -316,16 +405,29 @@ auto println(Backend& backend) -> int {
     return 1;
 }
 
-template <typename Backend>
-auto println(Backend& backend, const char* format) -> int {
-    int written = print(backend, format);
+template <typename Backend, typename... Args>
+auto println(Backend& backend, string format, Args&&... args) -> int {
+    int written = print(backend, format, std::forward<Args>(args)...);
     backend.new_line();
     return written + 1;
 }
 
-template <typename Backend, typename T, typename... Rest>
-auto println(Backend& backend, const char* format, T&& value, Rest&&... rest) -> int {
-    int written = print(backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
+template <typename Backend, typename... Args>
+auto println(Backend& backend, const char* format, Args&&... args) -> int {
+    return println(backend, string(format), std::forward<Args>(args)...);
+}
+
+template <typename Backend, typename T>
+auto println(Backend& backend, T&& value) -> int
+    requires(
+        !std::is_same_v<std::remove_cvref_t<T>, string> &&
+        !std::is_same_v<std::remove_cvref_t<T>, char*> &&
+        !std::is_same_v<std::remove_cvref_t<T>, const char*> &&
+        !(std::is_array_v<std::remove_cvref_t<T>> &&
+          std::is_same_v<std::remove_extent_t<std::remove_cvref_t<T>>, char>)
+    )
+{
+    int written = print_value(backend, std::forward<T>(value));
     backend.new_line();
     return written + 1;
 }
@@ -337,8 +439,8 @@ auto println(Backend& backend, const char* format, T&& value, Rest&&... rest) ->
 namespace fmt_test {
 
 struct Capture_Backend {
-    char  buffer[64] = {};
-    usize length     = 0;
+    char  buffer[256] = {};
+    usize length      = 0;
 
     auto put_char(char c) -> void {
         if (length + 1 < sizeof(buffer)) buffer[length++] = c;
@@ -349,24 +451,73 @@ struct Capture_Backend {
 
 } // namespace fmt_test
 
-// string_view exposes `data` as a member variable, which used to make it fall
+// string exposes `data` as a member variable, which used to make it fall
 // through every `value.data()` branch of print_value and get printed as a
 // pointer.
-TEST(fmt, prints_string_view_contents_not_its_address) {
+TEST(fmt, prints_string_contents_not_its_address) {
     fmt_test::Capture_Backend backend;
 
-    fmt::print(backend, "%", string_view("hello world", 5));
+    fmt::print(backend, "%", string("hello world", 5));
 
     EXPECT_STREQ(backend.buffer, "hello");
 }
 
-TEST(fmt, prints_string_view_lvalue) {
+TEST(fmt, prints_string_lvalue) {
     fmt_test::Capture_Backend backend;
-    const string_view value = "abc";
+    const string value = "abc";
 
     fmt::print(backend, "[%]", value);
 
     EXPECT_STREQ(backend.buffer, "[abc]");
+}
+
+TEST(fmt, sequential_percent) {
+    fmt_test::Capture_Backend backend;
+    fmt::print(backend, "%, %!", "hello", "world");
+    EXPECT_STREQ(backend.buffer, "hello, world!");
+}
+
+TEST(fmt, numbered_args_reorder) {
+    fmt_test::Capture_Backend backend;
+    fmt::print(backend, "%2 then %1", "first", "second");
+    EXPECT_STREQ(backend.buffer, "second then first");
+}
+
+TEST(fmt, numbered_then_implicit) {
+    fmt_test::Capture_Backend backend;
+    // %2 consumes arg1; next bare % uses implicit = 2 → arg index 2 (third)
+    fmt::print(backend, "%2-%", "a", "b", "c");
+    EXPECT_STREQ(backend.buffer, "b-c");
+}
+
+TEST(fmt, percent_escape_and_empty) {
+    fmt_test::Capture_Backend backend;
+    fmt::print(backend, "%% %00 done", 1);
+    EXPECT_STREQ(backend.buffer, "%  done");
+}
+
+TEST(fmt, leading_zero_numbered_arg) {
+    fmt_test::Capture_Backend backend;
+    fmt::print(backend, "%01-%02", "a", "b");
+    EXPECT_STREQ(backend.buffer, "a-b");
+}
+
+TEST(fmt, out_of_range_index_asserts) {
+    fmt_test::Capture_Backend backend;
+    EXPECT_DEATH(fmt::print(backend, "%5 %", "a"), "");
+}
+
+TEST(fmt, char_31_is_literal_percent) {
+    fmt_test::Capture_Backend backend;
+    char format[] = {'x', static_cast<char>(31), 'y', '\0'};
+    fmt::print(backend, format);
+    EXPECT_STREQ(backend.buffer, "x%y");
+}
+
+TEST(fmt, single_value) {
+    fmt_test::Capture_Backend backend;
+    fmt::print(backend, 42);
+    EXPECT_STREQ(backend.buffer, "42");
 }
 
 #endif

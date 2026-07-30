@@ -1,6 +1,6 @@
 #pragma once
 
-#include "string_view.hh"
+#include "string.hh"
 #include "array.hh"
 #include "assert.hh"
 #include "numbers.hh"
@@ -13,12 +13,12 @@ struct Stacktrace {
 };
 
 struct Frame {
-    psize       function_address;
-    string_view function_name;
-    u32         line_number;
+    psize  function_address;
+    string function_name;
+    u32    line_number;
 };
 
-auto get_function_name(psize address) -> string_view {
+auto get_function_name(psize address) -> string {
     (void)address;
     return "implement me!";
 }

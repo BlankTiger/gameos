@@ -9,7 +9,7 @@
 #include "kstd/gfx.hh"
 #include "kstd/ps2.hh"
 #include "kstd/math.hh"
-#include "kstd/string.hh"
+#include "kstd/string_builder.hh"
 #include "kstd/random.hh"
 
 constexpr u64 FPS_MAX                                 = 144;
@@ -199,11 +199,8 @@ auto update(Game& game) -> void {
 auto draw(const Game& game) -> void {
     gfx::clear(gfx::BLACK);
 
-    const auto fps_text = sprint("FPS: %", game.fps);
-    gfx::draw_text(8, 8, fps_text);
-
-    const auto grid_as_text = sprint("%", game.grid);
-    gfx::draw_text(gfx::width() / 3, gfx::height() / 8, grid_as_text);
+    gfx::draw_text(8, 8, tprint("FPS: %", game.fps));
+    gfx::draw_text(gfx::width() / 3, gfx::height() / 8, tprint("%", game.grid));
 
     gfx::draw_frame();
 }

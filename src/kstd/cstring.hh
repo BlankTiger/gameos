@@ -22,7 +22,7 @@ force_inline auto kstd_memcpy(void* __restrict destination, const void* __restri
     void* dst = destination;
     const void* src = source;
 
-    asm volatile("rep movsl" : "+D"(dst), "+S"(src), "+c"(dwords) : : "memory");
+    asm volatile("cld; rep movsl" : "+D"(dst), "+S"(src), "+c"(dwords) : : "memory", "cc");
 
     u8* dst_bytes = static_cast<u8*>(dst);
     const u8* src_bytes = static_cast<const u8*>(src);
@@ -41,7 +41,7 @@ force_inline auto kstd_memset(void* buffer, int value, usize length) -> void* {
 #else
     void* dst = buffer;
     usize bytes = length;
-    asm volatile("rep stosb" : "+D"(dst), "+c"(bytes) : "a"(static_cast<u8>(value)) : "memory");
+    asm volatile("cld; rep stosb" : "+D"(dst), "+c"(bytes) : "a"(static_cast<u8>(value)) : "memory", "cc");
     return buffer;
 #endif
 }
@@ -55,7 +55,7 @@ force_inline auto kstd_memset32(void* buffer, u32 value, usize count) -> void* {
 #else
     void* dst = buffer;
     usize n = count;
-    asm volatile("rep stosl" : "+D"(dst), "+c"(n) : "a"(value) : "memory");
+    asm volatile("cld; rep stosl" : "+D"(dst), "+c"(n) : "a"(value) : "memory", "cc");
     return buffer;
 #endif
 }
