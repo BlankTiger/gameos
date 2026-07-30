@@ -8,12 +8,12 @@ constexpr auto kstd_strlen(const char* str) -> usize {
     return len;
 }
 
-#if defined(__STDC_HOSTED__) && __STDC_HOSTED__
+#if HOSTED
 #include <cstring>
 #endif
 
 force_inline auto kstd_memcpy(void* __restrict destination, const void* __restrict source, usize length) -> void* {
-#if defined(__STDC_HOSTED__) && __STDC_HOSTED__
+#if HOSTED
     return std::memcpy(destination, source, length);
 #else
     usize dwords = length / 4;
@@ -36,7 +36,7 @@ force_inline auto kstd_memcpy(void* __restrict destination, const void* __restri
 }
 
 force_inline auto kstd_memset(void* buffer, int value, usize length) -> void* {
-#if defined(__STDC_HOSTED__) && __STDC_HOSTED__
+#if HOSTED
     return std::memset(buffer, value, length);
 #else
     void* dst = buffer;
@@ -48,7 +48,7 @@ force_inline auto kstd_memset(void* buffer, int value, usize length) -> void* {
 
 // Fill `count` dwords with `value` (rep stosl on freestanding i686).
 force_inline auto kstd_memset32(void* buffer, u32 value, usize count) -> void* {
-#if defined(__STDC_HOSTED__) && __STDC_HOSTED__
+#if HOSTED
     auto* dst = static_cast<u32*>(buffer);
     for (usize i = 0; i < count; ++i) dst[i] = value;
     return buffer;

@@ -4,7 +4,7 @@
 
 #include "basic.hh"
 
-#if defined(__STDC_HOSTED__) && __STDC_HOSTED__
+#if HOSTED
 #include <cstdio>
 #include <cstdlib>
 
@@ -135,4 +135,11 @@ constexpr force_inline auto unimplemented(
     const std::source_location& location = std::source_location::current()
 ) -> void {
     kstd_assert(false, message ? message : "unimplemented", location);
+}
+
+constexpr force_inline auto unreachable(
+    const char* message = nullptr,
+    const std::source_location& location = std::source_location::current()
+) -> void {
+    kstd_assert(false, message ? message : "unreachable", location);
 }

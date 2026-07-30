@@ -10,6 +10,7 @@
 #include "cstring.hh"
 #include "assert.hh"
 #include "string_view.hh"
+#include "allocator.hh"
 #include "array_iterator.hh"
 
 template <typename T, usize N>
@@ -175,8 +176,8 @@ struct Bounded_Array {
     static constexpr auto size_in_bytes = sizeof(T) * N;
     usize size = 0;
     // Raw byte storage avoids default-constructing every slot up front.
-    // Without this, push_back's placement-new would run a second constructor
-    // over an already-live object - UB for any non-trivial T.
+    // Without this, push_back placement-new would run a second constructor
+    // over an already-live object. It is UB for any non-trivial T.
     alignas(T) u8 data[sizeof(T) * N];
 
     Bounded_Array() = default;
@@ -340,26 +341,36 @@ TEST(Bounded_Array, passes_implicitly_to_function_taking_array_view) {
 
 #endif
 
+//
+// Growable heap array. Stores the Allocator pointer that owns `data` so free
+// and grow always use the same heap. Pass null to capture the current global
+// allocator at construction.
+//
 template <typename T>
 struct Array {
-    usize capacity;
-    usize size;
-    T* data;
+    // Allocator first. Member init order follows declaration order.
+    mem::Allocator* allocator = nullptr;
+    usize           capacity  = 0;
+    usize           size      = 0;
+    T*              data      = nullptr;
 
-    Array()
-        : capacity(1),
+    Array(mem::Allocator* allocator = nullptr)
+        : allocator(mem::resolve_allocator(allocator)),
+          capacity(1),
           size(0),
-          data(static_cast<T*>(::operator new(sizeof(T) * capacity))) {}
+          data(allocate_storage(1)) {}
 
-    explicit Array(usize initial_size)
-        : capacity(initial_size),
+    Array(usize initial_capacity, mem::Allocator* allocator = nullptr)
+        : allocator(mem::resolve_allocator(allocator)),
+          capacity(initial_capacity == 0 ? 1 : initial_capacity),
           size(0),
-          data(static_cast<T*>(::operator new(sizeof(T) * capacity))) {}
+          data(allocate_storage(capacity)) {}
 
-    explicit Array(usize initial_size, const T& initial_value)
-        : capacity(initial_size),
+    Array(usize initial_size, const T& initial_value, mem::Allocator* allocator = nullptr)
+        : allocator(mem::resolve_allocator(allocator)),
+          capacity(initial_size == 0 ? 1 : initial_size),
           size(0),
-          data(static_cast<T*>(::operator new(sizeof(T) * capacity))) {
+          data(allocate_storage(capacity)) {
         for (usize index = 0; index < initial_size; ++index) {
             ::new (static_cast<void*>(data + index)) T(initial_value);
             ++size;
@@ -367,30 +378,31 @@ struct Array {
     }
 
     ~Array() {
-        for (usize i = 0; i < size; ++i)
-            data[i].~T();
-        ::operator delete(data);
+        destroy_elements();
+        free_storage(data, capacity);
     }
 
     Array(const Array& from)
-        : capacity(from.capacity),
+        : allocator(mem::resolve_allocator(from.allocator)),
+          capacity(from.capacity == 0 ? 1 : from.capacity),
           size(from.size),
-          data(static_cast<T*>(::operator new(sizeof(T) * capacity))) {
+          data(allocate_storage(capacity)) {
         for (usize i = 0; i < size; ++i)
             ::new (data + i) T(from.data[i]);
     }
 
     auto operator = (const Array& from) -> Array& {
         if (this == &from) return *this;
-        for (usize i = 0; i < size; ++i)
-            data[i].~T();
+
+        destroy_elements();
         // @TODO: Consider not deleting this if it's big enough. Also look at
         //        other constructors and do the same.
-        ::operator delete(data);
+        free_storage(data, capacity);
 
-        capacity = from.capacity;
-        size     = from.size;
-        data     = static_cast<T*>(::operator new(sizeof(T) * from.capacity));
+        allocator = mem::resolve_allocator(from.allocator);
+        capacity  = from.capacity == 0 ? 1 : from.capacity;
+        size      = from.size;
+        data      = allocate_storage(capacity);
 
         for (usize i = 0; i < size; ++i)
             ::new (data + i) T(from.data[i]);
@@ -399,29 +411,32 @@ struct Array {
     }
 
     Array(Array&& from) noexcept
-        : capacity(from.capacity),
+        : allocator(from.allocator),
+          capacity(from.capacity),
           size(from.size),
           data(from.data) {
-        from.capacity = 0;
-        from.size     = 0;
-        from.data     = nullptr;
+        from.allocator = nullptr;
+        from.capacity  = 0;
+        from.size      = 0;
+        from.data      = nullptr;
     }
 
     auto operator = (Array&& from) noexcept -> Array& {
         if (this == &from)
             return *this;
 
-        for (usize i = 0; i < size; ++i)
-            data[i].~T();
-        ::operator delete(data);
+        destroy_elements();
+        free_storage(data, capacity);
 
-        capacity = from.capacity;
-        size     = from.size;
-        data     = from.data;
+        allocator = from.allocator;
+        capacity  = from.capacity;
+        size      = from.size;
+        data      = from.data;
 
-        from.capacity = 0;
-        from.size     = 0;
-        from.data     = nullptr;
+        from.allocator = nullptr;
+        from.capacity  = 0;
+        from.size      = 0;
+        from.data      = nullptr;
 
         return *this;
     }
@@ -440,21 +455,24 @@ struct Array {
     auto reserve(usize min_capacity) -> void {
         if (min_capacity <= capacity) return;
 
+        ensure_allocator();
+
         usize new_capacity = capacity == 0 ? 16 : capacity;
         while (new_capacity < min_capacity) new_capacity *= 2;
 
-        T* new_data = static_cast<T*>(::operator new(sizeof(T) * new_capacity));
+        T* new_data = allocate_storage(new_capacity);
         if constexpr (std::is_trivially_copyable_v<T>) {
-            kstd_memcpy(new_data, data, sizeof(T) * size);
+            if (data != nullptr && size > 0)
+                kstd_memcpy(new_data, data, sizeof(T) * size);
         } else {
             for (usize i = 0; i < size; ++i) {
                 ::new (new_data + i) T(std::move(data[i]));
                 data[i].~T();
             }
         }
-        ::operator delete(data);
+        free_storage(data, capacity);
 
-        data = new_data;
+        data     = new_data;
         capacity = new_capacity;
     }
 
@@ -470,7 +488,7 @@ struct Array {
         ++size;
     }
 
-    // O(n) move of all elements back by one.
+    // Move all elements back by one in O(n) time.
     auto pop_front() -> void {
         kstd_assert(size > 0, "pop_front on empty Array");
         data[0].~T();
@@ -482,18 +500,41 @@ struct Array {
     }
 
     auto clear() {
-        for (usize i = 0; i < size; ++i) {
-            data[i].~T();
-        }
+        destroy_elements();
         size = 0;
     }
 
-    auto elements()       -> T*       { return data; }
+    auto elements()       ->       T* { return data; }
     auto elements() const -> const T* { return data; }
 
     operator Array_View<T>() { return Array_View<T>{size, data}; }
 
     ARRAY_ITERATOR()
+
+private:
+    auto ensure_allocator() -> void {
+        if (allocator == nullptr)
+            allocator = mem::resolve_allocator();
+    }
+
+    auto allocate_storage(usize count) -> T* {
+        ensure_allocator();
+        if (count == 0) return nullptr;
+        void* memory = allocator->alloc(sizeof(T) * count, alignof(T));
+        kstd_assert(memory != nullptr, "Array allocation failed");
+        return static_cast<T*>(memory);
+    }
+
+    auto free_storage(T* pointer, usize count) -> void {
+        if (pointer == nullptr) return;
+        ensure_allocator();
+        allocator->free(pointer, sizeof(T) * count, alignof(T));
+    }
+
+    auto destroy_elements() -> void {
+        for (usize i = 0; i < size; ++i)
+            data[i].~T();
+    }
 };
 
 
@@ -504,6 +545,47 @@ TEST(Array, default_is_empty) {
 
     EXPECT_EQ(arr.size, 0);
     EXPECT_EQ(arr.capacity, 1);
+    EXPECT_NE(arr.allocator, nullptr);
+}
+
+TEST(Array, remembers_explicit_allocator) {
+    mem::Hosted_Allocator allocator;
+    Array<int> arr(&allocator);
+
+    EXPECT_EQ(arr.allocator, &allocator);
+
+    arr.push_back(1);
+    arr.push_back(2);
+
+    EXPECT_EQ(arr.size, 2);
+    EXPECT_EQ(arr[0], 1);
+    EXPECT_EQ(arr[1], 2);
+    EXPECT_EQ(arr.allocator, &allocator);
+}
+
+TEST(Array, copy_keeps_source_allocator) {
+    mem::Hosted_Allocator allocator;
+    Array<int> first(&allocator);
+    first.push_back(7);
+
+    Array<int> second = first;
+
+    EXPECT_EQ(second.allocator, &allocator);
+    EXPECT_EQ(second.size, 1);
+    EXPECT_EQ(second[0], 7);
+}
+
+TEST(Array, move_transfers_allocator) {
+    mem::Hosted_Allocator allocator;
+    Array<int> first(&allocator);
+    first.push_back(9);
+
+    Array<int> second = std::move(first);
+
+    EXPECT_EQ(second.allocator, &allocator);
+    EXPECT_EQ(second[0], 9);
+    EXPECT_EQ(first.allocator, nullptr);
+    EXPECT_EQ(first.data, nullptr);
 }
 
 TEST(Array, push_back_grows_size) {
