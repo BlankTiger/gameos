@@ -321,15 +321,11 @@ struct Debug_Allocator final : Allocator {
 
     Debug_Allocator() = default;
 
-    explicit Debug_Allocator(Allocator* backing_allocator) {
-        init(backing_allocator);
-    }
-
-    auto init(Allocator* backing_allocator) -> void {
+    explicit Debug_Allocator(Allocator* backing_allocator)
+        : backing(backing_allocator),
+          live_head(nullptr),
+          live_count(0) {
         kstd_assert(backing_allocator != nullptr);
-        backing    = backing_allocator;
-        live_head  = nullptr;
-        live_count = 0;
     }
 
     ~Debug_Allocator() {
@@ -384,6 +380,7 @@ struct Debug_Allocator final : Allocator {
 struct Null_Allocator final : Allocator {
     auto alloc(usize, usize = alignof(std::max_align_t)) -> void* override {
         unreachable("Null_Allocator alloc called.");
+        return nullptr;
     }
 
     auto free(void*, usize, usize = alignof(std::max_align_t)) -> void override {
