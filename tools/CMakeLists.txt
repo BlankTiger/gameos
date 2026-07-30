@@ -2,6 +2,11 @@ cmake_minimum_required(VERSION 3.20)
 
 project(preprocessor CXX)
 
+find_program(CCACHE_PROGRAM ccache)
+if(CCACHE_PROGRAM)
+    set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE_PROGRAM})
+endif()
+
 find_package(Threads REQUIRED)
 
 add_executable(preprocessor
