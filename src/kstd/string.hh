@@ -1,136 +1,80 @@
 #pragma once
 
-#include <iterator>
 #include <source_location>
 #include <type_traits>
-#include <utility>
 
 #include "basic.hh"
 #include "cstring.hh"
-#include "array.hh"
-#include "array_iterator.hh"
+
+//
+// Forward declare instead of including array.hh.
+// array.hh includes assert.hh, then serial.hh, format.hh, string.hh.
+// Supply the default here, not in array.hh definition.
+// Redefining the same default there would be illegal.
+// Array_View<T, N> is a view of exactly N elements.
+// Array_View<T> with N=DYNAMIC_EXTENT carries its own runtime size.
+//
+template <typename T, usize N = DYNAMIC_EXTENT>
+struct Array_View;
+
+struct string;
+
+//
+// Forward declare instead of including assert.hh.
+// assert.hh includes serial.hh, format.hh, string.hh.
+// That would create a cycle back to this header.
+// Forward declare unconditionally, not only in the UNIT_TESTS-less branch.
+// The first header that reaches this one in the cycle needs kstd_assert
+// visible for operator[] before the other header include returns.
+//
+constexpr force_inline auto kstd_assert(bool predicate, const char* message, const std::source_location& location) -> void;
+
+#ifdef UNIT_TESTS
 #include "assert.hh"
-#include "format.hh"
-#include "string_view.hh"
+#endif
 
+//
+// string: {data, size}, non-owning. Never frees in destructor.
+// Heap bytes: free_string(s [, allocator]). Prefer defer(free_string(s)).
+// Temp bytes: use before temporary_allocator.reset().
+// Builder / sprint / tprint: string_builder.hh
+//
 struct string {
-    using T = char;
-    static_assert(std::is_same_v<T, char>, "string only supports T = char for now");
+    char* data = nullptr;
+    usize size = 0;
 
-    T*    data     = nullptr;
-    usize size     = 0;
-    usize capacity = 0;
+    constexpr string() = default;
+    constexpr string(char* data, usize size) : data(data), size(size) {}
+    constexpr string(const char* data, usize size)
+        : data(const_cast<char*>(data)), size(size) {}
 
-    string() = default;
+    // Construction from an Array_View<u8> lives on the Array_View side (see
+    // array.hh's `operator string()`): array.hh has to include this header
+    // to assert, so this header must not need to know about arrays.
 
-    explicit string(string_view view) {
-        append(view);
-    }
+    // Intentionally not `explicit`: accept string literals like const char*.
+    constexpr string(const char* cstr)
+        : data(const_cast<char*>(cstr)), size(cstr != nullptr ? kstd_strlen(cstr) : 0) {}
 
-    string(const T* cstr) : string(string_view(cstr)) {}
-
-    ~string() {
-        delete[] data;
-    }
-
-    string(const string& other) {
-        append(other.view());
-    }
-
-    auto operator = (const string& other) -> string& {
-        if (this == &other) return *this;
-        clear();
-        append(other.view());
-        return *this;
-    }
-
-    string(string&& other) noexcept
-        : data(other.data), size(other.size), capacity(other.capacity) {
-        other.data     = nullptr;
-        other.size     = 0;
-        other.capacity = 0;
-    }
-
-    auto operator = (string&& other) noexcept -> string& {
-        if (this == &other) return *this;
-        delete[] data;
-        data     = other.data;
-        size     = other.size;
-        capacity = other.capacity;
-        other.data     = nullptr;
-        other.size     = 0;
-        other.capacity = 0;
-        return *this;
-    }
-
-    auto reserve(usize min_capacity) -> void {
-        if (min_capacity <= capacity) return;
-
-        usize new_capacity = capacity == 0 ? 16 : capacity;
-        while (new_capacity < min_capacity) new_capacity *= 2;
-
-        T* new_data = new T[new_capacity];
-        if (data != nullptr) kstd_memcpy(new_data, data, size);
-        delete[] data;
-        data = new_data;
-        capacity = new_capacity;
-    }
-
-    auto push_back(T c) -> void {
-        reserve(size + 1);
-        data[size++] = c;
-    }
-
-    auto append(string_view view) -> void {
-        reserve(size + view.size);
-        kstd_memcpy(data + size, view.data, view.size);
-        size += view.size;
-    }
-
-    auto operator += (T c) -> string& {
-        push_back(c);
-        return *this;
-    }
-
-    auto operator += (string_view view) -> string& {
-        append(view);
-        return *this;
-    }
-
-    auto clear() -> void {
-        size = 0;
-    }
-
-    // Ensures a trailing '\0' without counting it towards size, and returns
-    // the buffer for use with APIs expecting a null-terminated C string.
-    auto c_str() -> const T* {
-        reserve(size + 1);
-        data[size] = '\0';
-        return data;
-    }
-
-    auto view() const -> string_view {
-        return string_view(data, size);
+    auto operator [] (usize index) const -> char {
+        kstd_assert(index < size, "string index out of bounds", std::source_location::current());
+        return data[index];
     }
 
     auto operator == (const string& other) const -> bool {
-        return view() == other.view();
+        if (size != other.size) return false;
+        for (usize i = 0; i < size; ++i) {
+            if (data[i] != other.data[i]) return false;
+        }
+        return true;
     }
 
     auto operator != (const string& other) const -> bool {
         return !(*this == other);
     }
 
-    auto operator == (const string_view& other) const -> bool {
-        return view() == other;
-    }
-
-    auto operator != (const string_view& other) const -> bool {
-        return !(*this == other);
-    }
-
     auto operator == (const char* other) const -> bool {
-        return view() == string_view{other};
+        return *this == string(other);
     }
 
     auto operator != (const char* other) const -> bool {
@@ -138,117 +82,43 @@ struct string {
     }
 
     auto format() const -> string {
-        string result = *this;
-        return result;
+        return *this;
     }
 
-    auto operator [] (usize index) const -> T {
-        kstd_assert(index < size, "string index out of bounds", std::source_location::current());
-        return data[index];
+    operator bool() const {
+        return data != nullptr && size > 0;
     }
 
-    operator string_view() const {
-        return view();
-    }
-
-    auto elements() -> T* { return data; }
-    auto elements() const -> const T* { return data; }
-
-    ARRAY_ITERATOR()
+    auto begin() const -> const char* { return data; }
+    auto end() const -> const char* { return data + size; }
 };
 
 #ifdef UNIT_TESTS
 
-TEST(string_view, iterator) {
-    string_view view = "abc";
-    string collected;
-    for (char c : view) collected += c;
-    EXPECT_EQ(collected.view(), "abc");
-}
-
 TEST(string, default_is_empty) {
-    string str;
-    EXPECT_EQ(str.data,     nullptr);
-    EXPECT_EQ(str.size,     0);
-    EXPECT_EQ(str.capacity, 0);
+    string s;
+    EXPECT_EQ(s.size, 0);
+    EXPECT_EQ(s.data, nullptr);
 }
 
-TEST(string, can_be_made_from_string_view) {
-    string str{string_view("hello")};
-    EXPECT_EQ(str.view(), "hello");
+TEST(string, can_be_made_from_a_cstring) {
+    string s = "hello";
+    EXPECT_EQ(s.size, 5);
+    EXPECT_EQ(s[0], 'h');
+    EXPECT_EQ(s[4], 'o');
 }
 
-TEST(string, can_be_made_from_cstring) {
-    string str = "hello";
-    EXPECT_EQ(str.view(), "hello");
-}
-
-TEST(string, append_grows_2x) {
-    string str;
-    EXPECT_EQ(str.capacity, 0);
-    str.append("hello ");
-    EXPECT_EQ(str.capacity, 16);
-    str.append("world");
-    EXPECT_EQ(str.capacity, 16);
-    EXPECT_EQ(str.view(), "hello world");
-}
-
-TEST(string, push_back_on_single_on_single_chars) {
-    string str;
-    for (char c : {'a', 'b', 'c'}) str.push_back(c);
-    EXPECT_EQ(str.view(), "abc");
-}
-
-TEST(string, operator_plus_means_append) {
-    string str;
-    str += 'a';
-    str += string_view("bc");
-    str += "de";
-    EXPECT_EQ(str.view(), "abcde");
-}
-
-TEST(string, clear_resets_size_but_not_capacity) {
-    string str = "hello";
-    auto capacity_before = str.capacity;
-    str.clear();
-    EXPECT_EQ(str.size, 0);
-    EXPECT_EQ(str.capacity, capacity_before);
-}
-
-TEST(string, string_to_cstring) {
-    string str = "hi";
-    const char* cstr = str.c_str();
-    EXPECT_EQ(cstr[0], 'h');
-    EXPECT_EQ(cstr[1], 'i');
-    EXPECT_EQ(cstr[2], '\0');
-    EXPECT_EQ(str.size, 2);
-}
-
-TEST(string, copy_constructor) {
-    string original = "hello";
-    string copy = original;
-    copy += '!';
-    EXPECT_EQ(original.view(), "hello");
-    EXPECT_EQ(copy.view(),     "hello!");
-}
-
-TEST(string, move_constructor) {
-    string original = "hello";
-    string moved = std::move(original);
-    EXPECT_EQ(moved.view(), "hello");
-    EXPECT_EQ(original.size, 0);
+TEST(string, can_be_made_from_pointer_and_length) {
+    const char* data = "hello world";
+    string s(data, 5);
+    EXPECT_EQ(s.size, 5);
+    EXPECT_EQ(s[4], 'o');
 }
 
 TEST(string, equality) {
     EXPECT_EQ(string("abc"), string("abc"));
     EXPECT_NE(string("abc"), string("abd"));
     EXPECT_NE(string("abc"), string("ab"));
-}
-
-TEST(string, equality_with_string_view) {
-    EXPECT_EQ(string("abc"), string_view("abc"));
-    EXPECT_NE(string("abc"), string_view("abd"));
-    EXPECT_NE(string("abc"), string_view("ab"));
 }
 
 TEST(string, equality_with_cstring) {
@@ -258,49 +128,23 @@ TEST(string, equality_with_cstring) {
 }
 
 TEST(string, index_out_of_bounds_assert) {
-    string str = "abc";
-    EXPECT_DEATH(str[3], "");
+    string s = "abc";
+    EXPECT_DEATH(s[3], "");
 }
 
-#endif
-
-struct String_Print_Backend {
-    string target;
-
-    auto put_char(char c) -> void {
-        target.push_back(c);
-    }
-
-    auto new_line() -> void {
-        put_char('\n');
-    }
-};
-
-auto sprint(const char* format) -> string {
-    String_Print_Backend backend;
-    fmt::print(backend, format);
-    return backend.target;
+TEST(string, iterator) {
+    string s = "abc";
+    char buf[4] = {};
+    usize i = 0;
+    for (char c : s) buf[i++] = c;
+    EXPECT_STREQ(buf, "abc");
 }
 
-template <typename T, typename... Rest>
-auto sprint(const char* format, T&& value, Rest&&... rest) -> string {
-    String_Print_Backend backend;
-    fmt::print(backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
-    return backend.target;
-}
-
-template <typename T>
-auto sprint(T&& value) -> string {
-    String_Print_Backend backend;
-    fmt::print(backend, std::forward<T>(value));
-    return backend.target;
-}
-
-#ifdef UNIT_TESTS
-
-TEST(sprint, can_format_values_into_a_string) {
-    auto formatted = sprint("%, %!", "hello", "world");
-    EXPECT_EQ(formatted, "hello, world!");
+TEST(string, bool_is_content_presence) {
+    EXPECT_FALSE(static_cast<bool>(string{}));
+    EXPECT_FALSE(static_cast<bool>(string(static_cast<const char*>(nullptr))));
+    EXPECT_FALSE(static_cast<bool>(string("x", 0)));
+    EXPECT_TRUE(static_cast<bool>(string("x")));
 }
 
 #endif

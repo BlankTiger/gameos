@@ -9,7 +9,8 @@
 #include "basic.hh"
 #include "array.hh"
 #include "assert.hh"
-#include "string.hh"
+#include "string_builder.hh"
+#include "allocator.hh"
 
 namespace math {
 
@@ -1211,19 +1212,20 @@ struct Grid3 {
     }
 
     auto format() const -> string {
-        string result;
+        PUSH_ALLOCATOR(&mem::temporary_allocator);
+        String_Builder builder;
         for (u32 layer_index = 0; layer_index < layers; ++layer_index) {
             for (u32 row_index = 0; row_index < rows; ++row_index) {
-                result += "  [";
+                builder.append("  [");
                 for (u32 col_index = 0; col_index < cols; ++col_index) {
-                    result += sprint("%", at(row_index, col_index, layer_index));
-                    if (col_index != cols - 1) result += ", ";
+                    builder.print(at(row_index, col_index, layer_index));
+                    if (col_index != cols - 1) builder.append(", ");
                 }
-                result += "]\n";
+                builder.append("]\n");
             }
-            result += "\n\n";
+            builder.append("\n\n");
         }
-        return result;
+        return builder.to_string();
     }
 };
 

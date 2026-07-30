@@ -5,7 +5,7 @@
 #include "kstd/font8x16.hh"
 #include "kstd/math.hh"
 #include "kstd/resource.hh"
-#include "kstd/string_view.hh"
+#include "kstd/string.hh"
 
 #include "common.hh"
 
@@ -32,7 +32,7 @@ struct Char_Command {
 
 struct Text_Command {
     u32 x, y;
-    string_view text;
+    string text;
     Color fg, bg;
 };
 
@@ -122,7 +122,7 @@ auto draw_char_immediate(Args&&... args) -> void {
     inner_draw_char<true>(std::forward<Args>(args)...);
 }
 
-auto inner_draw_text(u32 x, u32 y, string_view text, Color fg = WHITE, Color bg = TRANSPARENT, Depth depth = DEPTH_FAR) -> void {
+auto inner_draw_text(u32 x, u32 y, string text, Color fg = WHITE, Color bg = TRANSPARENT, Depth depth = DEPTH_FAR) -> void {
     u32 cx = x;
     u32 cy = y;
     u32 frame_width  = hidden::front_buffer.width;
@@ -147,7 +147,7 @@ auto inner_draw_text(u32 x, u32 y, string_view text, Color fg = WHITE, Color bg 
     }
 }
 
-auto draw_text(u32 x, u32 y, const string_view text, Color fg = WHITE, Color bg = TRANSPARENT, u8 z = 1, Render_Pass pass = Render_Pass::UI, Depth depth = DEPTH_FAR) -> void {
+auto draw_text(u32 x, u32 y, const string text, Color fg = WHITE, Color bg = TRANSPARENT, u8 z = 1, Render_Pass pass = Render_Pass::UI, Depth depth = DEPTH_FAR) -> void {
     auto& queue = (pass == Render_Pass::WORLD_2D) ? draw_commands_world_2D : draw_commands_ui;
     queue.push_back(
         Draw_Command_2D{

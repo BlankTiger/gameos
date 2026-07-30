@@ -38,8 +38,11 @@ base layer:
 - [ ] save SIMD registers on an interrupt
 - [x] get random numbers for the seed in random.hh
 - [ ] should Array_View and Static_Array do bounds checking or not?
-- [ ] String_Builder
+- [x] String_Builder
 - [x] keep allocator on structures that allocate
+- [x] temporary storage + tprint/tcopy/talloc
+- [x] string RAII vs allocator swap (option 2; see docs/string-allocator-plan.md)
+- [ ] test defer freeing string (test that it is really freed)
 - [ ] fix halt::Backend (look at the todo there)
 - [ ] mark unallocated pages as read only
 - [x] RAII push_allocator(Allocator* allocator) that sets an allocator for the current scope

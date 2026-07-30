@@ -9,8 +9,8 @@
 #include "basic.hh"
 #include "cstring.hh"
 #include "assert.hh"
-#include "string_view.hh"
 #include "allocator.hh"
+#include "string.hh"
 #include "array_iterator.hh"
 
 template <typename T, usize N>
@@ -34,10 +34,10 @@ struct Array_View {
     auto elements() const -> const T* { return data; }
 
     // Byte views can be reinterpreted as text. Defined on this side (rather
-    // than as a string_view constructor) so string_view.hh never has to know
-    // about arrays: it is included by this header for its own asserts.
-    explicit operator string_view() const requires std::is_same_v<std::remove_const_t<T>, u8> {
-        return string_view(reinterpret_cast<const char*>(data), N);
+    // than as a string constructor) so string.hh does not need to know about arrays.
+    // This header includes it for its own asserts.
+    explicit operator string() const requires std::is_same_v<std::remove_const_t<T>, u8> {
+        return string(reinterpret_cast<const char*>(data), N);
     }
 
     ARRAY_ITERATOR()
@@ -62,8 +62,8 @@ struct Array_View<T, DYNAMIC_EXTENT> {
     auto elements()       -> T*       { return data; }
     auto elements() const -> const T* { return data; }
 
-    explicit operator string_view() const requires std::is_same_v<std::remove_const_t<T>, u8> {
-        return string_view(reinterpret_cast<const char*>(data), size);
+    explicit operator string() const requires std::is_same_v<std::remove_const_t<T>, u8> {
+        return string(reinterpret_cast<const char*>(data), size);
     }
 
     ARRAY_ITERATOR()
