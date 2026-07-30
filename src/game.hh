@@ -87,9 +87,6 @@ auto produce_new_falling_body(Game& game) -> bool {
     const auto body       = available_bodies.begin()[body_index];
 
     auto falling_body = create_new_falling_body(body);
-    falling_body.layer_sort();
-
-    game.falling_body = falling_body;
 
     for (const auto& [row, col, layer] : falling_body.blocks) {
         if (game.grid.at(row, col, layer) != Block_Type::EMPTY) return false;
@@ -98,6 +95,8 @@ auto produce_new_falling_body(Game& game) -> bool {
     for (const auto& [row, col, layer] : falling_body.blocks) {
         game.grid.set(row, col, layer, Block_Type::FALLING);
     }
+
+    game.falling_body = falling_body;
     return true;
 }
 

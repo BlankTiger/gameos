@@ -1300,6 +1300,12 @@ TEST(Grid3_bool, can_move_lower_empty_space_below) {
 TEST(Grid3_bool, cant_move_lower_on_last_layer) {
     Grid3 grid(2, 2, 3);
     grid.set(0, 1, 2, true);
+    EXPECT_FALSE(grid.can_move_lower(0, 1, 2));
+}
+
+TEST(Grid3_bool, trying_to_go_lower_than_last_layer_returns_false) {
+    Grid3 grid(2, 2, 3);
+    grid.set(0, 1, 2, true);
     EXPECT_FALSE(grid.can_move_lower(0, 1, 3));
 }
 
@@ -1339,9 +1345,9 @@ struct Rect {
         return Rect{ x, y, x + w, y + h };
     }
 
-    constexpr auto width()  const -> u32 { return x2 - x1; }
-    constexpr auto height() const -> u32 { return y2 - y1; }
-    constexpr auto empty()  const -> u32 { return x1 >= x2 || y1 >= y2; }
+    constexpr auto width()  const -> u32  { return x2 - x1; }
+    constexpr auto height() const -> u32  { return y2 - y1; }
+    constexpr auto empty()  const -> bool { return x1 >= x2 || y1 >= y2; }
 
     force_inline void clip(u32 screen_width, u32 screen_height) {
         x1 = std::clamp(x1, static_cast<u32>(0), screen_width);
