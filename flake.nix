@@ -28,6 +28,7 @@
                 xorriso
                 gtest
                 just
+                ccache
               ];
           };
         }

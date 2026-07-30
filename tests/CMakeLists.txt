@@ -5,6 +5,11 @@ project(kstd_tests CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+find_program(CCACHE_PROGRAM ccache)
+if(CCACHE_PROGRAM)
+    set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE_PROGRAM})
+endif()
+
 find_package(GTest REQUIRED)
 
 enable_testing()
@@ -91,6 +96,10 @@ target_compile_definitions(kstd_tests PRIVATE UNIT_TEST)
 target_compile_options(kstd_tests PRIVATE
     -Wall
     -Wextra
+)
+
+target_precompile_headers(kstd_tests PRIVATE
+    <gtest/gtest.h>
 )
 
 target_link_libraries(kstd_tests PRIVATE GTest::gtest_main)
