@@ -133,9 +133,11 @@ constexpr ICW4 CPU_MODE_DATA = {
 auto initialize() -> void {
     using namespace low_level_io;
 
-    // Save current IMRs.
+    // Discard current IMRs.
     u8 mask1 = inb(PIC_DATA_PORT_MASTER);
     u8 mask2 = inb(PIC_DATA_PORT_SLAVE);
+    (void)mask1;
+    (void)mask2;
 
     // ICW1 starts initialization. The chip waits for three commands:
     // - ICW2. Sets vector offset.
@@ -156,8 +158,6 @@ auto initialize() -> void {
     outb_with_delay(PIC_DATA_PORT_MASTER, CPU_MODE_DATA.raw);
     outb_with_delay(PIC_DATA_PORT_SLAVE,  CPU_MODE_DATA.raw);
 
-    (void)mask1;
-    (void)mask2;
     constexpr IMR master_mask = {
         .irq0_pit      = 0,
         .irq1_keyboard = 0,

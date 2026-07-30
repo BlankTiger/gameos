@@ -89,7 +89,6 @@
             return ptr != other.ptr;                                         \
         }                                                                    \
                                                                              \
-        /* Implicit conversion from iterator to const_iterator */            \
         explicit const_iterator(iterator it)                                 \
             : ptr(it.ptr) {}                                                 \
     };                                                                       \
