@@ -43,8 +43,8 @@ constexpr auto U64_MIN = std::numeric_limits<u64>::min();
 constexpr auto F32_MAX = std::numeric_limits<f32>::max();
 constexpr auto F64_MAX = std::numeric_limits<f64>::max();
 
-constexpr auto F32_MIN = std::numeric_limits<f32>::min();
-constexpr auto F64_MIN = std::numeric_limits<f64>::min();
+constexpr auto F32_MIN = std::numeric_limits<f32>::lowest();
+constexpr auto F64_MIN = std::numeric_limits<f64>::lowest();
 
 // constexpr auto INT_MAX   = std::numeric_limits<int>::max();
 // constexpr auto FLOAT_MAX = std::numeric_limits<float>::max();
