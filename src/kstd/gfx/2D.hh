@@ -322,7 +322,9 @@ auto inner_draw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color, Depth depth = 
 }
 
 auto draw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color, u8 z = 1, Render_Pass pass = Render_Pass::UI, Depth depth = DEPTH_FAR) -> void {
+    if (x1 >= width() || y1 >= height()) return;
     if (x2 >= width() || y2 >= height()) return;
+
     auto& queue = (pass == Render_Pass::WORLD_2D) ? draw_commands_world_2D : draw_commands_ui;
     queue.push_back(
         Draw_Command_2D{

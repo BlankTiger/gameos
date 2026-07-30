@@ -65,7 +65,7 @@ struct Pixel {
             raw = (static_cast<u32>(fg.r) << fmt.red_pos)   |
                   (static_cast<u32>(fg.g) << fmt.green_pos) |
                   (static_cast<u32>(fg.b) << fmt.blue_pos)  |
-                  (0xFF << Framebuffer_Format::alpha_pos);
+                  (static_cast<u32>(0xFF) << Framebuffer_Format::alpha_pos);
             return;
         }
 
