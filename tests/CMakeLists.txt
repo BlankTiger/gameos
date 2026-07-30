@@ -5,6 +5,10 @@ project(kstd_tests CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux")
+    add_link_options(-fuse-ld=mold)
+endif()
+
 find_program(CCACHE_PROGRAM ccache)
 if(CCACHE_PROGRAM)
     set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE_PROGRAM})
