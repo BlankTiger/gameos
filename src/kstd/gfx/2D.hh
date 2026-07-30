@@ -322,8 +322,17 @@ auto inner_draw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color, Depth depth = 
 }
 
 auto draw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color, u8 z = 1, Render_Pass pass = Render_Pass::UI, Depth depth = DEPTH_FAR) -> void {
+    // Wu plots pixel and pixel+1 on the minor axis. Reject true out of bounds, then clamp
+    // into [0, width-2] x [0, height-2] so the AA neighbor stays in-bounds.
+    if (width() < 2 || height() < 2) return;
     if (x1 >= width() || y1 >= height()) return;
     if (x2 >= width() || y2 >= height()) return;
+    u32 max_x = width()  - 2;
+    u32 max_y = height() - 2;
+    x1 = std::min(x1, max_x);
+    y1 = std::min(y1, max_y);
+    x2 = std::min(x2, max_x);
+    y2 = std::min(y2, max_y);
 
     auto& queue = (pass == Render_Pass::WORLD_2D) ? draw_commands_world_2D : draw_commands_ui;
     queue.push_back(
