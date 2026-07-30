@@ -195,12 +195,12 @@ private:
 
 // Free heap bytes from copy_string / String_Builder::to_string / sprint.
 // allocator null → current global allocator at free time (must match alloc heap).
-auto free_string(string s, mem::Allocator* allocator = nullptr) -> void {
+inline auto free_string(string s, mem::Allocator* allocator = nullptr) -> void {
     if (s.data == nullptr || s.size == 0) return;
     mem::resolve_allocator(allocator)->free(s.data, s.size, alignof(char));
 }
 
-auto copy_string(string s, mem::Allocator* allocator = nullptr) -> string {
+inline auto copy_string(string s, mem::Allocator* allocator = nullptr) -> string {
     if (s.size == 0) return string{};
 
     auto* destination_allocator = mem::resolve_allocator(allocator);
@@ -215,7 +215,7 @@ force_inline auto tcopy(string s) -> string {
 }
 
 // Null-terminated copy in temp (for C APIs). Not counted in the string length.
-auto temp_c_string(string s) -> const char* {
+inline auto temp_c_string(string s) -> const char* {
     auto* data = static_cast<char*>(mem::talloc(s.size + 1, alignof(char)));
     if (s.size > 0) kstd_memcpy(data, s.data, s.size);
     data[s.size] = '\0';
@@ -238,7 +238,7 @@ auto tprint(Args&&... args) -> string {
     return builder.to_string(&mem::temporary_allocator);
 }
 
-#ifdef UNIT_TESTS
+#ifdef UNIT_TESTS_KSTD_STRING_BUILDER
 
 TEST(String_Builder, append_and_to_string) {
     String_Builder builder;

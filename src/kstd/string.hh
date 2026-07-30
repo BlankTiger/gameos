@@ -29,7 +29,7 @@ struct string;
 //
 constexpr force_inline auto kstd_assert(bool predicate, const char* message, const std::source_location& location) -> void;
 
-#ifdef UNIT_TESTS
+#ifdef UNIT_TESTS_KSTD_STRING
 #include "assert.hh"
 #endif
 
@@ -93,7 +93,7 @@ struct string {
     auto end() const -> const char* { return data + size; }
 };
 
-#ifdef UNIT_TESTS
+#ifdef UNIT_TESTS_KSTD_STRING
 
 TEST(string, default_is_empty) {
     string s;
