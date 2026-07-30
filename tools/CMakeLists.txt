@@ -7,6 +7,10 @@ if(CCACHE_PROGRAM)
     set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE_PROGRAM})
 endif()
 
+if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux")
+    add_link_options(-fuse-ld=mold)
+endif()
+
 find_package(Threads REQUIRED)
 
 add_executable(preprocessor

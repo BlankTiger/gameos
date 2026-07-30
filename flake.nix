@@ -29,6 +29,8 @@
                 gtest
                 just
                 ccache
+              ] ++ lib.optionals stdenv.hostPlatform.isLinux [
+                mold
               ];
           };
         }
