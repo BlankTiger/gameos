@@ -1,29 +1,35 @@
+This project uses `just` as its task runner. Run `just` to list all available
+targets. Use `just <target>` for development tasks.
+
 # Development
 
-    nix develop -c fish
-    cmake -S . -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=cmake/Toolchain-i686-elf.cmake && cmake --build build
+    just build
 
 # Running
 
-    qemu-system-i386 -serial stdio -cdrom build/gameos.iso
+    just run
 
 # Testing
 
-Host-side unit tests for kstd headers that don't need real hardware I/O
-(ports, interrupts, ...) live under `tests/`. They're built with normal g++:
+    just test
 
-    nix develop -c fish
-    cmake -S tests -B build/tests -G Ninja -DCMAKE_CXX_COMPILER=g++ && cmake --build build/tests
-    ctest --test-dir build/tests
+Tests build with host `g++` (not the freestanding i686 toolchain), so
+`__STDC_HOSTED__` is set and `HOSTED` is 1 (`kstd/basic.hh`). That changes
+several kstd paths:
 
-kstd headers use their own `kstd_assert`/`kstd_memcpy`/`kstd_memset`/`kstd_strlen` (never the
-bare libc names) specifically so they can be included in the same translation
-unit as `<gtest/gtest.h>` without colliding with `<cassert>`/ `<cstring>`.
-`kstd/assert.hh` detects a hosted build (`__STDC_HOSTED__`) and makes `kstd_assert`
-print + `abort()` instead of halting the CPU, so anything that halts can be
-tested with `EXPECT_DEATH`.
+- `kstd_assert` prints to stderr and calls `abort()` instead of halting the
+  CPU. Use `EXPECT_DEATH` for failing assertions.
+- `kstd_memcpy` / `kstd_memset` / `kstd_memset32` call libc (or a plain loop)
+  instead of freestanding `rep movs*` / `rep stos*` asm.
+- Allocators use `Hosted_Allocator` (`operator new` / `delete`). Under
+  `UNIT_TEST`, the global allocator is a `Debug_Allocator` over that heap.
+  A fixed buffer backs the temporary allocator (no kernel buddy).
 
-# Abbreviations used
+kstd headers keep their own names (`kstd_assert`, `kstd_memcpy`, and so on).
+They never use bare libc names. That avoids collisions with
+`<gtest/gtest.h>`, `<cassert>`, or `<cstring>` in the same translation unit.
+
+# Abbreviations
 
 ## Serial / UART registers / signals
 
@@ -32,11 +38,11 @@ tested with `EXPECT_DEATH`.
 - LCR - Line Control Register (sets data bits, stop bits, parity, and the DLAB mode switch)
 - MCR - Modem Control Register (drives the DTR/RTS/OUT2 handshake lines)
 - LSR - Line Status Register (reports transmit-ready, data-ready, and error conditions)
-- DLAB - Divisor Latch Access Bit (LCR bit 7; repurposes two UART registers into the baud-rate divisor)
+- DLAB - Divisor Latch Access Bit (LCR bit 7). It repurposes two UART registers into the baud-rate divisor.
 - THR - Transmitter Holding Register (holds the next byte waiting to be shifted out)
-- THRE - Transmitter Holding Register Empty (LSR bit meaning the UART is ready for another byte)
-- DTR - Data Terminal Ready (MCR handshake line signaling the local end is ready to communicate)
-- RTS - Request To Send (MCR handshake line signaling the local end wants to transmit)
+- THRE - Transmitter Holding Register Empty (LSR bit that shows the UART is ready for another byte)
+- DTR - Data Terminal Ready (MCR handshake line that signals the local end is ready to communicate)
+- RTS - Request To Send (MCR handshake line that signals the local end wants to transmit)
 - FIFO - First In, First Out (the UART's internal send/receive buffer queues)
 
 ## Hardware chips / subsystems
@@ -48,20 +54,20 @@ tested with `EXPECT_DEATH`.
 
 - IDT - Interrupt Descriptor Table (the array of gate descriptors the CPU looks up when an interrupt fires)
 - IDTR - Interrupt Descriptor Table Register (the 6-byte CPU register that holds the address and size of the IDT)
-- GDT - Global Descriptor Table (a similar table that describes memory segments; the kernel CS selector comes from here)
+- GDT - Global Descriptor Table (a similar table that describes memory segments. The kernel CS selector comes from here.)
 
 ## Interrupt terminology
 
 - IRQ - Interrupt ReQuest (a hardware signal from a device saying "I need attention")
 - ISR - Interrupt Service Routine (the handler function that runs when an interrupt fires)
 - EOI - End Of Interrupt (a command you send back to the PIC to tell it you finished handling the IRQ)
-- NMI - Non-Maskable Interrupt (an interrupt that cannot be disabled with `cli`; used for serious hardware errors)
+- NMI - Non-Maskable Interrupt (an interrupt that cannot be disabled with `cli`. It is used for serious hardware errors.)
 
 ## PIC initialization words
 
-- ICW - Initialization Command Word (the sequence of bytes you write to configure the PIC; there are 4 of them, ICW1–ICW4)
+- ICW - Initialization Command Word (the sequence of bytes you write to configure the PIC. There are 4 of them, ICW1-ICW4.)
 - OCW - Operation Command Word (commands sent to the PIC after init, e.g. setting the mask)
-- IMR - Interrupt Mask Register (an 8-bit register in the PIC; a `1` bit disables that IRQ line)
+- IMR - Interrupt Mask Register (an 8-bit register in the PIC. A `1` bit disables that IRQ line.)
 
 ## Gate descriptor fields
 
@@ -86,6 +92,6 @@ tested with `EXPECT_DEATH`.
 - HLT - Halt (CPU instruction that pauses execution until the next interrupt)
 - STI - Set Interrupt flag (enables interrupts)
 - CLI - CLear Interrupt flag (disables interrupts)
-- IRET - Interrupt RETurn (the special return instruction used at the end of an ISR; restores `eflags`, `cs`, and `eip` from the stack)
+- IRET - Interrupt RETurn (the special return instruction used at the end of an ISR. It restores `eflags`, `cs`, and `eip` from the stack.)
 - PUSHA / POPA - Push/Pop All registers (saves or restores all 8 general-purpose registers at once)
 - FP - Fixed Point (a way to represent fractional values using integers, e.g. multiplying by 256 to get sub-pixel precision without floats)
