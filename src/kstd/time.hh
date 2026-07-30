@@ -2,6 +2,7 @@
 
 #include "basic.hh"
 #include "low_level_io.hh"
+#include "critical_section.hh"
 
 namespace time {
 
@@ -52,6 +53,13 @@ force_inline auto on_tick() -> void {
 }
 
 force_inline auto get_ticks() -> u64 {
+    //
+    // Needs a guard because loading `u64` on 32-bit is not atomic (2 load operations).
+    //
+    // Only `get_ticks` needs a guard. `on_tick` runs in an interrupt so it's
+    // implicitly running with interrupts off.
+    //
+    critical_section::Guard guard{};
     return tick_counter;
 }
 
