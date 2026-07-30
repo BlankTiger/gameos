@@ -86,6 +86,8 @@ add_dependencies(kstd_tests generate_test_files)
 
 target_include_directories(kstd_tests PRIVATE ${GENERATED_SRC_DIR})
 
+target_compile_definitions(kstd_tests PRIVATE UNIT_TEST)
+
 target_compile_options(kstd_tests PRIVATE
     -Wall
     -Wextra

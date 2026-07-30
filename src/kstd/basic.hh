@@ -2,14 +2,34 @@
 
 #include "numbers.hh"
 
+#if defined(__STDC_HOSTED__) && __STDC_HOSTED__
+#define HOSTED 1
+#else
+#define HOSTED 0
+#endif
+
 #if defined(__GNUC__) || defined(__clang__)
 #define force_inline inline __attribute__((always_inline))
 #else
 #define force_inline inline
 #endif
 
+#define NAME_CONCAT_IMPL(x, y) x##y
+#define NAME_CONCAT(x, y) NAME_CONCAT_IMPL(x, y)
+#define DEFER_UNIQ(prefix) NAME_CONCAT(prefix, __COUNTER__)
+
+template <typename F>
+struct Defer {
+    F f;
+    Defer(F f) : f(f) {}
+    ~Defer() { f(); }
+};
+
+#define defer_copy(code) Defer DEFER_UNIQ(_defer_)([=]() { code; })
+#define defer(code) Defer DEFER_UNIQ(_defer_)([&]() { code; })
+
 // Extent value meaning "Array_View's size is only known at runtime"
 // (as opposed to a compile-time N). Declared here rather than in
-// array.hh since string_view.hh needs it for a forward declaration
-// before array.hh itself is reachable (see string_view.hh comment).
+// array.hh since string.hh needs it for a forward declaration
+// before array.hh itself is reachable (see string.hh comment).
 inline constexpr usize DYNAMIC_EXTENT = static_cast<usize>(-1);

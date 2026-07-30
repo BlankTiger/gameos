@@ -32,7 +32,7 @@ auto kernel_init(u32 magic, const boot::Multiboot2_Info* mbi) -> void {
     mem::initialize(mbi);
 
     // Global constructors are called here, after the allocator is live, so any
-    // constructor that calls operator new has a valid global_allocator (must
+    // constructor that calls operator new has a valid global allocator (must
     // be called after mem::initialize).
     run_global_constructors();
 

@@ -2,6 +2,7 @@
 
 #include <initializer_list>
 
+#include "kstd/allocator.hh"
 #include "kstd/array.hh"
 #include "kstd/numbers.hh"
 #include "kstd/time.hh"
@@ -27,7 +28,7 @@ struct Falling_Body {
     }
 };
 
-// Tetracubes below are laid out with row/col forming the 3x3 footprint and
+// Tetracubes below use row/col for the 3x3 footprint and
 // layer as the falling axis.
 constexpr std::initializer_list<Body> available_bodies = {
     Body{{0, 0, 0}, {0, 0, 1}},                        // domino
@@ -79,8 +80,8 @@ auto create_new_falling_body(Body blocks) -> Falling_Body {
     return body;
 }
 
-// there was available space -> true
-// otherwise                 -> false
+// available space -> true
+// otherwise       -> false
 auto produce_new_falling_body(Game& game) -> bool {
     const auto body_index = rand::generate(0, available_bodies.size());
     const auto body       = available_bodies.begin()[body_index];
@@ -224,18 +225,24 @@ auto game_main() -> void {
 
     constexpr auto TARGET_TICKS = time::ticks_per_frame(FPS_MAX);
 
+    const auto* temporary_allocator_mark = mem::temporary_allocator.mark();
     while (!ps2::is_pressed(ps2::Scancode::ESCAPE)) {
         const u64 frame_start = time::get_ticks();
         const u64 elapsed     = frame_start - last_tick;
         last_tick = frame_start;
 
-        game.dt_real  = elapsed;
-        game.dt       = static_cast<f64>(game.dt_real) / time::TICK_RATE * game.time_scale;
-        game.time_ms += time::ticks_to_ms(game.dt_real);
-        game.fps      = 1 / game.dt;
+        {
+            game.dt_real  = elapsed;
+            game.dt       = static_cast<f64>(game.dt_real) / time::TICK_RATE * game.time_scale;
+            game.time_ms += time::ticks_to_ms(game.dt_real);
+            game.fps      = 1 / game.dt;
 
-        update(game);
-        draw(game);
+            update(game);
+            draw(game);
+
+            // serial::println("% MB", static_cast<f32>(mem::temporary_allocator.bytes_used()) / 1000000);
+            mem::temporary_allocator.rewind(temporary_allocator_mark);
+        }
 
         const u64 frame_ticks = time::get_ticks() - frame_start;
         if (frame_ticks < TARGET_TICKS) {
