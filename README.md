@@ -29,6 +29,37 @@ kstd headers keep their own names (`kstd_assert`, `kstd_memcpy`, and so on).
 They never use bare libc names. That avoids collisions with
 `<gtest/gtest.h>`, `<cassert>`, or `<cstring>` in the same translation unit.
 
+# Allocations
+
+All heaps implement `mem::Allocator` (`alloc` / `free`). Null allocator args
+resolve to the current global via `mem::resolve_allocator`.
+
+| Allocator | Role |
+| --- | --- |
+| `Buddy_Allocator` | Kernel default. Page buddy over multiboot regions (`mem::initialize`). |
+| `Hosted_Allocator` | Host/tests only. Wraps `operator new` / `delete`. |
+| `Temporary_Allocator` | Bump arena. `free` is a no-op. Call `reset()` to reclaim. |
+| `Arena_Allocator` | Bump over a backing allocator. |
+| `Debug_Allocator` | Tracks live allocs. Asserts no leaks on destroy (tests wrap hosted). |
+| `Null_Allocator` | `alloc` / `free` call `unreachable`. Use when no heap is valid / no allocations should happen. |
+
+**Global scope.** `PUSH_ALLOCATOR(a)` sets the global for the current scope
+(RAII). `operator new` / `delete` go through the global too.
+
+**Containers.** `Array`, `String_Builder`, and friends store the
+`Allocator*` from construction. Free on the same heap that allocated.
+
+**Strings.** `string` is a non-owning `{data, size}` view. It never frees in
+its destructor.
+
+- Long-lived heap: `sprint` / `copy_string` / `to_string`, then
+  `defer(free_string(s))` (or pass the matching allocator).
+- Scratch: `tprint` / `tcopy` / `talloc` / `temp_c_string` on
+  `mem::temporary_allocator`. Valid until the next `temporary_allocator.reset()`.
+
+Do not free temp bytes with `free_string` on the global heap. Do not keep
+temp pointers across a reset.
+
 # Abbreviations
 
 ## Serial / UART registers / signals

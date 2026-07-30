@@ -49,6 +49,8 @@ base layer:
 - [ ] get rid of ensure_allocator from Array, there should always be a valid allocator on a live heap backed Array
 - [ ] Debug_Allocator try to match as much of the zigs debug allocator as possible
 - [ ] MarkAndRestore for temporary allocations?
+- [ ] realloc on Allocator
+- [ ] query_capabilities on Allocator
 
 utils:
 - [ ] todo list generator (gather notes from source code and generate a stable
