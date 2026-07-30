@@ -217,7 +217,7 @@ enum class Scancode : u16 {
     F11             = 0x57,
     F12             = 0x58,
 
-    // Extended (0xE0 prefix) scancodes; stored at base + KEY_EXTENDED_OFFSET.
+    // Extended (0xE0 prefix) scancodes. Stored at base + KEY_EXTENDED_OFFSET.
     RIGHT_ARROW     = 0x4D + KEY_EXTENDED_OFFSET,
     LEFT_ARROW      = 0x4B + KEY_EXTENDED_OFFSET,
     UP_ARROW        = 0x48 + KEY_EXTENDED_OFFSET,

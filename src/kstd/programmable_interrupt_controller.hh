@@ -11,7 +11,7 @@ union ICW1 {
         u8 single_mode : 1;  // 0 = cascade mode (two PICs)
         u8 interval4   : 1;  // 0 = 8-byte interrupt vectors (unused on x86)
         u8 level_trig  : 1;  // 0 = edge triggered
-        u8 init        : 1;  // must be 1 — tells chip this is ICW1
+        u8 init        : 1;  // must be 1 to tell chip this is ICW1
         u8 _reserved   : 3;
     };
     u8 raw;
@@ -19,7 +19,7 @@ union ICW1 {
 
 union ICW2 {
     struct {
-        u8 _unused : 3;  // must be 0 — low 3 bits are set by the PIC itself
+        u8 _unused : 3;  // must be 0. PIC sets low 3 bits.
         u8 vector  : 5;  // upper 5 bits of base vector (32 >> 3 = 4, 40 >> 3 = 5)
     };
     u8 raw;
@@ -28,14 +28,14 @@ union ICW2 {
 union ICW3_Master {
     struct {
     // @TODO: Maybe expand to single bits.
-        u8 slave_irq : 8;  // bitmask — bit N = IRQ N has a slave attached
+        u8 slave_irq : 8;  // bitmask. Bit N = IRQ N has a slave attached.
     };
     u8 raw;
 } __attribute__((packed));
 
 union ICW3_Slave {
     struct {
-        u8 slave_id  : 3;  // which IRQ line on the master we're connected to
+        u8 slave_id  : 3;  // IRQ line on the master for this slave
         u8 _reserved : 5;
     };
     u8 raw;
@@ -45,9 +45,9 @@ union ICW4 {
     struct {
         u8 mode_8086  : 1;  // 1 = 8086 mode
         u8 auto_eoi   : 1;  // 0 = manual EOI
-        u8 buf_slave  : 1;  // buffered mode — 0 for non-buffered
-        u8 buf_enable : 1;  // buffered mode — 0 for non-buffered
-        u8 sfnm       : 1;  // special fully nested mode — 0 normally
+        u8 buf_slave  : 1;  // buffered mode. 0 for non-buffered.
+        u8 buf_enable : 1;  // buffered mode. 0 for non-buffered.
+        u8 sfnm       : 1;  // special fully nested mode. 0 normally.
         u8 _reserved  : 3;
     };
     u8 raw;
@@ -59,7 +59,7 @@ union IMR {
     struct {
         u8 irq0_pit      : 1;  // IRQ0 - PIT timer
         u8 irq1_keyboard : 1;  // IRQ1 - PS/2 keyboard
-        u8 irq2_cascade  : 1;  // IRQ2 - cascade to slave (must be unmasked for slave IRQs)
+        u8 irq2_cascade  : 1;  // IRQ2 - cascade to slave. Unmask for slave IRQs.
         u8 irq3_com2     : 1;  // IRQ3 - COM2
         u8 irq4_com1     : 1;  // IRQ4 - COM1
         u8 irq5_lpt2     : 1;  // IRQ5 - LPT2 / sound card
@@ -106,7 +106,7 @@ constexpr ICW1 INIT_CMD = {
     ._reserved   = 0,
 };
 
-// Master: vector=32, 32>>3=4 goes into the upper 5 bits
+// Master: vector=32, 32>>3=4 in upper 5 bits.
 constexpr ICW2 VECTOR_OFFSET_MASTER_DATA = {
     ._unused = 0,
     .vector  = VECTOR_OFFSET_MASTER >> 3,
@@ -137,10 +137,10 @@ auto initialize() -> void {
     u8 mask1 = inb(PIC_DATA_PORT_MASTER);
     u8 mask2 = inb(PIC_DATA_PORT_SLAVE);
 
-    // ICW1, start initializing. This command makes the chip wait for 3 more instructions:
-    // - ICW2 -- Its vector offset.
-    // - ICW3 -- Tell it how it is wired to master/slaves.
-    // - ICW4 -- Gives additional information about the environment.
+    // ICW1 starts initialization. The chip waits for three commands:
+    // - ICW2. Sets vector offset.
+    // - ICW3. Defines master/slave wiring.
+    // - ICW4. Gives environment information.
     outb_with_delay(PIC_CMD_PORT_MASTER, INIT_CMD.raw);
     outb_with_delay(PIC_CMD_PORT_SLAVE,  INIT_CMD.raw);
 

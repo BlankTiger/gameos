@@ -1,6 +1,9 @@
 build_dir      := "build"
 test_build_dir := "build/tests"
 
+# Auto-enter flake dev shell when missing (skip if already inside).
+set shell := ["bash", "-c", 'if [ -z "${IN_NIX_SHELL:-}" ]; then exec nix develop --command bash -euo pipefail -c "$1"; else exec bash -euo pipefail -c "$1"; fi', "--"]
+
 default:
     just --list
 
