@@ -378,7 +378,7 @@ TEST(sprint, can_target_explicit_allocator) {
     auto formatted = sprint(&allocator, "%, %!", "hello", "world");
     EXPECT_EQ(formatted, "hello, world!");
     free_string(formatted, &allocator);
-    // Debug_Allocator dtor asserts no leaks -> alloc + free both hit this heap.
+    // Debug_Allocator destructor asserts no leaks -> alloc + free both hit this heap.
 }
 
 TEST(sprint, explicit_allocator_grows_past_inline_buffer) {

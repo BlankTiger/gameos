@@ -194,9 +194,15 @@ ISR_NO_ERROR_CODE (fpu,             45)  // IRQ13
 ISR_NO_ERROR_CODE (primary_ata,     46)  // IRQ14
 ISR_NO_ERROR_CODE (secondary_ata,   47)  // IRQ15
 
+namespace hidden {
+    // 8 KiB more than enough for error messages in interrupt handlers.
+    Static_Array<u8, 8 * 1024> error_message_buffer{};
+    inline mem::Arena_Allocator emergency_error_message_allocator{error_message_buffer};
+}
+
 auto isr_unimplemented_handler(Interrupt_Vector_Type type, u32 error) -> void {
     auto error_message = csprint(
-        &mem::emergency_error_message_allocator,
+        &hidden::emergency_error_message_allocator,
         "Unimplemented interrupt fired. Tell me why (%): %",
         type, error
     );
@@ -209,7 +215,7 @@ auto isr_handle_divide_error() -> void {
 
 auto isr_handle_double_fault(u32 error) -> void {
     auto error_message = csprint(
-        &mem::emergency_error_message_allocator,
+        &hidden::emergency_error_message_allocator,
         "Double fault, caused by IDT entry: %",
         error
     );

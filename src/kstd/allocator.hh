@@ -8,6 +8,9 @@
 #include "cstring.hh"
 #include "pointer_utils.hh"
 
+template <typename T, usize N>
+struct Static_Array;
+
 namespace mem {
 
 struct Allocator {
@@ -269,9 +272,27 @@ struct Arena_Allocator final : Allocator {
         kstd_assert(memory_base != nullptr);
     }
 
+    // Does not own buffer. Destructor will not free it.
+    Arena_Allocator(void* memory, usize size)
+        : backing_allocator(nullptr),
+          allocated(size),
+          memory_base(static_cast<u8*>(memory)),
+          current_point(memory_base),
+          address_limit(memory_base + allocated) {
+        kstd_assert(memory != nullptr);
+        kstd_assert(size > 0);
+    }
+
+    // Does not own buffer. Destructor will not free it.
+    template <usize N>
+    Arena_Allocator(Static_Array<u8, N>& buffer)
+        : Arena_Allocator(buffer.data, N) {}
+
     ~Arena_Allocator() {
         reset();
-        backing_allocator->free(memory_base, allocated);
+        if (backing_allocator != nullptr) {
+            backing_allocator->free(memory_base, allocated);
+        }
     }
 
     auto reset() -> void {
@@ -447,8 +468,6 @@ namespace hidden {
 }
 
 inline Allocator* default_global_allocator = hidden::current_global_allocator;
-// 8 KiB more than enough for error messages in interrupt handlers.
-inline Arena_Allocator emergency_error_message_allocator{8 * 1024};
 
 force_inline auto set_global_allocator(Allocator* allocator) -> void {
     hidden::current_global_allocator = allocator;
@@ -469,10 +488,12 @@ struct Push_Allocator {
 
 }  // namespace mem
 
-// Named RAII so dtor runs at scope exit.
+// Named RAII so destructor runs at scope exit.
 #define PUSH_ALLOCATOR(allocator) mem::Push_Allocator DEFER_UNIQ(_push_allocator_)(allocator)
 
 #ifdef UNIT_TESTS_KSTD_ALLOCATOR
+
+#include "array.hh"
 
 TEST(Debug_Allocator, allows_destruction_when_all_freed) {
     mem::Hosted_Allocator hosted{};
@@ -585,6 +606,48 @@ TEST(Arena_Allocator, debug_stamps_used_memory_on_reset) {
     for (usize i = 0; i < 32; ++i) {
         ASSERT_EQ(p[i], static_cast<u8>(0xCC));
     }
+}
+
+TEST(Arena_Allocator, uses_static_buffer) {
+    alignas(16) u8 buffer[256];
+    mem::Arena_Allocator arena{buffer, sizeof(buffer)};
+
+    ASSERT_EQ(arena.bytes_left(), 256u);
+    void* p = arena.alloc(64);
+    ASSERT_NE(p, nullptr);
+    ASSERT_GE(static_cast<u8*>(p), buffer);
+    ASSERT_LT(static_cast<u8*>(p), buffer + sizeof(buffer));
+}
+
+TEST(Arena_Allocator, static_buffer_returns_nullptr_when_exhausted) {
+    alignas(16) u8 buffer[256];
+    mem::Arena_Allocator arena{buffer, sizeof(buffer)};
+
+    void* all = arena.alloc(arena.bytes_left());
+    ASSERT_NE(all, nullptr);
+    ASSERT_EQ(arena.bytes_left(), 0u);
+    ASSERT_EQ(arena.alloc(1), nullptr);
+}
+
+TEST(Arena_Allocator, uses_static_array) {
+    Static_Array<u8, 256> buffer{};
+    mem::Arena_Allocator arena{buffer};
+
+    ASSERT_EQ(arena.bytes_left(), 256u);
+    void* p = arena.alloc(64);
+    ASSERT_NE(p, nullptr);
+    ASSERT_GE(static_cast<u8*>(p), buffer.data);
+    ASSERT_LT(static_cast<u8*>(p), buffer.data + buffer.size);
+}
+
+TEST(Arena_Allocator, static_array_returns_nullptr_when_exhausted) {
+    Static_Array<u8, 256> buffer{};
+    mem::Arena_Allocator arena{buffer};
+
+    void* all = arena.alloc(arena.bytes_left());
+    ASSERT_NE(all, nullptr);
+    ASSERT_EQ(arena.bytes_left(), 0u);
+    ASSERT_EQ(arena.alloc(1), nullptr);
 }
 
 #endif
