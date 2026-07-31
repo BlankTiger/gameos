@@ -53,39 +53,39 @@ struct Backend {
 };
 
 namespace hidden {
-    inline Backend backend;
+    inline Backend term_backend;
 }
 
 auto print(const char* format) -> int {
-    return fmt::print(hidden::backend, format);
+    return fmt::print(hidden::term_backend, format);
 }
 
 template <typename T, typename... Rest>
 auto print(const char* format, T&& value, Rest&&... rest) -> int {
-    return fmt::print(hidden::backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
+    return fmt::print(hidden::term_backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
 }
 
 auto println() -> int {
-    return fmt::println(hidden::backend);
+    return fmt::println(hidden::term_backend);
 }
 
 template <typename T>
 auto print(T&& value) -> int {
-    return fmt::print(hidden::backend, std::forward<T>(value));
+    return fmt::print(hidden::term_backend, std::forward<T>(value));
 }
 
 template <typename T>
 auto println(T&& value) -> int {
-    return fmt::println(hidden::backend, std::forward<T>(value));
+    return fmt::println(hidden::term_backend, std::forward<T>(value));
 }
 
 auto println(const char* format) -> int {
-    return fmt::println(hidden::backend, format);
+    return fmt::println(hidden::term_backend, format);
 }
 
 template <typename T, typename... Rest>
 auto println(const char* format, T&& value, Rest&&... rest) -> int {
-    return fmt::println(hidden::backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
+    return fmt::println(hidden::term_backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
 }
 
 [[nodiscard]] auto initialize() -> bool {

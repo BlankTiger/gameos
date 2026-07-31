@@ -5,6 +5,7 @@
 #include "basic.hh"
 
 #if HOSTED
+
 #include <cstdio>
 #include <cstdlib>
 
@@ -21,9 +22,11 @@ constexpr force_inline auto kstd_assert(
     );
     std::abort();
 }
-#else
-#include "serial.hh"
 
+#else
+
+// serial_port only: full serial.hh pulls format.hh → string.hh → assert.hh.
+#include "serial_port.hh"
 
 namespace halt {
 
@@ -40,7 +43,7 @@ namespace hidden {
 // @TODO(blanktiger): ehhh, this is wrong, backend should always fully print to one source before printing to the next one.
 struct Halt_Printer_Backend {
     static auto put_char(char c) -> void {
-        serial::print(c);
+        serial::put_char(c);
         for (int idx = 0; idx < hidden::current_halt_print_count; ++idx) {
             hidden::halt_print_fns[idx](c);
         }
@@ -52,40 +55,33 @@ struct Halt_Printer_Backend {
 };
 
 namespace hidden {
-    inline Halt_Printer_Backend backend;
+    inline Halt_Printer_Backend halt_backend;
 }
 
-auto print(const char* format) -> int {
-    return fmt::print(hidden::backend, format);
+force_inline auto put_char(char c) -> void {
+    hidden::halt_backend.put_char(c);
 }
 
-template <typename T, typename... Rest>
-auto print(const char* format, T&& value, Rest&&... rest) -> int {
-    return fmt::print(hidden::backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
+force_inline auto put_cstr(const char* s) -> void {
+    if (s == nullptr) return;
+    while (*s != '\0') put_char(*s++);
 }
 
-auto println() -> int {
-    return fmt::println(hidden::backend);
+force_inline auto put_u32(u32 value) -> void {
+    char buf[10];
+    u32  i = 0;
+    if (value == 0) {
+        put_char('0');
+        return;
+    }
+    while (value > 0) {
+        buf[i++] = static_cast<char>('0' + (value % 10));
+        value /= 10;
+    }
+    while (i > 0) put_char(buf[--i]);
 }
 
-template <typename T>
-auto print(T&& value) -> int {
-    return fmt::print(hidden::backend, std::forward<T>(value));
-}
-
-template <typename T>
-auto println(T&& value) -> int {
-    return fmt::println(hidden::backend, std::forward<T>(value));
-}
-
-auto println(const char* format) -> int {
-    return fmt::println(hidden::backend, format);
-}
-
-template <typename T, typename... Rest>
-auto println(const char* format, T&& value, Rest&&... rest) -> int {
-    return fmt::println(hidden::backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
-}
+// Formatted halt::print / println: end of format.hh (needs fmt after this header).
 
 [[noreturn]] static auto
 forever(const char* message, const std::source_location& location = std::source_location::current()) -> void {
@@ -94,8 +90,16 @@ forever(const char* message, const std::source_location& location = std::source_
     }
     hidden::panicking = true;
 
-    print("%:%:%", location.file_name(), location.line(), location.column());
-    if (message != nullptr) println(": %", message);
+    put_cstr(location.file_name());
+    put_char(':');
+    put_u32(location.line());
+    put_char(':');
+    put_u32(location.column());
+    if (message != nullptr) {
+        put_cstr(": ");
+        put_cstr(message);
+    }
+    put_char('\n');
 
     for (;;) asm volatile("hlt");
 }

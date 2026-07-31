@@ -10,7 +10,7 @@
 #include "kstd/term.hh"
 #include "kstd/time.hh"
 #include "kstd/gfx.hh"
-#include "kstd/serial.hh"
+#include "kstd/serial_format.hh"
 #include "kstd/random.hh"
 
 /* Check if the compiler thinks you are targeting the wrong operating system. */

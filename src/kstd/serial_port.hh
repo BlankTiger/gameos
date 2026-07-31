@@ -1,8 +1,12 @@
 #pragma once
 
 #include "low_level_io.hh"
-#include "format.hh"
 
+//
+// COM1 put_char only. No format.hh.
+// assert.hh needs this without pulling format → string → assert cycle.
+// Full serial::print wrappers live in serial.hh.
+//
 namespace serial {
 
 constexpr u16 COM1 = 0x3F8;
@@ -50,7 +54,7 @@ auto initialize() -> void {
 auto put_char(char c) -> void {
     // If serial is somehow not available it's better to drop a byte than lock everything.
     for (int spins = 0; spins < 100000 && !transmit_empty(); ++spins) {}
-    low_level_io::outb(COM1, (u8)c);
+    low_level_io::outb(COM1, static_cast<u8>(c));
 }
 
 struct Backend {
@@ -63,38 +67,8 @@ struct Backend {
     }
 };
 
-inline Backend backend;
-
-auto print(const char* format) -> int {
-    return fmt::print(backend, format);
-}
-
-template <typename T, typename... Rest>
-auto print(const char* format, T&& value, Rest&&... rest) -> int {
-    return fmt::print(backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
-}
-
-auto println() -> int {
-    return fmt::println(backend);
-}
-
-auto println(const char* format) -> int {
-    return fmt::println(backend, format);
-}
-
-template <typename T>
-auto print(T&& value) -> int {
-    return fmt::print(backend, std::forward<T>(value));
-}
-
-template <typename T>
-auto println(T&& value) -> int {
-    return fmt::println(backend, std::forward<T>(value));
-}
-
-template <typename T, typename... Rest>
-auto println(const char* format, T&& value, Rest&&... rest) -> int {
-    return fmt::println(backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
+namespace hidden {
+    inline Backend serial_backend;
 }
 
 }

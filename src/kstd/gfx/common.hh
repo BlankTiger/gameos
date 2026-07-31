@@ -77,10 +77,10 @@ struct Pixel {
         g = math::lerp(g, fg.g, fg.a, 255);
         b = math::lerp(b, fg.b, fg.a, 255);
 
-        raw = (static_cast<u32>(r) << fmt.red_pos)   |
-              (static_cast<u32>(g) << fmt.green_pos) |
-              (static_cast<u32>(b) << fmt.blue_pos)  |
-              (0xFF << Framebuffer_Format::alpha_pos);
+        raw = (static_cast<u32>(r)    << fmt.red_pos)   |
+              (static_cast<u32>(g)    << fmt.green_pos) |
+              (static_cast<u32>(b)    << fmt.blue_pos)  |
+              (static_cast<u32>(0xFF) << Framebuffer_Format::alpha_pos);
     }
 };
 
@@ -139,10 +139,12 @@ force_inline auto swap_buffers() -> void {
         "Framebuffer_Format was not initialized"
     );
 
-    kstd_memset(back_buffer.data, 0, back_buffer.size_in_bytes);
+    static_assert(sizeof(Pixel) == sizeof(u32));
+    kstd_memset32(back_buffer.data, 0, back_buffer.size_in_bytes / sizeof(Pixel));
     swap_buffers();
 
-    kstd_memset(depth_buffer.data, 0xFF, depth_buffer.size_in_bytes); // DEPTH_FAR
+    static_assert(sizeof(Depth) == sizeof(u32));
+    kstd_memset32(depth_buffer.data, DEPTH_FAR, depth_buffer.size_in_bytes / sizeof(Depth));
 
     framebuffer_initialized = true;
     return true;
@@ -199,7 +201,9 @@ auto clear(Color color) -> void {
             set_pixel(x, y, color);
         }
     }
-    kstd_memset(hidden::depth_buffer.data, 0xFF, hidden::depth_buffer.size_in_bytes); // DEPTH_FAR
+
+    static_assert(sizeof(Depth) == sizeof(u32));
+    kstd_memset32(hidden::depth_buffer.data, DEPTH_FAR, hidden::depth_buffer.size_in_bytes / sizeof(Depth));
 }
 
 enum struct Render_Pass : u8 {

@@ -3,7 +3,7 @@
 #include "basic.hh"
 #include "assert.hh"
 #include "array.hh"
-#include "serial.hh"
+#include "serial_format.hh"
 #include "low_level_io.hh"
 #include "time.hh"
 #include "programmable_interrupt_controller.hh"
