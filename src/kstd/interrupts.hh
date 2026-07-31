@@ -1,9 +1,11 @@
 #pragma once
 
+#include "allocator.hh"
 #include "basic.hh"
 #include "assert.hh"
 #include "array.hh"
-#include "serial_format.hh"
+#include "halt_format.hh"
+#include "string_builder.hh"
 #include "low_level_io.hh"
 #include "time.hh"
 #include "programmable_interrupt_controller.hh"
@@ -193,8 +195,12 @@ ISR_NO_ERROR_CODE (primary_ata,     46)  // IRQ14
 ISR_NO_ERROR_CODE (secondary_ata,   47)  // IRQ15
 
 auto isr_unimplemented_handler(Interrupt_Vector_Type type, u32 error) -> void {
-    serial::println("Tell me why (%): %", type, error);
-    halt::forever("Unimplemented interrupt fired.");
+    auto error_message = csprint(
+        &mem::emergency_error_message_allocator,
+        "Unimplemented interrupt fired. Tell me why (%): %",
+        type, error
+    );
+    halt::forever(error_message);
 }
 
 auto isr_handle_divide_error() -> void {
@@ -202,8 +208,12 @@ auto isr_handle_divide_error() -> void {
 }
 
 auto isr_handle_double_fault(u32 error) -> void {
-    serial::println("Double fault, caused by IDT entry: %", error);
-    halt::forever("");
+    auto error_message = csprint(
+        &mem::emergency_error_message_allocator,
+        "Double fault, caused by IDT entry: %",
+        error
+    );
+    halt::forever(error_message);
 }
 
 auto isr_handle_timer() -> void {

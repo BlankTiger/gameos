@@ -54,8 +54,11 @@ its destructor.
 
 - Long-lived heap: `sprint` / `copy_string` / `to_string`, then
   `defer(free_string(s))` (or pass the matching allocator).
+- Null-terminated C string: `csprint` (c string print) /
+  `to_c_string`, then `defer(free_c_string(p))`.
 - Scratch: `tprint` / `tcopy` / `talloc` / `temp_c_string` on
   `mem::temporary_allocator`. Valid until the next `temporary_allocator.reset()`.
+- Scratch C string: `ctprint` (c temporary print). Same lifetime rules.
 
 Do not free temp bytes with `free_string` on the global heap. Do not keep
 temp pointers across a reset.

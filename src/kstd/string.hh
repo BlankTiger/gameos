@@ -25,7 +25,7 @@ struct string;
 // string: {data, size}, non-owning. Never frees in destructor.
 // Heap bytes: free_string(s [, allocator]). Prefer defer(free_string(s)).
 // Temp bytes: use before temporary_allocator.reset().
-// Builder / sprint / tprint: string_builder.hh
+// Builder / sprint / tprint / csprint / ctprint: string_builder.hh
 //
 struct string {
     char* data = nullptr;
