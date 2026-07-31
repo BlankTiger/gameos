@@ -222,20 +222,27 @@ inline auto temp_c_string(string s) -> const char* {
     return data;
 }
 
-// Formats into default heap. Caller free_string(result) (or defer).
+// Formats into allocator heap (null → current global). Caller free_string(result) (or defer).
 template <typename... Args>
-auto sprint(Args&&... args) -> string {
-    String_Builder builder;
+auto sprint(mem::Allocator* allocator, Args&&... args) -> string {
+    String_Builder builder(allocator);
     builder.print(std::forward<Args>(args)...);
-    return builder.to_string();
+    return builder.to_string(allocator);
+}
+
+// Pack form when first arg is not an allocator (else derived Allocator* would prefer pack).
+template <typename First, typename... Rest>
+    requires (!std::is_convertible_v<First, mem::Allocator*>)
+auto sprint(First&& first, Rest&&... rest) -> string {
+    return sprint(static_cast<mem::Allocator*>(nullptr),
+                  std::forward<First>(first),
+                  std::forward<Rest>(rest)...);
 }
 
 // Format into mem::temporary_allocator, fire-and-forget until temporary_allocator.reset().
 template <typename... Args>
 auto tprint(Args&&... args) -> string {
-    String_Builder builder(&mem::temporary_allocator);
-    builder.print(std::forward<Args>(args)...);
-    return builder.to_string(&mem::temporary_allocator);
+    return sprint(&mem::temporary_allocator, std::forward<Args>(args)...);
 }
 
 #ifdef UNIT_TESTS_KSTD_STRING_BUILDER
@@ -306,6 +313,29 @@ TEST(sprint, numbered_args) {
     auto formatted = sprint("%2-%1", "a", "b");
     defer(free_string(formatted));
     EXPECT_EQ(formatted, "b-a");
+}
+
+TEST(sprint, can_target_explicit_allocator) {
+    mem::Hosted_Allocator hosted;
+    mem::Debug_Allocator  allocator{&hosted};
+
+    auto formatted = sprint(&allocator, "%, %!", "hello", "world");
+    EXPECT_EQ(formatted, "hello, world!");
+    free_string(formatted, &allocator);
+    // Debug_Allocator dtor asserts no leaks -> alloc + free both hit this heap.
+}
+
+TEST(sprint, explicit_allocator_grows_past_inline_buffer) {
+    mem::Hosted_Allocator hosted;
+    mem::Debug_Allocator  allocator{&hosted};
+
+    char payload[STRING_BUILDER_BUFFER_SIZE * 2];
+    kstd_memset(payload, 'x', sizeof(payload));
+    auto formatted = sprint(&allocator, "%", string(payload, sizeof(payload)));
+    EXPECT_EQ(formatted.size, sizeof(payload));
+    for (usize i = 0; i < formatted.size; ++i)
+        EXPECT_EQ(formatted.data[i], 'x');
+    free_string(formatted, &allocator);
 }
 
 TEST(tprint, formats_into_temporary_allocator) {
