@@ -304,6 +304,15 @@ struct Vector2 {
         T data[size];
     };
 
+    constexpr Vector2() : x(0), y(0) {}
+    constexpr Vector2(T x, T y) : x(x), y(y) {}
+
+    template <Numeric U>
+    explicit constexpr Vector2(const Vector2<U>& other)
+        : x(static_cast<T>(other.x)),
+          y(static_cast<T>(other.y))
+    {}
+
     constexpr auto operator [] (usize i) -> T& { return data[i]; }
     constexpr auto operator [] (usize i) const -> const T& { return data[i]; }
     [[nodiscard]] static constexpr auto zero() -> Vector2 { return Vector2{ T(0), T(0) }; }
@@ -318,6 +327,16 @@ struct Vector3 {
         struct { T x, y, z; };
         T data[size];
     };
+
+    constexpr Vector3() : x(0), y(0), z(0) {}
+    constexpr Vector3(T x, T y, T z): x(x), y(y), z(z) {}
+
+    template <Numeric U>
+    explicit constexpr Vector3(const Vector3<U>& other)
+        : x(static_cast<T>(other.x)),
+          y(static_cast<T>(other.y)),
+          z(static_cast<T>(other.z))
+    {}
 
     constexpr auto operator [] (usize i) -> T& { return data[i]; }
     constexpr auto operator [] (usize i) const -> const T& { return data[i]; }
@@ -334,9 +353,17 @@ struct Vector4 {
         T data[size];
     };
 
-    constexpr Vector4() {}
+    constexpr Vector4() : x(0), y(0), z(0), w(0) {}
     constexpr Vector4(T x, T y, T z, T w): x(x), y(y), z(z), w(w) {}
     constexpr Vector4(const Vector3<T>& v, T w) : x(v.x), y(v.y), z(v.z), w(w) {}
+
+    template <Numeric U>
+    explicit constexpr Vector4(const Vector3<U>& other)
+        : x(static_cast<T>(other.x)),
+          y(static_cast<T>(other.y)),
+          z(static_cast<T>(other.z)),
+          z(static_cast<T>(other.w))
+    {}
 
     constexpr auto operator [] (usize i) -> T& { return data[i]; }
     constexpr auto operator [] (usize i) const -> const T& { return data[i]; }
