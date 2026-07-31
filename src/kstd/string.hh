@@ -19,19 +19,7 @@ struct Array_View;
 
 struct string;
 
-//
-// Forward declare instead of including assert.hh.
-// assert.hh includes serial.hh, format.hh, string.hh.
-// That would create a cycle back to this header.
-// Forward declare unconditionally, not only in the UNIT_TESTS-less branch.
-// The first header that reaches this one in the cycle needs kstd_assert
-// visible for operator[] before the other header include returns.
-//
-constexpr force_inline auto kstd_assert(bool predicate, const char* message, const std::source_location& location) -> void;
-
-#ifdef UNIT_TESTS_KSTD_STRING
 #include "assert.hh"
-#endif
 
 //
 // string: {data, size}, non-owning. Never frees in destructor.

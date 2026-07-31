@@ -3,6 +3,7 @@
 #include "string.hh"
 #include "array.hh"
 #include "assert.hh"
+#include "halt_format.hh"
 #include "numbers.hh"
 
 namespace stacktrace {
