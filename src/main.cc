@@ -1,4 +1,4 @@
-#include "game.hh"
+#include "tetris/main.hh"
 #include "global_constructor_handling.hh"
 
 #include "kstd/assert.hh"
@@ -46,16 +46,16 @@ auto kernel_init(u32 magic, const boot::Multiboot2_Info* mbi) -> void {
 
     idt::initialize();
     pic::initialize();
-    time::initialize();
+    ktime::initialize();
     ps2::initialize();
     idt::enable_interrupts();
 
-    rand::initialize();
+    krand::initialize();
 }
 
 auto main() -> void {
     term::println("Hello from GameOS!");
-    game_main();
+    tetris_main();
 }
 
 extern "C" auto kernel_main(u32 magic, const boot::Multiboot2_Info* mbi) -> void {

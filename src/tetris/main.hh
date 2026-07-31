@@ -9,13 +9,18 @@
 #include "kstd/gfx.hh"
 #include "kstd/ps2.hh"
 #include "kstd/math.hh"
+#include "kstd/serial_format.hh"
 #include "kstd/string_builder.hh"
 #include "kstd/random.hh"
+
+
+using namespace ktime;
+using namespace math;
 
 constexpr u64 FPS_MAX                                 = 144;
 constexpr u64 ARBITRARY_FALLING_BODY_BLOCK_SIZE_LIMIT = 10;
 
-using Block_Coords = math::Vector3<u32>;
+using Block_Coords = Vector3<u32>;
 using Body = std::initializer_list<Block_Coords>;
 
 struct Falling_Body {
@@ -52,13 +57,14 @@ enum struct Block_Type {
 };
 
 struct Game {
-    math::Grid3<Block_Type> grid;
+    Grid3<Block_Type> grid;
     Falling_Body falling_body;
 
     Array<u32> layers_to_destroy;
 
     u64 time_till_next_move_ms       = 1000;
     u64 current_move_started_at_tick = 0;
+    u64 destroy_layers_after_ms      = 1000;
 
     u64 time_ms    = 0;
     f64 dt         = 0.0;
@@ -66,7 +72,7 @@ struct Game {
     f64 time_scale = 1.0;
     f64 fps        = 0.0;
 
-    Game(u32 rows = 3, u32 cols = 3, u32 layers = 7) : grid(math::Grid3<Block_Type>(rows, cols, layers)) {}
+    Game(u32 rows = 3, u32 cols = 3, u32 layers = 7) : grid(Grid3<Block_Type>(rows, cols, layers)) {}
 };
 
 auto create_new_falling_body(Body blocks) -> Falling_Body {
@@ -83,7 +89,7 @@ auto create_new_falling_body(Body blocks) -> Falling_Body {
 // available space -> true
 // otherwise       -> false
 auto produce_new_falling_body(Game& game) -> bool {
-    const auto body_index = rand::generate(0, available_bodies.size());
+    const auto body_index = krand::generate(0, available_bodies.size());
     const auto body       = available_bodies.begin()[body_index];
 
     auto falling_body = create_new_falling_body(body);
@@ -120,78 +126,108 @@ auto falling_body_can_go_lower(const Game& game) -> bool {
     return true;
 }
 
+enum struct Rotation_Axis { X, Y, Z };
+
+auto calculate_center_of_body(const Falling_Body& body) -> Block_Coords {
+    return {};
+}
+
+auto try_rotating_falling_body(Game& game, Rotation_Axis axis) -> void {
+    auto center_of_rotation = calculate_center_of_body(game.falling_body);
+}
+
 auto update(Game& game) -> void {
     // Handle layer destruction.
     {
-        Array<bool> layer_destroyed(game.grid.layers, false);
+        if (game.layers_to_destroy.size > 0) {
+            sleep_ms(game.destroy_layers_after_ms);
 
-        for (u32 layer : game.layers_to_destroy) {
-            layer_destroyed[layer] = true;
-        }
+            Array<bool> layer_destroyed(game.grid.layers, false);
 
-        auto skip_if_is_falling = [&](u32 row, u32 col, u32 layer) {
-            return game.grid.at(row, col, layer) == Block_Type::FALLING;
-        };
-
-        s64 write_layer = static_cast<s64>(game.grid.layers) - 1;
-
-        for (s64 read_layer = static_cast<s64>(game.grid.layers) - 1; read_layer >= 0; --read_layer) {
-            if (!layer_destroyed[read_layer]) {
-                if (read_layer != write_layer) {
-                    game.grid.copy_layer(static_cast<u32>(read_layer), static_cast<u32>(write_layer), skip_if_is_falling);
-                }
-                --write_layer;
+            for (u32 layer : game.layers_to_destroy) {
+                layer_destroyed[layer] = true;
             }
-        }
 
-        for (s64 layer = write_layer; layer >= 0; --layer) {
-            game.grid.clear_layer(static_cast<u32>(layer), skip_if_is_falling);
-        }
+            auto skip_if_is_falling = [&](u32 row, u32 col, u32 layer) {
+                return game.grid.at(row, col, layer) == Block_Type::FALLING;
+            };
 
-        game.layers_to_destroy.clear();
+            s64 write_layer = static_cast<s64>(game.grid.layers) - 1;
+
+            for (s64 read_layer = static_cast<s64>(game.grid.layers) - 1; read_layer >= 0; --read_layer) {
+                if (!layer_destroyed[read_layer]) {
+                    if (read_layer != write_layer) {
+                        game.grid.copy_layer(static_cast<u32>(read_layer), static_cast<u32>(write_layer), skip_if_is_falling);
+                    }
+                    --write_layer;
+                }
+            }
+
+            for (s64 layer = write_layer; layer >= 0; --layer) {
+                game.grid.clear_layer(static_cast<u32>(layer), skip_if_is_falling);
+            }
+
+            game.layers_to_destroy.clear();
+        }
     }
 
     // Handle rotations.
+    {
+        // @TODO: implement.
+        bool rotate_x_key_pressed = false;
+        bool rotate_y_key_pressed = false;
+        bool rotate_z_key_pressed = false;
+
+        if (rotate_x_key_pressed) {
+            try_rotating_falling_body(game, Rotation_Axis::X);
+        }
+        else if (rotate_y_key_pressed) {
+            try_rotating_falling_body(game, Rotation_Axis::Y);
+        }
+        else if (rotate_z_key_pressed) {
+            try_rotating_falling_body(game, Rotation_Axis::Z);
+        }
+    }
 
     // Handle movement.
+    {
+        bool timer_elapsed = get_ticks() >= game.current_move_started_at_tick + ms_to_ticks(game.time_till_next_move_ms);
+        bool fast_forward_key_pressed = false; // @TODO: implement.
 
-    using namespace time;
-    bool timer_elapsed = get_ticks() >= game.current_move_started_at_tick + ms_to_ticks(game.time_till_next_move_ms);
-    bool fast_forward_key_pressed = false; // @TODO: implement.
+        // If timer elapsed or a button has been pushed then move down, or if it's
+        // not possible solidify into the stationary layers at the bottom.
+        if (timer_elapsed || fast_forward_key_pressed) {
+            if (falling_body_can_go_lower(game)) {
+                // This has to go in layer sorted order (bottom-most to top-most layer).
+                // falling body should have already been sorted, but it doesn't cost us much to make sure:
+                game.falling_body.layer_sort();
 
-    // If timer elapsed or a button has been pushed then move down, or if it's
-    // not possible solidify into the stationary layers at the bottom.
-    if (timer_elapsed || fast_forward_key_pressed) {
-        if (falling_body_can_go_lower(game)) {
-            // This has to go in layer sorted order (bottom-most to top-most layer).
-            // falling body should have already been sorted, but it doesn't cost us much to make sure:
-            game.falling_body.layer_sort();
-
-            for (auto& [row, col, layer] : game.falling_body.blocks) {
-                game.grid.clear(row, col, layer);
-                layer += 1;
-                game.grid.set(row, col, layer, Block_Type::FALLING);
-            }
-        }
-        else {
-            // Solidify into bottom-most layers (FALLING -> SOLID).
-            // Get and set the next falling_body.
-            for (const auto& [row, col, layer] : game.falling_body.blocks) {
-                game.grid.set(row, col, layer, Block_Type::SOLID);
-            }
-
-            // If there is a new full layer, then schedule it for destruction.
-            for (s64 layer_index = game.grid.layers - 1; layer_index >= 0; --layer_index) {
-                if (game.grid.layer_filled_with(layer_index, Block_Type::SOLID)) {
-                    game.layers_to_destroy.push_back(layer_index);
+                for (auto& [row, col, layer] : game.falling_body.blocks) {
+                    game.grid.clear(row, col, layer);
+                    layer += 1;
+                    game.grid.set(row, col, layer, Block_Type::FALLING);
                 }
             }
+            else {
+                // Solidify into bottom-most layers (FALLING -> SOLID).
+                // Get and set the next falling_body.
+                for (const auto& [row, col, layer] : game.falling_body.blocks) {
+                    game.grid.set(row, col, layer, Block_Type::SOLID);
+                }
 
-            auto ok = produce_new_falling_body(game);
-            (void)ok; // @TODO: Discarding for now, will use later for determining if the game is over.
+                // If there is a new full layer, then schedule it for destruction.
+                for (s64 layer_index = game.grid.layers - 1; layer_index >= 0; --layer_index) {
+                    if (game.grid.layer_filled_with(layer_index, Block_Type::SOLID)) {
+                        game.layers_to_destroy.push_back(layer_index);
+                    }
+                }
+
+                auto ok = produce_new_falling_body(game);
+                (void)ok; // @TODO: Discarding for now, will use later for determining if the game is over.
+            }
+
+            game.current_move_started_at_tick = get_ticks();
         }
-
-        game.current_move_started_at_tick = get_ticks();
     }
 }
 
@@ -204,7 +240,10 @@ auto draw(const Game& game) -> void {
     gfx::draw_frame();
 }
 
-auto game_main() -> void {
+auto tetris_main() -> void {
+    mem::Debug_Allocator dbg_allocator{mem::resolve_allocator()};
+    mem::set_global_allocator(&dbg_allocator);
+
     Game game;
     for (u32 row = 0; row < game.grid.rows; ++row) {
         for (u32 col = 0; col < game.grid.cols; ++col) {
@@ -216,21 +255,21 @@ auto game_main() -> void {
     auto ok = produce_new_falling_body(game);
     kstd_assert(ok);
 
-    u64 last_tick = time::get_ticks();
+    u64 last_tick = get_ticks();
     game.current_move_started_at_tick = last_tick;
 
-    constexpr auto TARGET_TICKS = time::ticks_per_frame(FPS_MAX);
+    constexpr auto TARGET_TICKS = ticks_per_frame(FPS_MAX);
 
     const auto* temporary_allocator_mark = mem::temporary_allocator.mark();
     while (!ps2::is_pressed(ps2::Scancode::ESCAPE)) {
-        const u64 frame_start = time::get_ticks();
+        const u64 frame_start = get_ticks();
         const u64 elapsed     = frame_start - last_tick;
         last_tick = frame_start;
 
         {
             game.dt_real  = elapsed;
-            game.dt       = static_cast<f64>(game.dt_real) / time::TICK_RATE * game.time_scale;
-            game.time_ms += time::ticks_to_ms(game.dt_real);
+            game.dt       = static_cast<f64>(game.dt_real) / TICK_RATE * game.time_scale;
+            game.time_ms += ticks_to_ms(game.dt_real);
             game.fps      = 1 / game.dt;
 
             update(game);
@@ -240,9 +279,9 @@ auto game_main() -> void {
             mem::temporary_allocator.rewind(temporary_allocator_mark);
         }
 
-        const u64 frame_ticks = time::get_ticks() - frame_start;
+        const u64 frame_ticks = get_ticks() - frame_start;
         if (frame_ticks < TARGET_TICKS) {
-            time::sleep_ticks(TARGET_TICKS - frame_ticks);
+            sleep_ticks(TARGET_TICKS - frame_ticks);
         }
     }
 }

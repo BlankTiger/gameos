@@ -9,6 +9,18 @@
 //
 namespace critical_section {
 
+#if HOSTED
+
+force_inline auto interrupts_enabled() -> bool {
+    return true;
+}
+
+force_inline auto disable_interrupts() -> void {}
+
+force_inline auto enable_interrupts() -> void {}
+
+#else
+
 force_inline auto interrupts_enabled() -> bool {
     u32 flags;
     asm volatile("pushfl\n\tpopl %0" : "=r"(flags));
@@ -22,6 +34,8 @@ force_inline auto disable_interrupts() -> void {
 force_inline auto enable_interrupts() -> void {
     asm volatile("sti");
 }
+
+#endif
 
 struct Guard {
     bool was_enabled;
