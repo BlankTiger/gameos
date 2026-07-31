@@ -22,9 +22,10 @@ constexpr u64 ARBITRARY_FALLING_BODY_BLOCK_SIZE_LIMIT = 10;
 
 using Block_Coords = Vector3<u32>;
 using Body = std::initializer_list<Block_Coords>;
+using Blocks = Bounded_Array<Block_Coords, ARBITRARY_FALLING_BODY_BLOCK_SIZE_LIMIT>;
 
 struct Falling_Body {
-    Bounded_Array<Block_Coords, ARBITRARY_FALLING_BODY_BLOCK_SIZE_LIMIT> blocks;
+    Blocks blocks;
 
     auto layer_sort() -> void {
         std::sort(blocks.begin(), blocks.end(), [](const Block_Coords& a, const Block_Coords& b) {
@@ -128,12 +129,101 @@ auto falling_body_can_go_lower(const Game& game) -> bool {
 
 enum struct Rotation_Axis { X, Y, Z };
 
-auto calculate_center_of_body(const Falling_Body& body) -> Block_Coords {
-    return {};
+auto rotate_90(Block_Coords block, Block_Coords center_of_rotation, Rotation_Axis axis) -> Block_Coords {
+    Vector3<s32> a(block);
+    Vector3<s32> b(center_of_rotation);
+
+    Vector3<s32> diff_position = a - b;
+    Vector3<s32> new_position{};
+
+    using enum Rotation_Axis;
+    switch (axis) {
+        case X: {
+            new_position.x = -diff_position.y;
+            new_position.y =  diff_position.x;
+            new_position.z =  diff_position.z;
+        } break;
+
+        case Y: {
+            new_position.x =  diff_position.x;
+            new_position.y = -diff_position.z;
+            new_position.z =  diff_position.y;
+        } break;
+
+        case Z: {
+            new_position.x =  diff_position.z;
+            new_position.y = -diff_position.y;
+            new_position.z =  diff_position.y;
+        } break;
+    }
+
+    return Block_Coords(new_position + b);
 }
 
-auto try_rotating_falling_body(Game& game, Rotation_Axis axis) -> void {
+auto calculate_center_of_body(const Falling_Body& body) -> Block_Coords {
+    u32 min_row   = U32_MAX, max_row   = 0;
+    u32 min_col   = U32_MAX, max_col   = 0;
+    u32 min_layer = U32_MAX, max_layer = 0;
+
+    for (const auto& [row, col, layer] : body.blocks) {
+        min_row = std::min(min_row, row);
+        max_row = std::max(max_row, row);
+
+        min_col = std::min(min_col, col);
+        max_col = std::max(max_col, col);
+
+        min_layer = std::min(min_layer, layer);
+        max_layer = std::max(max_layer, layer);
+    }
+
+    return Block_Coords(
+        (min_row   + max_row)   / 2,
+        (min_col   + max_col)   / 2,
+        (min_layer + max_layer) / 2
+    );
+}
+
+auto try_rotating_falling_body(Game& game, Rotation_Axis axis) -> bool {
     auto center_of_rotation = calculate_center_of_body(game.falling_body);
+
+    Blocks rotated;
+    for (const auto& block : game.falling_body.blocks) {
+        auto new_coords = rotate_90(block, center_of_rotation, axis);
+
+        // u32 so no need to check if negative.
+        if (new_coords.x >= game.grid.rows ||
+            new_coords.y >= game.grid.cols ||
+            new_coords.z >= game.grid.layers) {
+            return false;
+        }
+
+        if (game.grid.at(new_coords.x, new_coords.y, new_coords.z) != Block_Type::EMPTY) {
+            bool is_self = false;
+            for (const auto& other : game.falling_body.blocks) {
+                if (other == new_coords) {
+                    is_self = true;
+                    break;
+                }
+            }
+
+            if (!is_self) return false;
+        }
+
+        rotated.push_back(new_coords);
+    }
+
+    for (const auto& [x, y, z] : game.falling_body.blocks) {
+        game.grid.clear(x, y, z);
+    }
+
+    game.falling_body.blocks = rotated;
+    game.falling_body.layer_sort();
+
+    for (const auto& [x, y, z] : game.falling_body.blocks) {
+        game.grid.set(x, y, z, Block_Type::FALLING);
+    }
+
+    return true;
 }
 
 auto update(Game& game) -> void {
