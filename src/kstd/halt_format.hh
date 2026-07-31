@@ -9,35 +9,49 @@
 namespace halt {
 
 auto print(string format) -> int {
-    return fmt::print(hidden::halt_backend, format);
+    auto written = fmt::print(hidden::halt_backend, format);
+    flush();
+    return written;
 }
 
 template <typename T, typename... Rest>
 auto print(string format, T&& value, Rest&&... rest) -> int {
-    return fmt::print(hidden::halt_backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
+    auto written = fmt::print(hidden::halt_backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
+    flush();
+    return written;
 }
 
 auto println() -> int {
-    return fmt::println(hidden::halt_backend);
+    auto written = fmt::println(hidden::halt_backend);
+    flush();
+    return written;
 }
 
 template <typename T>
 auto print(T&& value) -> int {
-    return fmt::print(hidden::halt_backend, std::forward<T>(value));
+    auto written = fmt::print(hidden::halt_backend, std::forward<T>(value));
+    flush();
+    return written;
 }
 
 template <typename T>
 auto println(T&& value) -> int {
-    return fmt::println(hidden::halt_backend, std::forward<T>(value));
+    auto written = fmt::println(hidden::halt_backend, std::forward<T>(value));
+    flush();
+    return written;
 }
 
 auto println(string format) -> int {
-    return fmt::println(hidden::halt_backend, format);
+    auto written = fmt::println(hidden::halt_backend, format);
+    flush();
+    return written;
 }
 
 template <typename T, typename... Rest>
 auto println(string format, T&& value, Rest&&... rest) -> int {
-    return fmt::println(hidden::halt_backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
+    auto written = fmt::println(hidden::halt_backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
+    flush();
+    return written;
 }
 
 } // namespace halt

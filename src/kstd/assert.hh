@@ -38,19 +38,37 @@ namespace hidden {
 
     inline auto current_halt_print_count = 0;
     inline Halt_Print_Fn halt_print_fns[MAX_HALT_PRINT_COUNT];
+
+    constexpr auto HALT_PRINT_BUF_SIZE = 1024;
+    inline char    halt_print_buf[HALT_PRINT_BUF_SIZE];
+    inline usize   halt_print_len = 0;
 }
 
-// @TODO(blanktiger): ehhh, this is wrong, backend should always fully print to one source before printing to the next one.
+// Buffers one message, then dumps full buffer to each backend in turn (serial first).
 struct Halt_Printer_Backend {
     static auto put_char(char c) -> void {
-        serial::put_char(c);
-        for (int idx = 0; idx < hidden::current_halt_print_count; ++idx) {
-            hidden::halt_print_fns[idx](c);
+        if (hidden::halt_print_len < hidden::HALT_PRINT_BUF_SIZE) {
+            hidden::halt_print_buf[hidden::halt_print_len++] = c;
         }
     }
 
     static auto new_line() -> void {
         Halt_Printer_Backend::put_char('\n');
+    }
+
+    static auto flush() -> void {
+        auto* buf = hidden::halt_print_buf;
+        auto  len = hidden::halt_print_len;
+
+        for (usize i = 0; i < len; ++i) {
+            serial::put_char(buf[i]);
+        }
+        for (int idx = 0; idx < hidden::current_halt_print_count; ++idx) {
+            for (usize i = 0; i < len; ++i) {
+                hidden::halt_print_fns[idx](buf[i]);
+            }
+        }
+        hidden::halt_print_len = 0;
     }
 };
 
@@ -81,7 +99,11 @@ force_inline auto put_u32(u32 value) -> void {
     while (i > 0) put_char(buf[--i]);
 }
 
-// Formatted halt::print / println: end of format.hh (needs fmt after this header).
+force_inline auto flush() -> void {
+    hidden::halt_backend.flush();
+}
+
+// Formatted halt::print / println: halt_format.hh (needs fmt after this header).
 
 [[noreturn]] static auto
 forever(const char* message, const std::source_location& location = std::source_location::current()) -> void {
@@ -100,6 +122,7 @@ forever(const char* message, const std::source_location& location = std::source_
         put_cstr(message);
     }
     put_char('\n');
+    flush();
 
     for (;;) asm volatile("hlt");
 }
