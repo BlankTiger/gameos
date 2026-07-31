@@ -117,7 +117,7 @@ struct String_Builder {
         return bytes;
     }
 
-    // Contiguous copy onto destination_allocator (null → current global).
+    // Contiguous copy onto destination_allocator (null -> current global).
     // Chain buffers stay on builder's allocator. Non-owning; pair with
     // free_string when not on temp. Resets builder by default.
     auto to_string(mem::Allocator* destination_allocator = nullptr, bool do_reset = true) -> string {
@@ -194,7 +194,7 @@ private:
 };
 
 // Free heap bytes from copy_string / String_Builder::to_string / sprint.
-// allocator null → current global allocator at free time (must match alloc heap).
+// allocator null -> current global allocator at free time (must match alloc heap).
 inline auto free_string(string s, mem::Allocator* allocator = nullptr) -> void {
     if (s.data == nullptr || s.size == 0) return;
     mem::resolve_allocator(allocator)->free(s.data, s.size, alignof(char));
@@ -222,7 +222,7 @@ inline auto temp_c_string(string s) -> const char* {
     return data;
 }
 
-// Formats into allocator heap (null → current global). Caller free_string(result) (or defer).
+// Formats into allocator heap (null -> current global). Caller free_string(result) (or defer).
 template <typename... Args>
 auto sprint(mem::Allocator* allocator, Args&&... args) -> string {
     String_Builder builder(allocator);

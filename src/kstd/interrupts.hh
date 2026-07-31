@@ -54,7 +54,7 @@ inline Static_Array<Gate, NUM_VECTORS>     table;
 inline Interrupt_Descriptor_Table_Register interrupt_descriptor_table_register;
 
 enum struct Interrupt_Vector_Type : u8 {
-    // CPU exceptions (vectors 0–31)
+    // CPU exceptions (vectors 0-31)
     DIVIDE_ERROR                  = 0,
     DEBUG                         = 1,
     NON_MASKABLE_INTERRUPT        = 2,
@@ -88,7 +88,7 @@ enum struct Interrupt_Vector_Type : u8 {
     SECURITY_EXCEPTION            = 30,
     RESERVED_31                   = 31,
 
-    // Hardware IRQs (vectors 32–47, after PIC remapping)
+    // Hardware IRQs (vectors 32-47, after PIC remapping)
     PIT_TIMER                     = 32,
     PS2_KEYBOARD                  = 33,
     CASCADE                       = 34,
@@ -140,7 +140,7 @@ enum struct Interrupt_Vector_Type : u8 {
         );                                                                                         \
     }
 
-// CPU exceptions (vectors 0–31)
+// CPU exceptions (vectors 0-31)
 ISR_NO_ERROR_CODE (divide_error,                  0)   // #DE
 ISR_NO_ERROR_CODE (debug,                         1)   // #DB
 ISR_NO_ERROR_CODE (non_maskable_interrupt,        2)   // NMI
@@ -174,7 +174,7 @@ ISR_ERROR_CODE    (vmm_communication,             29)  // #VC
 ISR_ERROR_CODE    (security_exception,            30)  // #SX
 ISR_NO_ERROR_CODE (reserved_31,                   31)
 
-// Hardware IRQs (vectors 32–47, after PIC remapping)
+// Hardware IRQs (vectors 32-47, after PIC remapping)
 ISR_NO_ERROR_CODE (pit_timer,       32)  // IRQ0
 ISR_NO_ERROR_CODE (ps2_keyboard,    33)  // IRQ1
 ISR_NO_ERROR_CODE (cascade,         34)  // IRQ2
@@ -249,7 +249,7 @@ auto initialize() -> void {
     {
         using enum Interrupt_Vector_Type;
 
-        // CPU exceptions (vectors 0–31)
+        // CPU exceptions (vectors 0-31)
         set_gate(DIVIDE_ERROR,                  _isr_handle_divide_error);
         set_gate(DEBUG,                         _isr_handle_debug);
         set_gate(NON_MASKABLE_INTERRUPT,        _isr_handle_non_maskable_interrupt);
@@ -283,7 +283,7 @@ auto initialize() -> void {
         set_gate(SECURITY_EXCEPTION,            _isr_handle_security_exception);
         set_gate(RESERVED_31,                   _isr_handle_reserved_31);
 
-        // Hardware IRQs (vectors 32–47)
+        // Hardware IRQs (vectors 32-47)
         set_gate(PIT_TIMER,                     _isr_handle_pit_timer);
         set_gate(PS2_KEYBOARD,                  _isr_handle_ps2_keyboard);
         set_gate(CASCADE,                       _isr_handle_cascade);

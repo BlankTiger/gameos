@@ -4,7 +4,7 @@
 
 //
 // COM1 put_char only. No format.hh.
-// assert.hh needs this without pulling format → string → assert cycle.
+// assert.hh needs this without pulling format -> string -> assert cycle.
 // Full serial::print wrappers live in serial.hh.
 //
 namespace serial {
