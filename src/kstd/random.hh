@@ -3,7 +3,7 @@
 #include "kstd/assert.hh"
 #include "kstd/basic.hh"
 
-namespace rand {
+namespace krand {
 
 // Adapted from the code included on Sebastiano Vigna's website
 struct Xoshiro_256pp_State {

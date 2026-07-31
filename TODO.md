@@ -51,6 +51,7 @@ base layer:
 - [ ] MarkAndRestore for temporary allocations?
 - [ ] realloc on Allocator
 - [ ] query_capabilities on Allocator
+- [ ] set_temporary_allocator (also make it wrappable with Debug_Allocator)
 
 utils:
 - [ ] todo list generator (gather notes from source code and generate a stable

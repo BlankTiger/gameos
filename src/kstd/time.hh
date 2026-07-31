@@ -4,7 +4,7 @@
 #include "low_level_io.hh"
 #include "critical_section.hh"
 
-namespace time {
+namespace ktime {
 
 // Unit model: the PIT fires an interrupt TICK_RATE times per second (see
 // TICK_RATE_DIVISOR), and each interrupt increments tick_counter by one. So a

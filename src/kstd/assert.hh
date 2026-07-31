@@ -9,6 +9,14 @@
 #include <cstdio>
 #include <cstdlib>
 
+namespace halt {
+
+using Halt_Print_Fn = auto (*)(char) -> void;
+
+force_inline auto add_printer(Halt_Print_Fn) -> void {}
+
+}
+
 constexpr force_inline auto kstd_assert(
     bool predicate,
     const char* message = nullptr,

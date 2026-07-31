@@ -223,7 +223,7 @@ auto isr_handle_double_fault(u32 error) -> void {
 }
 
 auto isr_handle_timer() -> void {
-    time::on_tick();
+    ktime::on_tick();
 }
 
 extern "C" auto isr_dispatch(u32* registers_pointer) -> void {
