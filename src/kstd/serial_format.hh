@@ -5,12 +5,12 @@
 
 namespace serial {
 
-auto print(const char* format) -> int {
+auto print(string format) -> int {
     return fmt::print(hidden::serial_backend, format);
 }
 
 template <typename T, typename... Rest>
-auto print(const char* format, T&& value, Rest&&... rest) -> int {
+auto print(string format, T&& value, Rest&&... rest) -> int {
     return fmt::print(hidden::serial_backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
 }
 
@@ -18,7 +18,7 @@ auto println() -> int {
     return fmt::println(hidden::serial_backend);
 }
 
-auto println(const char* format) -> int {
+auto println(string format) -> int {
     return fmt::println(hidden::serial_backend, format);
 }
 
@@ -33,7 +33,7 @@ auto println(T&& value) -> int {
 }
 
 template <typename T, typename... Rest>
-auto println(const char* format, T&& value, Rest&&... rest) -> int {
+auto println(string format, T&& value, Rest&&... rest) -> int {
     return fmt::println(hidden::serial_backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
 }
 

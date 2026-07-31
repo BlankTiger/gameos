@@ -8,12 +8,12 @@
 // halt::print needs fmt; assert.hh cannot include this header (cycle).
 namespace halt {
 
-auto print(const char* format) -> int {
+auto print(string format) -> int {
     return fmt::print(hidden::halt_backend, format);
 }
 
 template <typename T, typename... Rest>
-auto print(const char* format, T&& value, Rest&&... rest) -> int {
+auto print(string format, T&& value, Rest&&... rest) -> int {
     return fmt::print(hidden::halt_backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
 }
 
@@ -31,12 +31,12 @@ auto println(T&& value) -> int {
     return fmt::println(hidden::halt_backend, std::forward<T>(value));
 }
 
-auto println(const char* format) -> int {
+auto println(string format) -> int {
     return fmt::println(hidden::halt_backend, format);
 }
 
 template <typename T, typename... Rest>
-auto println(const char* format, T&& value, Rest&&... rest) -> int {
+auto println(string format, T&& value, Rest&&... rest) -> int {
     return fmt::println(hidden::halt_backend, format, std::forward<T>(value), std::forward<Rest>(rest)...);
 }
 
