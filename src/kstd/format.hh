@@ -29,9 +29,9 @@
 //
 // Format rules:
 //   % / %0     next arg (implicit index)
-//   %1, %2, …  1-based arg index; sets next implicit to N+1
+//   %1, %2, ...  1-based arg index; sets next implicit to N+1
 //              leading zeros ok (%01 == %1); out-of-range asserts
-//   %00        empty insert (%000… too)
+//   %00        empty insert (%000... too)
 //   %%         literal %  (also char 31)
 //
 // For a custom type to be easily displayed by anything implementing fmt
@@ -329,7 +329,7 @@ auto print_impl(Backend& backend, string format, Tuple& args) -> int {
         if (cursor < format.size) {
             char next = format.data[cursor];
             if (next == '%') {
-                // %% → literal %
+                // %% -> literal %
                 backend.put_char('%');
                 written += 1;
                 cursor  += 1;
@@ -346,13 +346,13 @@ auto print_impl(Backend& backend, string format, Tuple& args) -> int {
                 usize digit_count = cursor - start;
                 if (sum == 0) {
                     if (digit_count >= 2) {
-                        // %00, %000, … → empty insert
+                        // %00, %000, ... -> empty insert
                         printed = cursor;
                         continue;
                     }
-                    // %0 → same as bare %
+                    // %0 -> same as bare %
                 } else {
-                    value = sum - 1;  // 1-based → 0-based
+                    value = sum - 1;  // 1-based -> 0-based
                 }
             }
         }
@@ -483,7 +483,7 @@ TEST(fmt, numbered_args_reorder) {
 
 TEST(fmt, numbered_then_implicit) {
     fmt_test::Capture_Backend backend;
-    // %2 consumes arg1; next bare % uses implicit = 2 → arg index 2 (third)
+    // %2 consumes arg1; next bare % uses implicit = 2 -> arg index 2 (third)
     fmt::print(backend, "%2-%", "a", "b", "c");
     EXPECT_STREQ(backend.buffer, "b-c");
 }
