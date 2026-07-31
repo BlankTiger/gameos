@@ -447,7 +447,7 @@ namespace hidden {
 }
 
 inline Allocator* default_global_allocator = hidden::current_global_allocator;
-// 8 KiB more than enough for error messages.
+// 8 KiB more than enough for error messages in interrupt handlers.
 inline Arena_Allocator emergency_error_message_allocator{8 * 1024};
 
 force_inline auto set_global_allocator(Allocator* allocator) -> void {

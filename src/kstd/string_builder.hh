@@ -143,6 +143,29 @@ struct String_Builder {
         return string(out, count);
     }
 
+    // Contiguous null-terminated copy onto destination_allocator (null -> current
+    // global). Chain buffers stay on builder's allocator. free_c_string when not
+    // on temp. Resets builder by default.
+    auto to_c_string(mem::Allocator* destination_allocator = nullptr, bool do_reset = true) -> const char* {
+        usize count = length();
+
+        auto* destination = mem::resolve_allocator(destination_allocator);
+        auto* out = static_cast<char*>(destination->alloc(count + 1, alignof(char)));
+        kstd_assert(out != nullptr, "String_Builder::to_c_string allocation failed");
+
+        char* cursor = out;
+        for (Buffer* buffer = base_buffer(); buffer != nullptr; buffer = buffer->next) {
+            if (buffer->count > 0) {
+                kstd_memcpy(cursor, buffer_data(buffer), buffer->count);
+                cursor += buffer->count;
+            }
+        }
+        *cursor = '\0';
+
+        if (do_reset) reset();
+        return out;
+    }
+
 private:
     auto base_buffer() -> Buffer* {
         return reinterpret_cast<Buffer*>(initial_bytes);
@@ -200,6 +223,14 @@ inline auto free_string(string s, mem::Allocator* allocator = nullptr) -> void {
     mem::resolve_allocator(allocator)->free(s.data, s.size, alignof(char));
 }
 
+// Free heap bytes from String_Builder::to_c_string / csprint.
+// allocator null -> current global allocator at free time (must match alloc heap).
+inline auto free_c_string(const char* s, mem::Allocator* allocator = nullptr) -> void {
+    if (s == nullptr) return;
+    mem::resolve_allocator(allocator)->free(
+        const_cast<char*>(s), kstd_strlen(s) + 1, alignof(char));
+}
+
 inline auto copy_string(string s, mem::Allocator* allocator = nullptr) -> string {
     if (s.size == 0) return string{};
 
@@ -243,6 +274,31 @@ auto sprint(First&& first, Rest&&... rest) -> string {
 template <typename... Args>
 auto tprint(Args&&... args) -> string {
     return sprint(&mem::temporary_allocator, std::forward<Args>(args)...);
+}
+
+// C string print: formats into allocator heap (null -> current global), null-terminated.
+// Caller free_c_string(result) (or defer) when not on temp.
+template <typename... Args>
+auto csprint(mem::Allocator* allocator, Args&&... args) -> const char* {
+    String_Builder builder(allocator);
+    builder.print(std::forward<Args>(args)...);
+    return builder.to_c_string(allocator);
+}
+
+// Pack form when first arg is not an allocator (else derived Allocator* would prefer pack).
+template <typename First, typename... Rest>
+    requires (!std::is_convertible_v<First, mem::Allocator*>)
+auto csprint(First&& first, Rest&&... rest) -> const char* {
+    return csprint(static_cast<mem::Allocator*>(nullptr),
+                   std::forward<First>(first),
+                   std::forward<Rest>(rest)...);
+}
+
+// C temporary print: format null-terminated into mem::temporary_allocator.
+// Valid until temporary_allocator.reset().
+template <typename... Args>
+auto ctprint(Args&&... args) -> const char* {
+    return csprint(&mem::temporary_allocator, std::forward<Args>(args)...);
 }
 
 #ifdef UNIT_TESTS_KSTD_STRING_BUILDER
@@ -338,8 +394,70 @@ TEST(sprint, explicit_allocator_grows_past_inline_buffer) {
     free_string(formatted, &allocator);
 }
 
+TEST(csprint, can_format_values_into_a_c_string) {
+    auto* formatted = csprint("%, %!", "hello", "world");
+    defer(free_c_string(formatted));
+    EXPECT_STREQ(formatted, "hello, world!");
+}
+
+TEST(csprint, numbered_args) {
+    auto* formatted = csprint("%2-%1", "a", "b");
+    defer(free_c_string(formatted));
+    EXPECT_STREQ(formatted, "b-a");
+}
+
+TEST(csprint, can_target_explicit_allocator) {
+    mem::Hosted_Allocator hosted;
+    mem::Debug_Allocator  allocator{&hosted};
+
+    auto* formatted = csprint(&allocator, "%, %!", "hello", "world");
+    defer(free_c_string(formatted, &allocator));
+    EXPECT_STREQ(formatted, "hello, world!");
+}
+
+TEST(csprint, explicit_allocator_grows_past_inline_buffer) {
+    mem::Hosted_Allocator hosted;
+    mem::Debug_Allocator  allocator{&hosted};
+
+    char payload[STRING_BUILDER_BUFFER_SIZE * 2];
+    kstd_memset(payload, 'x', sizeof(payload));
+    auto* formatted = csprint(&allocator, "%", string(payload, sizeof(payload)));
+    EXPECT_EQ(kstd_strlen(formatted), sizeof(payload));
+    for (usize i = 0; i < sizeof(payload); ++i)
+        EXPECT_EQ(formatted[i], 'x');
+    EXPECT_EQ(formatted[sizeof(payload)], '\0');
+    free_c_string(formatted, &allocator);
+}
+
+TEST(csprint, empty_is_null_terminated) {
+    auto* formatted = csprint("");
+    defer(free_c_string(formatted));
+    EXPECT_NE(formatted, nullptr);
+    EXPECT_EQ(formatted[0], '\0');
+}
+
+TEST(ctprint, formats_into_temporary_allocator) {
+    defer(mem::temporary_allocator.reset());
+
+    auto* a = ctprint("%, %!", "hello", "world");
+    EXPECT_STREQ(a, "hello, world!");
+
+    auto* b = ctprint("n=%", 42);
+    EXPECT_STREQ(b, "n=42");
+    EXPECT_STREQ(a, "hello, world!");
+}
+
+TEST(String_Builder, to_c_string_null_terminates) {
+    String_Builder builder;
+    builder.append("hi");
+    auto* cstr = builder.to_c_string();
+    defer(free_c_string(cstr));
+    EXPECT_EQ(cstr[0], 'h');
+    EXPECT_EQ(cstr[1], 'i');
+    EXPECT_EQ(cstr[2], '\0');
+}
+
 TEST(tprint, formats_into_temporary_allocator) {
-    mem::temporary_allocator.reset();
     defer(mem::temporary_allocator.reset());
 
     auto a = tprint("%, %!", "hello", "world");
@@ -351,7 +469,6 @@ TEST(tprint, formats_into_temporary_allocator) {
 }
 
 TEST(tprint, reset_invalidates_previous_views_memory_reuse) {
-    mem::temporary_allocator.reset();
     defer(mem::temporary_allocator.reset());
     auto first = tprint("first");
     EXPECT_EQ(first, "first");
@@ -362,7 +479,6 @@ TEST(tprint, reset_invalidates_previous_views_memory_reuse) {
 }
 
 TEST(tcopy, copies_into_temp) {
-    mem::temporary_allocator.reset();
     defer(mem::temporary_allocator.reset());
     const char* literal = "abc";
     auto copied = tcopy(string(literal));
@@ -371,7 +487,6 @@ TEST(tcopy, copies_into_temp) {
 }
 
 TEST(temp_c_string, null_terminates) {
-    mem::temporary_allocator.reset();
     defer(mem::temporary_allocator.reset());
     auto* cstr = temp_c_string("hi");
     EXPECT_EQ(cstr[0], 'h');
