@@ -1,6 +1,7 @@
 #pragma once
 
 #include "kstd/assert.hh"
+#include "kstd/cpuid.hh"
 #include "kstd/gfx.hh"
 #include "kstd/global_constructor_handling.hh"
 #include "kstd/global_descriptors.hh"
@@ -22,6 +23,15 @@ inline auto kernel_startup(u32 magic, const boot::Multiboot2_Info* mbi) -> void 
     serial::initialize();
 
     kstd_assert(magic == boot::MULTIBOOT2_MAGIC, "bad multiboot2 magic");
+
+    cpu::detect_features();
+    const auto& f = cpu::features();
+    serial::println("CPUID vendor=% max_basic=%", f.vendor, f.max_basic_leaf);
+    serial::println(
+        "CPUID apic=% x2apic=% sse=% sse2=% avx=% fxsr=% fsgsbase=% rdrand=% nx=%",
+        f.apic, f.x2apic, f.sse, f.sse2, f.avx, f.fxsr, f.fsgsbase, f.rdrand, f.nx
+    );
+    serial::println("CPUID initial_apic_id=%", f.initial_apic_id);
 
     serial::println("Initializing mem");
     mem::initialize(mbi);

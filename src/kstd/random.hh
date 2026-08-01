@@ -2,6 +2,7 @@
 
 #include "kstd/assert.hh"
 #include "kstd/basic.hh"
+#include "kstd/cpuid.hh"
 
 namespace krand {
 
@@ -47,9 +48,7 @@ force_inline auto rdtsc() -> u64 {
 }
 
 force_inline auto cpu_has_rdrand() -> bool {
-    u32 ecx;
-    asm volatile("cpuid" : "=c"(ecx) : "a"(1) : "rbx", "rdx");
-    return (ecx >> 30) & 1;
+    return cpu::features().rdrand;
 }
 
 // Intel's recommended retry loop; a handful of failures in a row means the
