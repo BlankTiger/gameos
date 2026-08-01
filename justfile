@@ -19,6 +19,10 @@ preprocess: configure
 check-headers: preprocess
     cmake --build {{build_dir}} --target check_headers
 
+# Compile only (no codegen/link).
+syntax: preprocess
+    cmake --build {{build_dir}} --target syntax_only
+
 run: build
     qemu-system-x86_64 -enable-kvm -cpu host -m 512M -serial stdio -cdrom {{build_dir}}/gameos.iso
 
