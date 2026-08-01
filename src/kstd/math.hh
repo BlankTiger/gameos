@@ -370,6 +370,9 @@ struct Vector4 {
     explicit constexpr operator Vector3<T>() const { return Vector3<T>{ x, y, z }; }
     [[nodiscard]] static constexpr auto zero() -> Vector4 { return Vector4{ T(0), T(0), T(0), T(0) }; }
     [[nodiscard]] static constexpr auto one()  -> Vector4 { return Vector4{ T(1), T(1), T(1), T(1) }; }
+    // Homogeneous coordinates for Vector3
+    [[nodiscard]] static constexpr auto as_vector(Vector3<T>& V) -> Vector4 { return Vector4{ V.x, V.y, V.z, T(0) }; }
+    [[nodiscard]] static constexpr auto as_point(Vector3<T>& V)  -> Vector4 { return Vector4{ V.x, V.y, V.z, T(1) }; }
 };
 
 template <typename T>

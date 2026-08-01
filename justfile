@@ -26,6 +26,9 @@ syntax: preprocess
 run: build
     qemu-system-x86_64 -enable-kvm -cpu host -m 512M -serial stdio -display gtk,zoom-to-fit=on -cdrom {{build_dir}}/gameos.iso
 
+run-no-kvm: build
+    qemu-system-x86_64 -serial stdio -cdrom {{build_dir}}/gameos.iso
+
 test: configure-tests
     cmake --build {{test_build_dir}}
     ctest --test-dir {{test_build_dir}} --output-on-failure

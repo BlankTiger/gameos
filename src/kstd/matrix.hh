@@ -562,7 +562,7 @@ constexpr auto translate(Matrix4<T> m, const Vector3<T>& t) -> Matrix4<T> {
 }
 
 template <typename Result_Type>
-constexpr auto rotation_matrix(const Quaternion<@T(Result_Type::Value_Type)>& q) -> Result_Type {
+constexpr auto make_rotation_matrix(const Quaternion<@T(Result_Type::Value_Type)>& q) -> Result_Type {
     using T = @T(Result_Type::Value_Type);
     Result_Type m{};
 
@@ -601,13 +601,13 @@ constexpr auto rotation_matrix(const Quaternion<@T(Result_Type::Value_Type)>& q)
 
 template <std::floating_point T>
 constexpr auto rotate(const Matrix3<T>& m, const Quaternion<T>& q) -> Matrix3<T> {
-    Matrix3<T> r = rotation_matrix<Matrix3<T>>(q);
+    Matrix3<T> r = make_rotation_matrix<Matrix3<T>>(q);
     return m * r;
 }
 
 template <std::floating_point T>
 constexpr auto rotate(const Matrix4<T>& m, const Quaternion<T>& q) -> Matrix4<T> {
-    Matrix3<T> r = rotation_matrix<Matrix3<T>>(q);
+    Matrix3<T> r = make_rotation_matrix<Matrix3<T>>(q);
     return m * r;
 }
 
@@ -793,15 +793,21 @@ constexpr auto lerp(const Matrix3<T>& a, const Matrix3<T>& b, @T(Matrix3<T>::Val
     return r;
 }
 
+template <IsMatrix M>
+struct InverseResult {
+    M result;
+    bool success;
+};
+
 template <std::floating_point T>
-constexpr auto inverse(const Matrix3<T>& a, @T(Matrix3<T>::Value_Type) epsilon = T(0.001)) -> std::optional<Matrix3<T>> {
+constexpr auto inverse(const Matrix3<T>& a, @T(Matrix3<T>::Value_Type) epsilon = T(0.001)) -> InverseResult<Matrix3<T>> {
     T c11 = a._22*a._33 - a._32*a._23;
     T c12 = a._21*a._33 - a._31*a._23;
     T c13 = a._21*a._32 - a._31*a._22;
 
     T det = a._11*c11 - a._12*c12 + a._13*c13;
 
-    if (det < epsilon && det > -epsilon) return std::nullopt;  // Singular.
+    if (det < epsilon && det > -epsilon) return {{}, false};  // Singular.
 
     T idet = T(1) / det;
 
@@ -816,13 +822,13 @@ constexpr auto inverse(const Matrix3<T>& a, @T(Matrix3<T>::Value_Type) epsilon =
     r._32 = -idet*(a._11*a._32 - a._12*a._31);
     r._33 =  idet*(a._11*a._22 - a._12*a._21);
 
-    return r;
+    return {r, true};
 }
 
 // Fast 4x4 inverse. Good enough for well-conditioned game matrices.
 // Ref: Lengyel, Foundations of Game Dev Math, 1.7.5.
 template <std::floating_point T>
-constexpr auto inverse(const Matrix4<T>& m, @T(Matrix4<T>::Value_Type) epsilon = T(0.0001)) -> std::optional<Matrix4<T>> {
+constexpr auto inverse(const Matrix4<T>& m, @T(Matrix4<T>::Value_Type) epsilon = T(0.0001)) -> InverseResult<Matrix4<T>> {
     Vector3<T> a{ m._11, m._21, m._31 };
     Vector3<T> b{ m._12, m._22, m._32 };
     Vector3<T> c{ m._13, m._23, m._33 };
@@ -840,7 +846,7 @@ constexpr auto inverse(const Matrix4<T>& m, @T(Matrix4<T>::Value_Type) epsilon =
 
     T det = dot(s, v) + dot(t, u);
 
-    if (abs(det) < epsilon) return std::nullopt;
+    if (abs(det) < epsilon) return {{}, false};
 
     T inv_det = T(1) / det;
     s *= inv_det;
@@ -853,11 +859,14 @@ constexpr auto inverse(const Matrix4<T>& m, @T(Matrix4<T>::Value_Type) epsilon =
     Vector3<T> r2 = cross(d, u) + s * w;
     Vector3<T> r3 = cross(u, c) - s * z;
 
-    return Matrix4<T>{
-        r0.x, r0.y, r0.z, -dot(b, t),
-        r1.x, r1.y, r1.z,  dot(a, t),
-        r2.x, r2.y, r2.z, -dot(d, s),
-        r3.x, r3.y, r3.z,  dot(c, s)
+    return {
+        Matrix4<T>{
+            r0.x, r0.y, r0.z, -dot(b, t),
+            r1.x, r1.y, r1.z,  dot(a, t),
+            r2.x, r2.y, r2.z, -dot(d, s),
+            r3.x, r3.y, r3.z,  dot(c, s)
+        },
+        true
     };
 }
 
@@ -1170,10 +1179,10 @@ TEST(Matrix, translate_in_place) {
 TEST(Matrix, rotation_matrix_identity_quaternion) {
     auto q = Quaternion<f32>::identity();
 
-    auto m3 = rotation_matrix<Matrix3<f32>>(q);
+    auto m3 = make_rotation_matrix<Matrix3<f32>>(q);
     EXPECT_TRUE(m3 == Matrix3<f32>::identity());
 
-    auto m4 = rotation_matrix<Matrix4<f32>>(q);
+    auto m4 = make_rotation_matrix<Matrix4<f32>>(q);
     EXPECT_TRUE(m4 == Matrix4<f32>::identity());
 }
 
