@@ -49,9 +49,41 @@ auto kernel_init(u32 magic, const boot::Multiboot2_Info* mbi) -> void {
 
 auto main() -> void {
     term::println("Hello from GameOS!");
-    gfx::Mesh_Instance cube{gfx::UNIT_CUBE, {10.f, 10.f, 10.f}};
-    gfx::draw_mesh(cube);
-    gfx::draw_frame();
+
+    using namespace ktime;
+    using namespace math;
+
+    constexpr auto TARGET_TICKS = ticks_per_frame(60);
+    constexpr f32  RAD_PER_SEC  = 1.2f; // full spin ~5s
+    constexpr Vector3<f32> SPIN_AXIS{0.6f, 1.f, 0.3f}; // tumble: all 6 faces show
+
+    gfx::Mesh_Instance cube{
+        gfx::UNIT_CUBE,
+        {0.f, 0.f, -5.f},
+        Quaternion<f32>::identity(),
+    };
+    cube.texture = @embed("obamium2.png");
+
+    u64 last_tick = get_ticks();
+    const auto* temporary_allocator_mark = mem::temporary_allocator.mark();
+    while (!ps2::is_pressed(ps2::Scancode::ESCAPE)) {
+        const u64 frame_start = get_ticks();
+        const u64 elapsed     = frame_start - last_tick;
+        last_tick = frame_start;
+
+        const f32 angle = RAD_PER_SEC * static_cast<f32>(elapsed) / static_cast<f32>(TICK_RATE);
+        cube.rotation = Quaternion<f32>::from_axis_angle(SPIN_AXIS, angle) * cube.rotation;
+        cube.recompute_matrix();
+
+        gfx::clear(gfx::BLACK);
+        gfx::draw_mesh(cube);
+        gfx::draw_frame();
+
+        mem::temporary_allocator.rewind(temporary_allocator_mark);
+
+        const u64 frame_ticks = get_ticks() - frame_start;
+        if (frame_ticks < TARGET_TICKS) sleep_ticks(TARGET_TICKS - frame_ticks);
+    }
     // tetris_main();
 }
 

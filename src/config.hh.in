@@ -3,4 +3,4 @@
 #define GFX_WIDTH @GFX_WIDTH@
 #define GFX_HEIGHT @GFX_HEIGHT@
 #define GFX_PIXEL_COUNT (GFX_WIDTH * GFX_HEIGHT)
-#define GFX_ASPECT_RATIO (GFX_WIDTH / GFX_HEIGHT)
+#define GFX_ASPECT_RATIO (static_cast<float>(GFX_WIDTH) / static_cast<float>(GFX_HEIGHT))

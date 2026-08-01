@@ -58,7 +58,9 @@ struct Sprite_Command {
 
 struct Triangle_Command {
     Vector4<f32> v1, v2, v3;
+    Vector2<f32> uv1, uv2, uv3;
     Color color;
+    Resource_View texture{}; // width==0 => solid color
 };
 
 struct Draw_Command_2D {
@@ -401,10 +403,25 @@ auto is_inside(f32 e, bool top_left) -> bool {
     return e > 0.f || (e == 0.f && top_left);
 };
 
+force_inline auto sample_texture(const Resource_View& res, f32 u, f32 v) -> Color {
+    if (u < 0.f) u = 0.f;
+    else if (u > 1.f) u = 1.f;
+    if (v < 0.f) v = 0.f;
+    else if (v > 1.f) v = 1.f;
+    const u32 tx = static_cast<u32>(u * static_cast<f32>(res.width  - 1));
+    const u32 ty = static_cast<u32>(v * static_cast<f32>(res.height - 1));
+    const Color* colors = reinterpret_cast<const Color*>(res.data.data);
+    return colors[ty * res.width + tx];
+}
+
 // Possible improvements:
 // - Iterate over chunks of pixels and check if bounding vertices are out of the triangle
 // - Barycentric coordinates & fragments?
-auto inner_draw_triangle(Vector4<f32> v1, Vector4<f32> v2, Vector4<f32> v3, Color color) -> void {
+auto inner_draw_triangle(
+    Vector4<f32> v1, Vector4<f32> v2, Vector4<f32> v3,
+    Vector2<f32> uv1, Vector2<f32> uv2, Vector2<f32> uv3,
+    Color color, Resource_View texture
+) -> void {
     Rect bounding_box{v1, v2, v3};
     bounding_box.clip(width(), height());
 
@@ -415,6 +432,11 @@ auto inner_draw_triangle(Vector4<f32> v1, Vector4<f32> v2, Vector4<f32> v3, Colo
     f32 dy23 = v3.y - v2.y;
     f32 dx31 = v1.x - v3.x;
     f32 dy31 = v1.y - v3.y;
+
+    // Full triangle area (after CW fix-up det > 0). Used as barycentric denom.
+    f32 area = dx12 * (v3.y - v1.y) - dy12 * (v3.x - v1.x);
+    if (area == 0.f) return;
+    f32 inv_area = 1.f / area;
 
     // Compute the original determinant orientations once:
     // det_xy(edge, point - start)
@@ -429,7 +451,16 @@ auto inner_draw_triangle(Vector4<f32> v1, Vector4<f32> v2, Vector4<f32> v3, Colo
     bool tl23 = is_top_left(dx23, dy23);
     bool tl31 = is_top_left(dx31, dy31);
 
-    // Increment edge values instead of recomputing determinants
+    const bool textured = texture.width != 0 && texture.height != 0;
+    // Perspective-correct: interpolate attr/w and 1/w, recover attr = (attr/w)/(1/w).
+    const f32 iw1 = (v1.w != 0.f) ? (1.f / v1.w) : 0.f;
+    const f32 iw2 = (v2.w != 0.f) ? (1.f / v2.w) : 0.f;
+    const f32 iw3 = (v3.w != 0.f) ? (1.f / v3.w) : 0.f;
+    const f32 u1_iw = uv1.x * iw1, v1_iw = uv1.y * iw1;
+    const f32 u2_iw = uv2.x * iw2, v2_iw = uv2.y * iw2;
+    const f32 u3_iw = uv3.x * iw3, v3_iw = uv3.y * iw3;
+
+    // e = dx*(py-y0) - dy*(px-x0)  =>  de/dx = -dy,  de/dy = dx
     f32 row12 = e12;
     f32 row23 = e23;
     f32 row31 = e31;
@@ -438,17 +469,30 @@ auto inner_draw_triangle(Vector4<f32> v1, Vector4<f32> v2, Vector4<f32> v3, Colo
         f32 e23 = row23;
         f32 e31 = row31;
         for (u32 x = bounding_box.x1; x < bounding_box.x2; ++x) {
-            if (is_inside(e12, tl12) && is_inside(e23, tl23) && is_inside(e31, tl31))
-                set_pixel(x, y, color);
-            // Move one pixel right
-            e12 += dx12;
-            e23 += dx23;
-            e31 += dx31;
+            if (is_inside(e12, tl12) && is_inside(e23, tl23) && is_inside(e31, tl31)) {
+                if (textured) {
+                    // bary: w1 at v1 = e23/area, w2 at v2 = e31/area, w3 at v3 = e12/area
+                    const f32 w1 = e23 * inv_area;
+                    const f32 w2 = e31 * inv_area;
+                    const f32 w3 = e12 * inv_area;
+                    const f32 inv_w = w1 * iw1 + w2 * iw2 + w3 * iw3;
+                    if (inv_w != 0.f) {
+                        const f32 recip = 1.f / inv_w;
+                        const f32 u = (w1 * u1_iw + w2 * u2_iw + w3 * u3_iw) * recip;
+                        const f32 v = (w1 * v1_iw + w2 * v2_iw + w3 * v3_iw) * recip;
+                        set_pixel(x, y, sample_texture(texture, u, v));
+                    }
+                } else {
+                    set_pixel(x, y, color);
+                }
+            }
+            e12 -= dy12;
+            e23 -= dy23;
+            e31 -= dy31;
         }
-        // Move one pixel down
-        row12 -= dy12;
-        row23 -= dy23;
-        row31 -= dy31;
+        row12 += dx12;
+        row23 += dx23;
+        row31 += dx31;
     }
 }
 
@@ -458,7 +502,11 @@ enum struct Cull_Mode : u8 {
 };
 inline auto cull_mode = Cull_Mode::BACK_FACE;
 
-auto draw_triangle(Vector4<f32> v1, Vector4<f32> v2, Vector4<f32> v3, Color color, u8 z = 1) -> void {
+auto draw_triangle(
+    Vector4<f32> v1, Vector4<f32> v2, Vector4<f32> v3,
+    Vector2<f32> uv1, Vector2<f32> uv2, Vector2<f32> uv3,
+    Resource_View texture, Color color, u8 z = 1
+) -> void {
     Vector4<f32> a = v2 - v1;
     Vector4<f32> b = v3 - v1;
     f32 det = det_xy(a, b);
@@ -473,15 +521,20 @@ auto draw_triangle(Vector4<f32> v1, Vector4<f32> v2, Vector4<f32> v3, Color colo
 
     if (is_counter_clockwise) {
         std::swap(v2, v3);
+        std::swap(uv2, uv3);
         det = -det;
     }
     draw_commands_world_2D.push_back(
         Draw_Command_2D{
             .type = Draw_Command_2D_Type::DRAW_TRIANGLE,
             .z = z,
-            .triangle = Triangle_Command{v1, v2, v3, color},
+            .triangle = Triangle_Command{v1, v2, v3, uv1, uv2, uv3, color, texture},
         }
     );
+}
+
+auto draw_triangle(Vector4<f32> v1, Vector4<f32> v2, Vector4<f32> v3, Color color, u8 z = 1) -> void {
+    draw_triangle(v1, v2, v3, {}, {}, {}, Resource_View{}, color, z);
 }
 
 template <bool z_sort = true>
@@ -523,7 +576,7 @@ force_inline auto draw_ui() -> void {
             } break;
             case DRAW_TRIANGLE: {
                 const Triangle_Command& cmd = command.triangle;
-                inner_draw_triangle(cmd.v1, cmd.v2, cmd.v3, cmd.color);
+                inner_draw_triangle(cmd.v1, cmd.v2, cmd.v3, cmd.uv1, cmd.uv2, cmd.uv3, cmd.color, cmd.texture);
             } break;
         }
     }
@@ -561,7 +614,7 @@ force_inline auto draw_world_2D() -> void {
             } break;
             case DRAW_TRIANGLE: {
                 const Triangle_Command& cmd = command.triangle;
-                inner_draw_triangle(cmd.v1, cmd.v2, cmd.v3, cmd.color);
+                inner_draw_triangle(cmd.v1, cmd.v2, cmd.v3, cmd.uv1, cmd.uv2, cmd.uv3, cmd.color, cmd.texture);
             } break;
         }
     }

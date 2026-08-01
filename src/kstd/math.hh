@@ -371,8 +371,8 @@ struct Vector4 {
     [[nodiscard]] static constexpr auto zero() -> Vector4 { return Vector4{ T(0), T(0), T(0), T(0) }; }
     [[nodiscard]] static constexpr auto one()  -> Vector4 { return Vector4{ T(1), T(1), T(1), T(1) }; }
     // Homogeneous coordinates for Vector3
-    [[nodiscard]] static constexpr auto as_vector(Vector3<T>& V) -> Vector4 { return Vector4{ V.x, V.y, V.z, T(0) }; }
-    [[nodiscard]] static constexpr auto as_point(Vector3<T>& V)  -> Vector4 { return Vector4{ V.x, V.y, V.z, T(1) }; }
+    [[nodiscard]] static constexpr auto as_vector(const Vector3<T>& V) -> Vector4 { return Vector4{ V.x, V.y, V.z, T(0) }; }
+    [[nodiscard]] static constexpr auto as_point(const Vector3<T>& V)  -> Vector4 { return Vector4{ V.x, V.y, V.z, T(1) }; }
 };
 
 template <typename T>
@@ -565,7 +565,34 @@ struct Quaternion {
     T x{}, y{}, z{}, w{};
 
     [[nodiscard]] static constexpr auto identity() -> Quaternion { return Quaternion{ T(0), T(0), T(0), T(1) }; }
+
+    // axis need not be unit; zero axis falls back to identity.
+    [[nodiscard]] static auto from_axis_angle(Vector3<T> axis, T angle) -> Quaternion {
+        normalize(axis, Vector3<T>::zero());
+        if (axis == Vector3<T>::zero()) return identity();
+        T half = angle * T(0.5);
+        T s    = static_cast<T>(sin(static_cast<f32>(half)));
+        T c    = static_cast<T>(cos(static_cast<f32>(half)));
+        return Quaternion{ axis.x * s, axis.y * s, axis.z * s, c };
+    }
 };
+
+// Hamilton product. Apply b then a: q = a * b.
+template <std::floating_point T>
+[[nodiscard]] constexpr auto operator * (const Quaternion<T>& a, const Quaternion<T>& b) -> Quaternion<T> {
+    return Quaternion<T>{
+        a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
+        a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
+        a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
+        a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z,
+    };
+}
+
+template <std::floating_point T>
+constexpr auto operator *= (Quaternion<T>& a, const Quaternion<T>& b) -> Quaternion<T>& {
+    a = a * b;
+    return a;
+}
 
 #ifdef UNIT_TESTS_KSTD_MATH
 
