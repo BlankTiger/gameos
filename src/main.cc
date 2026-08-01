@@ -13,14 +13,8 @@
 #include "kstd/serial_format.hh"
 #include "kstd/random.hh"
 
-/* Check if the compiler thinks you are targeting the wrong operating system. */
-#if defined(__linux__)
-#error "You are not using a cross-compiler, you will most certainly run into trouble"
-#endif
-
-/* This tutorial will only work for the 32-bit ix86 targets. */
-#if !defined(__i386__)
-#error "This tutorial needs to be compiled with a ix86-elf compiler"
+#if !defined(__x86_64__)
+#error "This kernel needs an x86_64-elf compiler"
 #endif
 
 auto kernel_init(u32 magic, const boot::Multiboot2_Info* mbi) -> void {

@@ -16,13 +16,13 @@ force_inline auto kstd_memcpy(void* __restrict destination, const void* __restri
 #if HOSTED
     return std::memcpy(destination, source, length);
 #else
-    usize dwords = length / 4;
-    usize remainder = length % 4;
+    usize qwords = length / 8;
+    usize remainder = length % 8;
 
     void* dst = destination;
     const void* src = source;
 
-    asm volatile("cld; rep movsl" : "+D"(dst), "+S"(src), "+c"(dwords) : : "memory", "cc");
+    asm volatile("cld; rep movsq" : "+D"(dst), "+S"(src), "+c"(qwords) : : "memory", "cc");
 
     u8* dst_bytes = static_cast<u8*>(dst);
     const u8* src_bytes = static_cast<const u8*>(src);
@@ -46,7 +46,7 @@ force_inline auto kstd_memset(void* buffer, int value, usize length) -> void* {
 #endif
 }
 
-// Fill `count` dwords with `value` (rep stosl on freestanding i686).
+// Fill `count` dwords with `value` (rep stosl on freestanding x86).
 force_inline auto kstd_memset32(void* buffer, u32 value, usize count) -> void* {
 #if HOSTED
     auto* dst = static_cast<u32*>(buffer);

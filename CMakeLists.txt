@@ -93,7 +93,7 @@ foreach(header ${all_headers})
     add_custom_command(
         OUTPUT ${stamp}
         COMMAND ${CMAKE_CXX_COMPILER}
-                -std=c++23 -ffreestanding -fno-exceptions -fno-rtti
+                -std=c++23 -ffreestanding -fno-exceptions -fno-rtti -mno-red-zone
                 -Wno-pragma-once-outside-header
                 -I ${GENERATED_DIR}/src -I ${GENERATED_DIR}
                 -fsyntax-only ${header}
@@ -112,6 +112,7 @@ target_compile_options(gameos PRIVATE
     $<$<COMPILE_LANGUAGE:C,CXX>:-O2>
     $<$<COMPILE_LANGUAGE:C,CXX>:-Wall>
     $<$<COMPILE_LANGUAGE:C,CXX>:-Wextra>
+    $<$<COMPILE_LANGUAGE:C,CXX>:-mno-red-zone>
     $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions>
     $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
     -DGFX_WIDTH=${GFX_WIDTH}
@@ -122,6 +123,7 @@ target_link_options(gameos PRIVATE
     -T ${GENERATED_DIR}/src/linker.ld
     -ffreestanding
     -nostdlib
+    -z max-page-size=0x1000
 )
 
 target_link_libraries(gameos PRIVATE gcc)
