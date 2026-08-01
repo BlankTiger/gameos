@@ -48,7 +48,7 @@ force_inline auto rdtsc() -> u64 {
 
 force_inline auto cpu_has_rdrand() -> bool {
     u32 ecx;
-    asm volatile("cpuid" : "=c"(ecx) : "a"(1) : "ebx", "edx");
+    asm volatile("cpuid" : "=c"(ecx) : "a"(1) : "rbx", "rdx");
     return (ecx >> 30) & 1;
 }
 

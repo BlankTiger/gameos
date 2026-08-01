@@ -11,7 +11,7 @@ build: configure
     cmake --build {{build_dir}}
 
 configure:
-    cmake -S . -B {{build_dir}} -G Ninja -DCMAKE_TOOLCHAIN_FILE=cmake/Toolchain-i686-elf.cmake
+    cmake -S . -B {{build_dir}} -G Ninja -DCMAKE_TOOLCHAIN_FILE=cmake/Toolchain-x86_64-elf.cmake
 
 preprocess: configure
     cmake --build {{build_dir}} --target generate_files
@@ -20,7 +20,7 @@ check-headers: preprocess
     cmake --build {{build_dir}} --target check_headers
 
 run: build
-    qemu-system-i386 -enable-kvm -cpu host -m 512M -serial stdio -cdrom {{build_dir}}/gameos.iso
+    qemu-system-x86_64 -enable-kvm -cpu host -m 512M -serial stdio -cdrom {{build_dir}}/gameos.iso
 
 test: configure-tests
     cmake --build {{test_build_dir}}

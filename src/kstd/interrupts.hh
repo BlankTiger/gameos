@@ -26,30 +26,39 @@ union Gate_Type_Attributes {
 
 static_assert(sizeof(Gate_Type_Attributes) == 1);
 
-constexpr Gate_Type_Attributes GATE_PRESENT_RING0_INT32 = {
+constexpr Gate_Type_Attributes GATE_PRESENT_RING0_INT = {
     .gate_type                  = 0xE,
     .storage                    = 0,
     .descriptor_privilege_level = 0, // ring-0, kernel
     .present                    = 1,
 };
-constexpr u16 KERNEL_CODE_SEGMENT = 0x10;
+
+// Matches boot.S temp GDT: null @ 0x00, 64-bit code @ 0x08, data @ 0x10.
+constexpr u16 KERNEL_CODE_SEGMENT = 0x08;
 
 struct Gate {
     u16                  handler_address_low;
     u16                  selector = KERNEL_CODE_SEGMENT;
     u8                   zero     = 0;
-    Gate_Type_Attributes type     = GATE_PRESENT_RING0_INT32;
-    u16                  handler_address_high;
+    Gate_Type_Attributes type     = GATE_PRESENT_RING0_INT;
+    u16                  handler_address_mid;
+    u32                  handler_address_high;
+    u32                  reserved = 0;
 } __attribute__((packed));
 
-static_assert(sizeof(Gate) == 8);
+static_assert(sizeof(Gate) == 16);
 
 struct Interrupt_Descriptor_Table_Register {
     u16   limit;
     psize base;
 } __attribute__((packed));
 
-static_assert(sizeof(Interrupt_Descriptor_Table_Register) == 6);
+static_assert(sizeof(Interrupt_Descriptor_Table_Register) == 10);
+
+// Eager FXSAVE area for IRQ paths that may touch XMM (x86_64 codegen).
+extern "C" {
+    alignas(16) u8 idt_fpu_irq_save[512];
+}
 
 constexpr auto NUM_VECTORS = 256;
 inline Static_Array<Gate, NUM_VECTORS>     table;
@@ -109,37 +118,90 @@ enum struct Interrupt_Vector_Type : u8 {
     SECONDARY_ATA                 = 47,
 };
 
-#define ISR_NO_ERROR_CODE(NAME, NUMBER)                                                                         \
-    __attribute__((naked)) auto _isr_handle_##NAME() -> void {                                                  \
-        asm volatile(                                                                                           \
-            "push $0\n\t"             /* dummy error code to make the stack uniform with `isr_handler_error` */ \
-            "push $" #NUMBER "\n\t"   /* vector number                                                       */ \
-            "pusha\n\t"               /* save cpu registers                                                  */ \
-            "push %esp\n\t"           /* pass pointer to the saved registers to your dispatcher              */ \
-                                                                                                                \
-            "call isr_dispatch\n\t"                                                                             \
-                                                                                                                \
-            "add $4, %esp\n\t"  /* pop the pointer argument */                                                  \
-            "popa\n\t"          /* restore registers        */                                                  \
-            "add $8, %esp\n\t"  /* skip vector + error_code */                                                  \
-            "iret\n\t"          /* restore eip, cs, eflags  */                                                  \
-        );                                                                                                      \
+
+//
+// Stack at isr_dispatch (low address = %rsp):
+//   r15..r8, rbp, rdi, rsi, rdx, rcx, rbx, rax,
+//   vector, error_code,
+//   rip, cs, rflags, rsp, ss
+//
+// Long mode always pushes SS:RSP on interrupt (Intel SDM).
+//
+struct Interrupt_Frame {
+    u64 r15, r14, r13, r12, r11, r10, r9, r8;
+    u64 rbp, rdi, rsi, rdx, rcx, rbx, rax;
+    u64 vector;
+    u64 error_code;
+    u64 rip, cs, rflags, rsp, ss;
+};
+
+//
+// Common tail after vector/error are on the stack:
+//   push GPRs (matches Interrupt_Frame field order when read upward from %rsp),
+//   fxsave, call isr_dispatch(%rdi = frame), fxrstor, pop, iretq.
+//
+// Stack alignment: after 15 GPRs + vector + error (17 qwords) + CPU frame,
+// we align %rsp to 16 before `call` per SysV (rsp % 16 == 0 at call site means
+// after push of return addr, callee sees 16-byte aligned rsp... SysV wants
+// (rsp + 8) % 16 == 0 at call instruction, i.e. rsp % 16 == 8 before call.
+// We save rsp, and $ -16, then sub 8 if needed... simpler: save, and $-16, call.
+//
+#define ISR_COMMON_BODY                                                                         \
+    "push %rax\n\t"                                                                             \
+    "push %rbx\n\t"                                                                             \
+    "push %rcx\n\t"                                                                             \
+    "push %rdx\n\t"                                                                             \
+    "push %rsi\n\t"                                                                             \
+    "push %rdi\n\t"                                                                             \
+    "push %rbp\n\t"                                                                             \
+    "push %r8\n\t"                                                                              \
+    "push %r9\n\t"                                                                              \
+    "push %r10\n\t"                                                                             \
+    "push %r11\n\t"                                                                             \
+    "push %r12\n\t"                                                                             \
+    "push %r13\n\t"                                                                             \
+    "push %r14\n\t"                                                                             \
+    "push %r15\n\t"                                                                             \
+    "mov %rsp, %rdi\n\t"                                                                        \
+    "mov %rsp, %rbp\n\t"                                                                        \
+    "and $-16, %rsp\n\t"                                                                        \
+    "fxsave idt_fpu_irq_save(%rip)\n\t"                                                         \
+    "call isr_dispatch\n\t"                                                                     \
+    "fxrstor idt_fpu_irq_save(%rip)\n\t"                                                        \
+    "mov %rbp, %rsp\n\t"                                                                        \
+    "pop %r15\n\t"                                                                              \
+    "pop %r14\n\t"                                                                              \
+    "pop %r13\n\t"                                                                              \
+    "pop %r12\n\t"                                                                              \
+    "pop %r11\n\t"                                                                              \
+    "pop %r10\n\t"                                                                              \
+    "pop %r9\n\t"                                                                               \
+    "pop %r8\n\t"                                                                               \
+    "pop %rbp\n\t"                                                                              \
+    "pop %rdi\n\t"                                                                              \
+    "pop %rsi\n\t"                                                                              \
+    "pop %rdx\n\t"                                                                              \
+    "pop %rcx\n\t"                                                                              \
+    "pop %rbx\n\t"                                                                              \
+    "pop %rax\n\t"                                                                              \
+    "add $16, %rsp\n\t"                                                                         \
+    "iretq\n\t"
+
+#define ISR_NO_ERROR_CODE(NAME, NUMBER)                                                         \
+    __attribute__((naked)) auto _isr_handle_##NAME() -> void {                                  \
+        asm volatile(                                                                           \
+            "push $0\n\t"                                                                       \
+            "push $" #NUMBER "\n\t"                                                             \
+            ISR_COMMON_BODY                                                                     \
+        );                                                                                      \
     }
 
-#define ISR_ERROR_CODE(NAME, NUMBER)                                                               \
-    __attribute__((naked)) auto _isr_handle_##NAME() -> void {                                     \
-        asm volatile(                                                                              \
-            "push $" #NUMBER "\n\t"   /* vector number                                          */ \
-            "pusha\n\t"               /* save cpu registers                                     */ \
-            "push %esp\n\t"           /* pass pointer to the saved registers to your dispatcher */ \
-                                                                                                   \
-            "call isr_dispatch\n\t"                                                                \
-                                                                                                   \
-            "add $4, %esp\n\t"  /* pop the pointer argument */                                     \
-            "popa\n\t"          /* restore registers        */                                     \
-            "add $8, %esp\n\t"  /* skip vector + error_code */                                     \
-            "iret\n\t"          /* restore eip, cs, eflags  */                                     \
-        );                                                                                         \
+#define ISR_ERROR_CODE(NAME, NUMBER)                                                            \
+    __attribute__((naked)) auto _isr_handle_##NAME() -> void {                                  \
+        asm volatile(                                                                           \
+            "push $" #NUMBER "\n\t"                                                             \
+            ISR_COMMON_BODY                                                                     \
+        );                                                                                      \
     }
 
 // CPU exceptions (vectors 0-31)
@@ -200,7 +262,7 @@ namespace hidden {
     inline mem::Arena_Allocator emergency_error_message_allocator{error_message_buffer};
 }
 
-auto isr_unimplemented_handler(Interrupt_Vector_Type type, u32 error) -> void {
+auto isr_unimplemented_handler(Interrupt_Vector_Type type, u64 error) -> void {
     auto error_message = csprint(
         &hidden::emergency_error_message_allocator,
         "Unimplemented interrupt fired. Tell me why (%): %",
@@ -213,7 +275,7 @@ auto isr_handle_divide_error() -> void {
     halt::forever("Try not dividing by 0 m8.. glhf");
 }
 
-auto isr_handle_double_fault(u32 error) -> void {
+auto isr_handle_double_fault(u64 error) -> void {
     auto error_message = csprint(
         &hidden::emergency_error_message_allocator,
         "Double fault, caused by IDT entry: %",
@@ -226,12 +288,9 @@ auto isr_handle_timer() -> void {
     ktime::on_tick();
 }
 
-extern "C" auto isr_dispatch(u32* registers_pointer) -> void {
-    static constexpr auto VECTOR_TYPE_OFFSET = 8;
-    static constexpr auto ERROR_OFFSET       = 9;
-
-    auto type  = static_cast<Interrupt_Vector_Type>(registers_pointer[VECTOR_TYPE_OFFSET]);
-    u32  error = registers_pointer[ERROR_OFFSET];
+extern "C" auto isr_dispatch(Interrupt_Frame* frame) -> void {
+    auto type  = static_cast<Interrupt_Vector_Type>(frame->vector);
+    u64  error = frame->error_code;
 
     using enum Interrupt_Vector_Type;
     switch (type) {
@@ -247,18 +306,19 @@ extern "C" auto isr_dispatch(u32* registers_pointer) -> void {
     if (static_cast<u8>(type) >= 32) {
         pic::send_eoi(static_cast<u8>(type));
     }
-
 }
 
 auto set_gate(Interrupt_Vector_Type vector_type, void(*handler_function)()) -> void {
     auto& gate = table[static_cast<u8>(vector_type)];
     kstd_debug_assert(gate.selector == KERNEL_CODE_SEGMENT);
     kstd_debug_assert(gate.zero     == 0);
-    kstd_debug_assert(gate.type.raw == GATE_PRESENT_RING0_INT32.raw);
+    kstd_debug_assert(gate.type.raw == GATE_PRESENT_RING0_INT.raw);
 
     auto handler_address = reinterpret_cast<psize>(handler_function);
-    gate.handler_address_low  = static_cast<u16>(0xFFFF & (handler_address >> 0));
-    gate.handler_address_high = static_cast<u16>(0xFFFF & (handler_address >> 16));
+    gate.handler_address_low  = static_cast<u16>(handler_address);
+    gate.handler_address_mid  = static_cast<u16>(handler_address >> 16);
+    gate.handler_address_high = static_cast<u32>(handler_address >> 32);
+    gate.reserved             = 0;
 }
 
 auto initialize() -> void {

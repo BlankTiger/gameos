@@ -22,9 +22,9 @@ force_inline auto enable_interrupts() -> void {}
 #else
 
 force_inline auto interrupts_enabled() -> bool {
-    u32 flags;
-    asm volatile("pushfl\n\tpopl %0" : "=r"(flags));
-    return (flags & (1u << 9)) != 0;  // EFLAGS.IF
+    u64 flags;
+    asm volatile("pushfq\n\tpopq %0" : "=r"(flags));
+    return (flags & (1ull << 9)) != 0;  // RFLAGS.IF
 }
 
 force_inline auto disable_interrupts() -> void {

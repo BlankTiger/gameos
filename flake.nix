@@ -1,5 +1,5 @@
 {
-  description = "Development shell with i686 cross-compiler";
+  description = "Development shell with x86_64 freestanding cross-compiler";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -22,7 +22,7 @@
                 cmake
                 ninja
                 gcc
-                pkgsCross.i686-embedded.buildPackages.gcc
+                pkgsCross.x86_64-embedded.buildPackages.gcc
                 grub2
                 qemu
                 xorriso

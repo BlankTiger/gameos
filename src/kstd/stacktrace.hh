@@ -9,8 +9,8 @@
 namespace stacktrace {
 
 struct Stacktrace {
-    Stacktrace* ebp;
-    psize       eip;
+    Stacktrace* rbp;
+    psize       rip;
 };
 
 struct Frame {
@@ -34,13 +34,13 @@ auto get_stack_trace(u32 max_frame_count = DEFAULT_FRAME_COUNT, u32 skip_frame_c
     Array<Frame> traces(max_frame_count);
 
     Stacktrace* stacktrace;
-    asm volatile("movl %%ebp,%0" : "=r"(stacktrace) ::);
+    asm volatile("movq %%rbp,%0" : "=r"(stacktrace) ::);
     for (u32 frame = 0; stacktrace && frame < max_frame_count; ++frame) {
         if (frame >= skip_frame_count) {
-            auto function_name = get_function_name(stacktrace->eip);
-            traces.push_back({stacktrace->eip, function_name, 0});
+            auto function_name = get_function_name(stacktrace->rip);
+            traces.push_back({stacktrace->rip, function_name, 0});
         }
-        stacktrace = stacktrace->ebp;
+        stacktrace = stacktrace->rbp;
     }
 
     return traces;
@@ -48,14 +48,14 @@ auto get_stack_trace(u32 max_frame_count = DEFAULT_FRAME_COUNT, u32 skip_frame_c
 
 auto print_stack_trace(u32 max_frame_count = DEFAULT_FRAME_COUNT, u32 skip_frame_count = SKIP_FRAME_COUNT) -> void {
     Stacktrace* stacktrace;
-    asm volatile("movl %%ebp,%0" : "=r"(stacktrace) ::);
+    asm volatile("movq %%rbp,%0" : "=r"(stacktrace) ::);
     halt::println("Stack trace:");
     for (u32 frame = 0; stacktrace && frame < max_frame_count; ++frame) {
         if (frame >= skip_frame_count) {
-            auto function_name = get_function_name(stacktrace->eip);
-            halt::println("  % (0x%)", function_name, stacktrace->eip);
+            auto function_name = get_function_name(stacktrace->rip);
+            halt::println("  % (0x%)", function_name, stacktrace->rip);
         }
-        stacktrace = stacktrace->ebp;
+        stacktrace = stacktrace->rbp;
     }
 }
 
