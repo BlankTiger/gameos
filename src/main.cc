@@ -49,7 +49,10 @@ auto kernel_init(u32 magic, const boot::Multiboot2_Info* mbi) -> void {
 
 auto main() -> void {
     term::println("Hello from GameOS!");
-    tetris_main();
+    gfx::Mesh_Instance cube{gfx::UNIT_CUBE, {10.f, 10.f, 10.f}};
+    gfx::draw_mesh(cube);
+    gfx::draw_frame();
+    // tetris_main();
 }
 
 extern "C" auto kernel_main(u32 magic, const boot::Multiboot2_Info* mbi) -> void {
