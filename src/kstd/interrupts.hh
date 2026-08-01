@@ -9,6 +9,7 @@
 #include "low_level_io.hh"
 #include "time.hh"
 #include "programmable_interrupt_controller.hh"
+#include "global_descriptors.hh"
 #include "term.hh"
 #include "ps2.hh"
 
@@ -33,13 +34,10 @@ constexpr Gate_Type_Attributes GATE_PRESENT_RING0_INT = {
     .present                    = 1,
 };
 
-// Matches boot.S temp GDT: null @ 0x00, 64-bit code @ 0x08, data @ 0x10.
-constexpr u16 KERNEL_CODE_SEGMENT = 0x08;
-
 struct Gate {
     u16                  handler_address_low;
-    u16                  selector = KERNEL_CODE_SEGMENT;
-    u8                   zero     = 0;
+    u16                  selector = gdt::KERNEL_CODE_SEGMENT;
+    u8                   ist      = 0; // bits 2:0 = IST index; bits 7:3 = 0
     Gate_Type_Attributes type     = GATE_PRESENT_RING0_INT;
     u16                  handler_address_mid;
     u32                  handler_address_high;
@@ -308,16 +306,17 @@ extern "C" auto isr_dispatch(Interrupt_Frame* frame) -> void {
     }
 }
 
-auto set_gate(Interrupt_Vector_Type vector_type, void(*handler_function)()) -> void {
+auto set_gate(Interrupt_Vector_Type vector_type, void(*handler_function)(), u8 ist = 0) -> void {
     auto& gate = table[static_cast<u8>(vector_type)];
-    kstd_debug_assert(gate.selector == KERNEL_CODE_SEGMENT);
-    kstd_debug_assert(gate.zero     == 0);
+    kstd_debug_assert(gate.selector == gdt::KERNEL_CODE_SEGMENT);
     kstd_debug_assert(gate.type.raw == GATE_PRESENT_RING0_INT.raw);
+    kstd_debug_assert(ist <= 7);
 
     auto handler_address = reinterpret_cast<psize>(handler_function);
     gate.handler_address_low  = static_cast<u16>(handler_address);
     gate.handler_address_mid  = static_cast<u16>(handler_address >> 16);
     gate.handler_address_high = static_cast<u32>(handler_address >> 32);
+    gate.ist                  = ist;
     gate.reserved             = 0;
 }
 
@@ -334,7 +333,7 @@ auto initialize() -> void {
         set_gate(BOUND_RANGE_EXCEEDED,          _isr_handle_bound_range_exceeded);
         set_gate(INVALID_OPCODE,                _isr_handle_invalid_opcode);
         set_gate(DEVICE_NOT_AVAILABLE,          _isr_handle_device_not_available);
-        set_gate(DOUBLE_FAULT,                  _isr_handle_double_fault);
+        set_gate(DOUBLE_FAULT,                  _isr_handle_double_fault, 1); // IST1
         set_gate(COPROCESSOR_SEGMENT_OVERRUN,   _isr_handle_coprocessor_segment_overrun);
         set_gate(INVALID_TSS,                   _isr_handle_invalid_tss);
         set_gate(SEGMENT_NOT_PRESENT,           _isr_handle_segment_not_present);

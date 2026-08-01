@@ -3,6 +3,7 @@
 #include "kstd/assert.hh"
 #include "kstd/gfx.hh"
 #include "kstd/global_constructor_handling.hh"
+#include "kstd/global_descriptors.hh"
 #include "kstd/interrupts.hh"
 #include "kstd/memory.hh"
 #include "kstd/multiboot2.hh"
@@ -38,6 +39,7 @@ inline auto kernel_startup(u32 magic, const boot::Multiboot2_Info* mbi) -> void 
     const auto term_initialized = term::initialize();
     kstd_assert(term_initialized);
 
+    gdt::initialize();
     idt::initialize();
     pic::initialize();
     ktime::initialize();
