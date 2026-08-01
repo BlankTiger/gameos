@@ -105,6 +105,30 @@ endforeach()
 
 add_custom_target(check_headers ALL DEPENDS ${header_stamps})
 
+# Full TU syntax check without codegen/link. Fast feedback while refactoring.
+file(GLOB_RECURSE all_cxx_sources CONFIGURE_DEPENDS ${GENERATED_DIR}/src/*.cc)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/syntax_checks)
+
+foreach(source ${all_cxx_sources})
+    file(RELATIVE_PATH source_rel ${CMAKE_BINARY_DIR} ${source})
+    string(REPLACE "/" "_" source_flat ${source_rel})
+    set(stamp ${CMAKE_BINARY_DIR}/syntax_checks/${source_flat}.stamp)
+    add_custom_command(
+        OUTPUT ${stamp}
+        COMMAND ${CMAKE_CXX_COMPILER}
+                -std=c++23 -ffreestanding -fno-exceptions -fno-rtti -mno-red-zone
+                -Wall -Wextra
+                -I ${GENERATED_DIR}/src -I ${GENERATED_DIR}
+                -DGFX_WIDTH=${GFX_WIDTH} -DGFX_HEIGHT=${GFX_HEIGHT}
+                -fsyntax-only ${source}
+        COMMAND ${CMAKE_COMMAND} -E touch ${stamp}
+        DEPENDS ${source} ${GENERATED_DIR}/.stamp
+    )
+    list(APPEND syntax_stamps ${stamp})
+endforeach()
+
+add_custom_target(syntax_only DEPENDS ${syntax_stamps} check_headers)
+
 target_include_directories(gameos PRIVATE ${GENERATED_DIR} ${GENERATED_DIR}/src)
 
 target_compile_options(gameos PRIVATE
