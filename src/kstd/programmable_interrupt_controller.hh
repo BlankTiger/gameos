@@ -192,4 +192,23 @@ auto disable() -> void {
     outb_with_delay(PIC_DATA_PORT_SLAVE,  all_slave_masked.raw);
 }
 
+// irq_line 0..15. masked=true disables that line in the interrupt mask register.
+auto set_interrupt_request_line_masked(u8 irq_line, bool masked) -> void {
+    kstd_debug_assert(irq_line < 16);
+
+    using namespace low_level_io;
+
+    const bool is_slave  = irq_line >= 8;
+    const u16  data_port = is_slave ? PIC_DATA_PORT_SLAVE : PIC_DATA_PORT_MASTER;
+    const u8   bit       = static_cast<u8>(1u << (irq_line & 7));
+
+    u8 mask_register = inb(data_port);
+    if (masked) {
+        mask_register = static_cast<u8>(mask_register | bit);
+    } else {
+        mask_register = static_cast<u8>(mask_register & ~bit);
+    }
+    outb_with_delay(data_port, mask_register);
+}
+
 }

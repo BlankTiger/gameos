@@ -6,6 +6,7 @@
 #include "kstd/global_constructor_handling.hh"
 #include "kstd/global_descriptors.hh"
 #include "kstd/interrupts.hh"
+#include "kstd/local_apic.hh"
 #include "kstd/memory.hh"
 #include "kstd/multiboot2.hh"
 #include "kstd/programmable_interrupt_controller.hh"
@@ -52,9 +53,15 @@ inline auto kernel_startup(u32 magic, const boot::Multiboot2_Info* mbi) -> void 
     gdt::initialize();
     idt::initialize();
     pic::initialize();
+    lapic::initialize_bootstrap_processor();
     ktime::initialize();
     ps2::initialize();
     idt::enable_interrupts();
+
+    // Calibrate against the programmable interval timer, then hand ticks to
+    // the local APIC and mask IRQ0 so both sources cannot advance ktime.
+    lapic::calibrate_and_start_timer(ktime::TICK_RATE);
+    pic::set_interrupt_request_line_masked(0, true);
 
     krand::initialize();
 }
