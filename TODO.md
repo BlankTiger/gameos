@@ -52,6 +52,7 @@ base layer:
 - [ ] realloc on Allocator
 - [ ] query_capabilities on Allocator
 - [ ] set_temporary_allocator (also make it wrappable with Debug_Allocator)
+- [ ] extract programmable_interval_timer.hh from time.hh
 
 utils:
 - [ ] todo list generator (gather notes from source code and generate a stable

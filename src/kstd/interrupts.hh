@@ -10,6 +10,7 @@
 #include "time.hh"
 #include "programmable_interrupt_controller.hh"
 #include "global_descriptors.hh"
+#include "local_apic.hh"
 #include "term.hh"
 #include "ps2.hh"
 
@@ -114,6 +115,10 @@ enum struct Interrupt_Vector_Type : u8 {
     FPU                           = 45,
     PRIMARY_ATA                   = 46,
     SECONDARY_ATA                 = 47,
+
+    // This should be outside the 8259 remap window.
+    LOCAL_APIC_TIMER              = lapic::TIMER_INTERRUPT_VECTOR,
+    LOCAL_APIC_SPURIOUS           = lapic::SPURIOUS_INTERRUPT_VECTOR,
 };
 
 
@@ -254,6 +259,9 @@ ISR_NO_ERROR_CODE (fpu,             45)  // IRQ13
 ISR_NO_ERROR_CODE (primary_ata,     46)  // IRQ14
 ISR_NO_ERROR_CODE (secondary_ata,   47)  // IRQ15
 
+ISR_NO_ERROR_CODE (local_apic_timer,    64)   // lapic::TIMER_INTERRUPT_VECTOR
+ISR_NO_ERROR_CODE (local_apic_spurious, 255)  // lapic::SPURIOUS_INTERRUPT_VECTOR
+
 namespace hidden {
     // 8 KiB more than enough for error messages in interrupt handlers.
     Static_Array<u8, 8 * 1024> error_message_buffer{};
@@ -282,8 +290,16 @@ auto isr_handle_double_fault(u64 error) -> void {
     halt::forever(error_message);
 }
 
-auto isr_handle_timer() -> void {
+auto isr_handle_programmable_interval_timer() -> void {
     ktime::on_tick();
+}
+
+auto isr_handle_local_apic_timer() -> void {
+    ktime::on_tick();
+}
+
+auto isr_handle_local_apic_spurious() -> void {
+    // Hardware spurious: no end-of-interrupt required (Intel SDM).
 }
 
 extern "C" auto isr_dispatch(Interrupt_Frame* frame) -> void {
@@ -292,17 +308,23 @@ extern "C" auto isr_dispatch(Interrupt_Frame* frame) -> void {
 
     using enum Interrupt_Vector_Type;
     switch (type) {
-        case DIVIDE_ERROR: isr_handle_divide_error();      break;
-        case DOUBLE_FAULT: isr_handle_double_fault(error); break;
-        case PS2_KEYBOARD: ps2::isr_handle_ps2_keyboard(); break;
-        case PS2_MOUSE:    ps2::isr_handle_ps2_mouse();    break;
-        case PIT_TIMER:    isr_handle_timer();             break;
+        case DIVIDE_ERROR:        isr_handle_divide_error();                break;
+        case DOUBLE_FAULT:        isr_handle_double_fault(error);           break;
+        case PS2_KEYBOARD:        ps2::isr_handle_ps2_keyboard();           break;
+        case PS2_MOUSE:           ps2::isr_handle_ps2_mouse();              break;
+        case PIT_TIMER:           isr_handle_programmable_interval_timer(); break;
+        case LOCAL_APIC_TIMER:    isr_handle_local_apic_timer();            break;
+        case LOCAL_APIC_SPURIOUS: isr_handle_local_apic_spurious();         break;
 
         default: isr_unimplemented_handler(type, error); break;
     }
 
-    if (static_cast<u8>(type) >= 32) {
-        pic::send_eoi(static_cast<u8>(type));
+    const u8 vector = static_cast<u8>(type);
+    if (vector >= 32 && vector < 48) {
+        // 8259-sourced lines (remapped IRQs).
+        pic::send_eoi(vector);
+    } else if (type == LOCAL_APIC_TIMER) {
+        lapic::signal_end_of_interrupt();
     }
 }
 
@@ -375,6 +397,9 @@ auto initialize() -> void {
         set_gate(FPU,                           _isr_handle_fpu);
         set_gate(PRIMARY_ATA,                   _isr_handle_primary_ata);
         set_gate(SECONDARY_ATA,                 _isr_handle_secondary_ata);
+
+        set_gate(LOCAL_APIC_TIMER,              _isr_handle_local_apic_timer);
+        set_gate(LOCAL_APIC_SPURIOUS,           _isr_handle_local_apic_spurious);
     }
 
     interrupt_descriptor_table_register.limit = table.size * sizeof(Gate) - 1;

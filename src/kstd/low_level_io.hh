@@ -41,4 +41,19 @@ force_inline auto outb_with_delay(u16 port, u8 value) -> void {
     wait();
 }
 
+// Model-specific registers (rdmsr / wrmsr). ECX selects the register.
+// Value is EDX:EAX (high:low).
+force_inline auto read_model_specific_register(u32 register_index) -> u64 {
+    u32 low;
+    u32 high;
+    asm volatile("rdmsr" : "=a"(low), "=d"(high) : "c"(register_index));
+    return (static_cast<u64>(high) << 32) | low;
+}
+
+force_inline auto write_model_specific_register(u32 register_index, u64 value) -> void {
+    u32 low  = static_cast<u32>(value);
+    u32 high = static_cast<u32>(value >> 32);
+    asm volatile("wrmsr" : : "c"(register_index), "a"(low), "d"(high));
+}
+
 }

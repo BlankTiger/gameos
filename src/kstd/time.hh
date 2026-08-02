@@ -17,7 +17,9 @@ constexpr auto PIT_FREQUENCY_HZ  = 1'193'182;
 constexpr auto TICK_RATE         = 10'000; // ticks per second (100us per tick)
 constexpr auto TICK_RATE_DIVISOR = PIT_FREQUENCY_HZ / TICK_RATE;
 
-inline volatile u64 tick_counter = 0;
+namespace hidden {
+    inline volatile u64 tick_counter = 0;
+}
 
 union Command {
     struct {
@@ -39,7 +41,7 @@ constexpr Command INIT_CMD = {
 auto initialize() -> void {
     using namespace low_level_io;
 
-    tick_counter = 0;
+    hidden::tick_counter = 0;
     outb(PIT_CMD_REGISTER, INIT_CMD.raw);
 
     // low bytes
@@ -49,7 +51,7 @@ auto initialize() -> void {
 }
 
 force_inline auto on_tick() -> void {
-    tick_counter = tick_counter + 1;
+    hidden::tick_counter = hidden::tick_counter + 1;
 }
 
 force_inline auto get_ticks() -> u64 {
@@ -60,7 +62,7 @@ force_inline auto get_ticks() -> u64 {
     // implicitly running with interrupts off.
     //
     critical_section::Guard guard{};
-    return tick_counter;
+    return hidden::tick_counter;
 }
 
 force_inline constexpr auto ms_to_ticks(u64 ms) -> u64 {
