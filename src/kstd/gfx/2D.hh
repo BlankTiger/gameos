@@ -19,6 +19,7 @@ enum struct Draw_Command_2D_Type: u8 {
     DRAW_TEXT, // Probably we will need to copy text
     DRAW_CIRCLE,
     DRAW_LINE,
+    DRAW_RAW_LINE,
     DRAW_RECT,
     DRAW_SPRITE,
     DRAW_TRIANGLE,
@@ -275,6 +276,10 @@ auto inner_draw_line_endpoint(u32 x, u32 y, bool steep, Color color, Depth depth
     return sy;
 }
 
+// Possible improvements:
+// - Handle width
+// - Interpolate colors between two points
+// - Use Vector2 or even Vertex instead of raw coordinates
 auto inner_draw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color, Depth depth = DEPTH_FAR) -> void {
     bool steep = abs_diff(y1, y2) > abs_diff(x1, x2);
     if (steep) {
@@ -286,11 +291,11 @@ auto inner_draw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color, Depth depth = 
         std::swap(y1, y2);
     }
 
-    u32 dx = x2 - x1;
+    s32 dx = static_cast<s32>(x2 - x1);
     s32 dy = static_cast<s32>(y2) - static_cast<s32>(y1);
 
     s32 gradient = 0;
-    if (dx != 0) gradient = (dy << FIXED_POINT_SHIFT) / static_cast<s32>(dx);
+    if (dx != 0) gradient = (dy << FIXED_POINT_SHIFT) / dx;
 
     // First point
     s32 curr_y = inner_draw_line_endpoint(x1, y1, steep, color, depth) + gradient;
@@ -338,6 +343,65 @@ auto draw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color, u8 z = 1, Render_Pas
     queue.push_back(
         Draw_Command_2D{
             .type  = Draw_Command_2D_Type::DRAW_LINE,
+            .z     = z,
+            .depth = depth,
+            .line  = Line_Command{x1, y1, x2, y2, color}
+        }
+    );
+}
+
+// Possible improvements:
+// - Handle width
+// - Interpolate colors between two points
+// - Use Vector2 or even Vertex instead of raw coordinates
+auto inner_draw_raw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color, Depth depth = DEPTH_FAR) -> void {
+    bool steep = abs_diff(y1, y2) > abs_diff(x1, x2);
+    if (steep) {
+        std::swap(x1, y1);
+        std::swap(x2, y2);
+    }
+    if (x1 > x2) {
+        std::swap(x1, x2);
+        std::swap(y1, y2);
+    }
+
+    s32 dx = static_cast<s32>(x2 - x1);
+    s32 dy = abs(static_cast<s32>(y2) - static_cast<s32>(y1));
+
+    s32 y_step = y1 < y2 ? 1 : -1;
+    s32 error = dx / 2;
+    s32 y = static_cast<s32>(y1);
+
+    for (u32 x = x1; x <= x2; ++x) {
+        if (steep) {
+            set_pixel(y, x, color, depth);
+        }
+        else {
+            set_pixel(x, y, color, depth);
+        }
+
+        error -= dy;
+        if (error < 0) {
+            y += y_step;
+            error += dx;
+        }
+    }
+}
+
+auto draw_raw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color, u8 z = 1, Render_Pass pass = Render_Pass::UI, Depth depth = DEPTH_FAR) -> void {
+    if (x1 >= width() || y1 >= height()) return;
+    if (x2 >= width() || y2 >= height()) return;
+    u32 max_x = width()  - 2;
+    u32 max_y = height() - 2;
+    x1 = std::min(x1, max_x);
+    y1 = std::min(y1, max_y);
+    x2 = std::min(x2, max_x);
+    y2 = std::min(y2, max_y);
+
+    auto& queue = (pass == Render_Pass::WORLD_2D) ? draw_commands_world_2D : draw_commands_ui;
+    queue.push_back(
+        Draw_Command_2D{
+            .type  = Draw_Command_2D_Type::DRAW_RAW_LINE,
             .z     = z,
             .depth = depth,
             .line  = Line_Command{x1, y1, x2, y2, color}
@@ -404,7 +468,12 @@ auto is_inside(f32 e, bool top_left) -> bool {
 // Possible improvements:
 // - Iterate over chunks of pixels and check if bounding vertices are out of the triangle
 // - Barycentric coordinates & fragments?
-auto inner_draw_triangle(Vector4<f32> v1, Vector4<f32> v2, Vector4<f32> v3, Color color) -> void {
+// - Each vertex should have it's own color, interpolate between them using barycentric coordinates
+//   Also use:
+//   struct Vertex
+//     Vector3<f32> position;
+//     Color        color;
+auto inner_draw_triangle(Vector4<f32> v1, Vector4<f32> v2, Vector4<f32> v3, Color color, Depth depth = DEPTH_FAR) -> void {
     Rect bounding_box{v1, v2, v3};
     bounding_box.clip(width(), height());
 
@@ -418,6 +487,7 @@ auto inner_draw_triangle(Vector4<f32> v1, Vector4<f32> v2, Vector4<f32> v3, Colo
 
     // Compute the original determinant orientations once:
     // det_xy(edge, point - start)
+    // e = dx*(py - y0) - dy*(px - x0) => de/dx = -dy, de/dy = dx
     f32 start_x = bounding_box.x1 + 0.5f;
     f32 start_y = bounding_box.y1 + 0.5f;
     f32 e12 = dx12 * (start_y - v1.y) - dy12 * (start_x - v1.x);
@@ -439,16 +509,16 @@ auto inner_draw_triangle(Vector4<f32> v1, Vector4<f32> v2, Vector4<f32> v3, Colo
         f32 e31 = row31;
         for (u32 x = bounding_box.x1; x < bounding_box.x2; ++x) {
             if (is_inside(e12, tl12) && is_inside(e23, tl23) && is_inside(e31, tl31))
-                set_pixel(x, y, color);
+                set_pixel(x, y, color, depth);
             // Move one pixel right
-            e12 += dx12;
-            e23 += dx23;
-            e31 += dx31;
+            e12 -= dy12;
+            e23 -= dy23;
+            e31 -= dy31;
         }
         // Move one pixel down
-        row12 -= dy12;
-        row23 -= dy23;
-        row31 -= dy31;
+        row12 += dx12;
+        row23 += dx23;
+        row31 += dx31;
     }
 }
 
@@ -513,6 +583,10 @@ force_inline auto draw_ui() -> void {
                 const Line_Command& cmd = command.line;
                 inner_draw_line(cmd.x1, cmd.y1, cmd.x2, cmd.y2, cmd.color);
             } break;
+            case DRAW_RAW_LINE: {
+                const Line_Command& cmd = command.line;
+                inner_draw_raw_line(cmd.x1, cmd.y1, cmd.x2, cmd.y2, cmd.color, command.depth);
+            } break;
             case DRAW_RECT: {
                 const Rect_Command& cmd = command.rectangle;
                 inner_draw_rect(cmd.x, cmd.y, cmd.w, cmd.h, cmd.color);
@@ -551,6 +625,10 @@ force_inline auto draw_world_2D() -> void {
                 const Line_Command& cmd = command.line;
                 inner_draw_line(cmd.x1, cmd.y1, cmd.x2, cmd.y2, cmd.color, command.depth);
             } break;
+            case DRAW_RAW_LINE: {
+                const Line_Command& cmd = command.line;
+                inner_draw_raw_line(cmd.x1, cmd.y1, cmd.x2, cmd.y2, cmd.color, command.depth);
+            } break;
             case DRAW_RECT: {
                 const Rect_Command& cmd = command.rectangle;
                 inner_draw_rect(cmd.x, cmd.y, cmd.w, cmd.h, cmd.color, command.depth);
@@ -561,7 +639,7 @@ force_inline auto draw_world_2D() -> void {
             } break;
             case DRAW_TRIANGLE: {
                 const Triangle_Command& cmd = command.triangle;
-                inner_draw_triangle(cmd.v1, cmd.v2, cmd.v3, cmd.color);
+                inner_draw_triangle(cmd.v1, cmd.v2, cmd.v3, cmd.color, command.depth);
             } break;
         }
     }

@@ -21,6 +21,9 @@ constexpr Color WHITE{255, 255, 255, 255};
 constexpr Color RED{255, 0, 0, 255};
 constexpr Color GREEN{0, 255, 0, 255};
 constexpr Color BLUE{0, 0, 255, 255};
+constexpr Color YELLOW{255, 255, 0, 255};
+constexpr Color CYAN{0, 255, 255, 255};
+constexpr Color MAGENTA{255, 0, 255, 255};
 constexpr Color TRANSPARENT{0, 0, 0, 0};
 
 struct Framebuffer_Format {
@@ -94,6 +97,7 @@ struct Framebuffer {
     usize stride;
 };
 
+// TODO: reimplement so that all drawing algorithms calculate depth
 using Depth = u32;
 constexpr Depth DEPTH_FAR = static_cast<Depth>(-1); // 0xFFFFFFFF, memset-able with 0xFF
 
