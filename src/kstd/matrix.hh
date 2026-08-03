@@ -1257,14 +1257,14 @@ TEST(Matrix, lerp_matrix3) {
 TEST(Matrix, inverse_matrix3_identity) {
     auto m = Matrix3<f32>::identity();
     auto inv = inverse(m);
-    ASSERT_TRUE(inv.has_value());
-    EXPECT_TRUE(*inv == m);
+    ASSERT_TRUE(inv.success);
+    EXPECT_TRUE(inv.result == m);
 }
 
 TEST(Matrix, inverse_matrix3_singular_fails) {
     Matrix3<f32> m{};  // All zero: singular.
     auto inv = inverse(m);
-    EXPECT_FALSE(inv.has_value());
+    EXPECT_FALSE(inv.success);
 }
 
 TEST(Matrix, inverse_matrix3_round_trip) {
@@ -1275,32 +1275,32 @@ TEST(Matrix, inverse_matrix3_round_trip) {
     };
 
     auto inv = inverse(m);
-    ASSERT_TRUE(inv.has_value());
+    ASSERT_TRUE(inv.success);
 
-    auto product = m * (*inv);
+    auto product = m * (inv.result);
     EXPECT_TRUE(product == Matrix3<f32>::identity());
 }
 
 TEST(Matrix, inverse_matrix4_identity) {
     auto m = Matrix4<f32>::identity();
     auto inv = inverse(m);
-    ASSERT_TRUE(inv.has_value());
-    EXPECT_TRUE(*inv == m);
+    ASSERT_TRUE(inv.success);
+    EXPECT_TRUE(inv.result == m);
 }
 
 TEST(Matrix, inverse_matrix4_singular_fails) {
     Matrix4<f32> m{};  // All zero: singular.
     auto inv = inverse(m);
-    EXPECT_FALSE(inv.has_value());
+    EXPECT_FALSE(inv.success);
 }
 
 TEST(Matrix, inverse_matrix4_round_trip) {
     auto m = make_translation_matrix4(Vector3<f32>{ 1, 2, 3 });
 
     auto inv = inverse(m);
-    ASSERT_TRUE(inv.has_value());
+    ASSERT_TRUE(inv.success);
 
-    auto product = m * (*inv);
+    auto product = m * (inv.result);
     EXPECT_TRUE(product == Matrix4<f32>::identity());
 }
 

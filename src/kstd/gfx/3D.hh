@@ -85,9 +85,7 @@ struct Camera3D {
     constexpr Camera3D() : position(), rotation() { recompute_matrix(); }
 };
 
-inline Camera3D camera;
-
-force_inline auto update_camera(Vector3<f32> new_position = {}, Quaternion<f32> new_rotation = {}) -> void {
+force_inline auto update_camera(Camera3D& camera, Vector3<f32> new_position = {}, Quaternion<f32> new_rotation = {}) -> void {
     bool needs_update = false;
     if (camera.position != new_position) {
         needs_update = true;
@@ -101,7 +99,7 @@ force_inline auto update_camera(Vector3<f32> new_position = {}, Quaternion<f32> 
     camera.recompute_matrix();
 }
 
-struct ProjectionSettings {
+struct Projection_Settings {
     f32 vertical_fov_degrees = 90.f;
     f32 aspect_ratio = GFX_ASPECT_RATIO;
     f32 z_near = 1.f, z_far = 10.f;
@@ -123,10 +121,12 @@ struct ProjectionSettings {
         );
     }
 
-    constexpr ProjectionSettings() { recompute_matrix(); }
+    constexpr Projection_Settings() { recompute_matrix(); }
 };
 
-inline ProjectionSettings projection;
+namespace hidden {
+    inline Projection_Settings projection;
+}
 
 enum struct Draw_Command_3D_Type: u8 {
     DRAW_WIREFRAME,
@@ -143,6 +143,7 @@ struct Wireframe_Command {
 
 struct Draw_Command_3D {
     Draw_Command_3D_Type type;
+    Camera3D camera;
     Depth depth = DEPTH_FAR; // only used when queued into draw_commands_world_2D
 
     union {
@@ -163,8 +164,8 @@ auto clip_to_screen(Vector4<f32> clip) -> Vector4<f32> {
     return Vector4<f32>{sx, sy, ndc_z, clip.w};
 }
 
-force_inline static auto project(Mesh_Instance instance) -> Array<Vector4<f32>> {
-    Matrix4<f32> M = projection.M_projection * camera.M_camera * instance.transform;
+force_inline static auto project(Mesh_Instance instance, Camera3D camera) -> Array<Vector4<f32>> {
+    Matrix4<f32> M = hidden::projection.M_projection * camera.M_camera * instance.transform;
     const usize vertex_count = instance.model.vertices.size;
     Array<Vector4<f32>> projected_positions(vertex_count, Vector4<f32>::zero());
     for (usize i = 0; i < vertex_count; ++i) {
@@ -178,8 +179,8 @@ force_inline static auto project(Mesh_Instance instance) -> Array<Vector4<f32>> 
     return projected_positions;
 }
 
-auto inner_draw_mesh(Mesh_Instance instance, Depth depth = DEPTH_FAR) -> void {
-    auto projected_positions = project(instance);
+auto inner_draw_mesh(Mesh_Instance instance, Camera3D camera, Depth depth = DEPTH_FAR) -> void {
+    auto projected_positions = project(instance, camera);
     for (const auto& [i1, i2, i3]: instance.model.indices) {
         const Vector4<f32>& p1 = projected_positions[i1];
         const Vector4<f32>& p2 = projected_positions[i2];
@@ -192,18 +193,19 @@ auto inner_draw_mesh(Mesh_Instance instance, Depth depth = DEPTH_FAR) -> void {
     }
 }
 
-auto draw_mesh(Mesh_Instance instance, Depth depth = DEPTH_FAR) -> void {
+auto draw_mesh(Mesh_Instance instance, Camera3D camera, Depth depth = DEPTH_FAR) -> void {
     draw_commands_world_3D.push_back(
         Draw_Command_3D{
             .type = Draw_Command_3D_Type::DRAW_MESH,
+            .camera = camera,
             .depth = depth,
             .mesh = Mesh_Command{.instance = instance}
         }
     );
 }
 
-auto inner_draw_wireframe(Mesh_Instance instance, Depth depth = DEPTH_FAR) -> void {
-    auto projected_positions = project(instance);
+auto inner_draw_wireframe(Mesh_Instance instance, Camera3D camera, Depth depth = DEPTH_FAR) -> void {
+    auto projected_positions = project(instance, camera);
     for (const auto& [i1, i2, i3]: instance.model.indices) {
         const Vector4<f32>& p1 = projected_positions[i1];
         const Vector4<f32>& p2 = projected_positions[i2];
@@ -211,17 +213,18 @@ auto inner_draw_wireframe(Mesh_Instance instance, Depth depth = DEPTH_FAR) -> vo
         if (p1.w <= 0.f || p2.w <= 0.f || p3.w <= 0.f) continue;
         const Vertex& a = instance.model.vertices[i1];
         const Vertex& b = instance.model.vertices[i2];
-        const Vertex& c = instance.model.vertices[i3];
+        // const Vertex& c = instance.model.vertices[i3];
         inner_draw_raw_line(p1.x, p1.y, p2.x, p2.y, a.color, depth);
         inner_draw_raw_line(p1.x, p1.y, p3.x, p3.y, a.color, depth);
         inner_draw_raw_line(p2.x, p2.y, p3.x, p3.y, b.color, depth);
     }
 }
 
-auto draw_wireframe(Mesh_Instance instance, Depth depth = DEPTH_FAR) -> void {
+auto draw_wireframe(Mesh_Instance instance, Camera3D camera, Depth depth = DEPTH_FAR) -> void {
     draw_commands_world_3D.push_back(
         Draw_Command_3D{
             .type = Draw_Command_3D_Type::DRAW_WIREFRAME,
+            .camera = camera,
             .depth = depth,
             .wireframe = Wireframe_Command{.instance = instance}
         }
@@ -235,11 +238,11 @@ force_inline auto draw_world_3D() -> void {
         switch (command.type) {
             case DRAW_MESH: {
                 const Mesh_Command& cmd = command.mesh;
-                inner_draw_mesh(cmd.instance, command.depth);
+                inner_draw_mesh(cmd.instance, command.camera, command.depth);
             } break;
             case DRAW_WIREFRAME: {
                 const Mesh_Command& cmd = command.mesh;
-                inner_draw_wireframe(cmd.instance, command.depth);
+                inner_draw_wireframe(cmd.instance, command.camera, command.depth);
             } break;
         }
     }
