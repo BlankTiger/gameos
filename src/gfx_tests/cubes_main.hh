@@ -7,6 +7,8 @@ auto cubes_main() -> void {
     using namespace ktime;
     using namespace math;
 
+    gfx::Camera3D camera;
+
     constexpr auto TARGET_TICKS = ticks_per_frame(60);
     constexpr f32  RAD_PER_SEC  = 1.2f; // full spin ~5s
     constexpr Vector3<f32> SPIN_AXIS{0.6f, 1.f, 0.3f}; // tumble: all 6 faces show
@@ -38,8 +40,8 @@ auto cubes_main() -> void {
         wireframe_cube.recompute_matrix();
 
         gfx::clear(gfx::BLACK);
-        gfx::draw_mesh(cube);
-        gfx::draw_wireframe(wireframe_cube);
+        gfx::draw_mesh(cube, camera);
+        gfx::draw_wireframe(wireframe_cube, camera);
         gfx::draw_frame();
 
         mem::temporary_allocator.rewind(temporary_allocator_mark);

@@ -334,6 +334,7 @@ auto tetris_main() -> void {
     mem::Debug_Allocator dbg_allocator{mem::resolve_allocator()};
     mem::set_global_allocator(&dbg_allocator);
 
+    gfx::Camera3D camera; // TODO: implement moving/rotating camera
     Game game;
     for (u32 row = 0; row < game.grid.rows; ++row) {
         for (u32 col = 0; col < game.grid.cols; ++col) {
