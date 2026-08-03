@@ -9,6 +9,7 @@
 #include "kstd/local_apic.hh"
 #include "kstd/memory.hh"
 #include "kstd/multiboot2.hh"
+#include "kstd/advanced_configuration_and_power_interface.hh"
 #include "kstd/programmable_interrupt_controller.hh"
 #include "kstd/ps2.hh"
 #include "kstd/random.hh"
@@ -41,6 +42,10 @@ inline auto kernel_startup(u32 magic, const boot::Multiboot2_Info* mbi) -> void 
     // constructor that calls operator new has a valid global allocator (must
     // be called after mem::initialize).
     run_global_constructors();
+
+    serial::println("Parsing ACPI MADT");
+    auto madt_ok = acpi::parse_madt(mbi);
+    kstd_assert(madt_ok);
 
     serial::println("Initializing gfx");
     const auto gfx_initialized = gfx::initialize(mbi);

@@ -59,3 +59,25 @@ force_inline auto kstd_memset32(void* buffer, u32 value, usize count) -> void* {
     return buffer;
 #endif
 }
+
+force_inline auto kstd_memcmp(const void* a, const void* b, usize length) -> int {
+#if HOSTED
+    return std::memcmp(a, b, length);
+#else
+    const u8* p = static_cast<const u8*>(a);
+    const u8* q = static_cast<const u8*>(b);
+    for (usize i = 0; i < length; ++i) {
+        if (p[i] != q[i]) return static_cast<int>(p[i]) - static_cast<int>(q[i]);
+    }
+    return 0;
+#endif
+}
+
+force_inline auto kstd_memeq(const void* a, const void* b, usize length) -> bool {
+    return kstd_memcmp(a, b, length) == 0;
+}
+
+template <typename T, usize N>
+force_inline auto kstd_memeq(const void* bytes, const T (&array)[N]) -> bool {
+    return kstd_memcmp(bytes, array, sizeof(T) * N) == 0;
+}

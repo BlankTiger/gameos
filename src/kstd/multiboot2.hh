@@ -14,15 +14,17 @@ enum class Multiboot_Info_Flag : u32 {
 constexpr u32 MULTIBOOT2_MAGIC = 0x36D76289;
 
 enum class Multiboot2_Tag_Type : u16 {
-    END = 0,
-    CMDLINE = 1,
+    END              = 0,
+    CMDLINE          = 1,
     BOOT_LOADER_NAME = 2,
-    MODULE = 3,
-    BASIC_MEMINFO = 4,
-    BOOT_DEVICE = 5,
-    MEMORY_MAP = 6,
-    VBE = 7,
-    FRAMEBUFFER = 8,
+    MODULE           = 3,
+    BASIC_MEMINFO    = 4,
+    BOOT_DEVICE      = 5,
+    MEMORY_MAP       = 6,
+    VBE              = 7,
+    FRAMEBUFFER      = 8,
+    ACPI_OLD_RSDP    = 14,
+    ACPI_NEW_RSDP    = 15,
 };
 
 struct Multiboot2_Memory_Map_Entry {
@@ -70,6 +72,8 @@ struct Multiboot2_Info {
 } __attribute__((packed));
 
 struct Multiboot2_Memory_Map_Tag {
+    static constexpr auto TAG_TYPE = Multiboot2_Tag_Type::MEMORY_MAP;
+
     Multiboot2_Tag tag;
     u32 entry_size;
     u32 entry_version;
@@ -84,6 +88,8 @@ struct Multiboot2_Memory_Map_Tag {
 } __attribute__((packed));
 
 struct Multiboot2_Module_Tag {
+    static constexpr auto TAG_TYPE = Multiboot2_Tag_Type::MODULE;
+
     Multiboot2_Tag tag;
     u32 mod_start;
     u32 mod_end;
@@ -96,6 +102,8 @@ struct Multiboot2_Module_Tag {
 } __attribute__((packed));
 
 struct Multiboot2_Framebuffer_Tag {
+    static constexpr auto TAG_TYPE = Multiboot2_Tag_Type::FRAMEBUFFER;
+
     Multiboot2_Tag tag;
     u64 framebuffer_addr;
     u32 framebuffer_pitch;
@@ -120,13 +128,30 @@ struct Multiboot2_Framebuffer_Tag {
     } framebuffer_info;
 } __attribute__((packed));
 
-auto find_multiboot2_framebuffer_tag(const Multiboot2_Info* mbi) -> const Multiboot2_Framebuffer_Tag* {
-    auto* tag = mbi->first_tag();
+// Multiboot2 tags 14/15: RSDP copy sits in tag payload (after Multiboot2_Tag).
+// Parse payload as acpi::RSDP.
+struct Multiboot2_ACPI_Old_RSDP_Tag {
+    static constexpr auto TAG_TYPE = Multiboot2_Tag_Type::ACPI_OLD_RSDP;
+
+    Multiboot2_Tag tag;
+} __attribute__((packed));
+
+struct Multiboot2_ACPI_New_RSDP_Tag {
+    static constexpr auto TAG_TYPE = Multiboot2_Tag_Type::ACPI_NEW_RSDP;
+
+    Multiboot2_Tag tag;
+} __attribute__((packed));
+
+template <typename Tag>
+auto find_multiboot2_tag(const Multiboot2_Info* mbi) -> const Tag* {
+    auto*       tag = mbi->first_tag();
     const auto* end = mbi->end_tag();
 
+    // Don't change to tag != end because end is one past the real end + if a
+    // tag is corrupted then it could get bad.
     while (ptr_addr(tag) < ptr_addr(end)) {
-        if (tag->type == Multiboot2_Tag_Type::FRAMEBUFFER) {
-            return tag->as<Multiboot2_Framebuffer_Tag>();
+        if (tag->type == Tag::TAG_TYPE) {
+            return tag->as<Tag>();
         }
 
         tag = tag->next();
