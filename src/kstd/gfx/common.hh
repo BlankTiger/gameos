@@ -121,7 +121,7 @@ force_inline auto swap_buffers() -> void {
 
     if (framebuffer_initialized) return true;
 
-    const auto* framebuffer_tag = boot::find_multiboot2_framebuffer_tag(mbi);
+    const auto* framebuffer_tag = boot::find_multiboot2_tag<boot::Multiboot2_Framebuffer_Tag>(mbi);
     if (framebuffer_tag == nullptr || framebuffer_tag->framebuffer_addr == 0) return false;
 
     auto* frontbuffer_pixels = reinterpret_cast<Pixel*>(framebuffer_tag->framebuffer_addr);
