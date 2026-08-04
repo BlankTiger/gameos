@@ -2,6 +2,7 @@
 
 #include "kstd/assert.hh"
 #include "kstd/cpuid.hh"
+#include "kstd/cpu_local.hh"
 #include "kstd/gfx.hh"
 #include "kstd/global_constructor_handling.hh"
 #include "kstd/global_descriptors.hh"
@@ -33,7 +34,7 @@ inline auto kernel_startup(u32 magic, const boot::Multiboot2_Info* mbi) -> void 
         "CPUID apic=% x2apic=% sse=% sse2=% avx=% fxsr=% fsgsbase=% rdrand=% nx=%",
         f.apic, f.x2apic, f.sse, f.sse2, f.avx, f.fxsr, f.fsgsbase, f.rdrand, f.nx
     );
-    serial::println("CPUID initial_apic_id=%", f.initial_apic_id);
+    serial::println("CPUID initial_apic_id=% cache_line_size=%", f.initial_apic_id, f.cache_line_size);
 
     serial::println("Initializing mem");
     mem::initialize(mbi);
@@ -59,6 +60,7 @@ inline auto kernel_startup(u32 magic, const boot::Multiboot2_Info* mbi) -> void 
     idt::initialize();
     pic::initialize();
     lapic::initialize_bootstrap_processor();
+    cpu_local::initialize_bootstrap_processor();
     ktime::initialize();
     ps2::initialize();
     idt::enable_interrupts();

@@ -11,6 +11,7 @@
 #include "programmable_interrupt_controller.hh"
 #include "global_descriptors.hh"
 #include "local_apic.hh"
+#include "cpu_local.hh"
 #include "term.hh"
 #include "ps2.hh"
 
@@ -53,11 +54,6 @@ struct Interrupt_Descriptor_Table_Register {
 } __attribute__((packed));
 
 static_assert(sizeof(Interrupt_Descriptor_Table_Register) == 10);
-
-// Eager FXSAVE area for IRQ paths that may touch XMM (x86_64 codegen).
-extern "C" {
-    alignas(16) u8 idt_fpu_irq_save[512];
-}
 
 constexpr auto NUM_VECTORS = 256;
 inline Static_Array<Gate, NUM_VECTORS>     table;
@@ -141,14 +137,12 @@ struct Interrupt_Frame {
 //
 // Common tail after vector/error are on the stack:
 //   push GPRs (matches Interrupt_Frame field order when read upward from %rsp),
-//   fxsave, call isr_dispatch(%rdi = frame), fxrstor, pop, iretq.
+//   fxsave to Core_Info via %gs:0, call isr_dispatch(%rdi = frame), fxrstor, pop, iretq.
 //
 // Stack alignment: after 15 GPRs + vector + error (17 qwords) + CPU frame,
-// we align %rsp to 16 before `call` per SysV (rsp % 16 == 0 at call site means
-// after push of return addr, callee sees 16-byte aligned rsp... SysV wants
-// (rsp + 8) % 16 == 0 at call instruction, i.e. rsp % 16 == 8 before call.
-// We save rsp, and $ -16, then sub 8 if needed... simpler: save, and $-16, call.
+// we align %rsp to 16 before `call` per SysV.
 //
+
 #define ISR_COMMON_BODY                                                                         \
     "push %rax\n\t"                                                                             \
     "push %rbx\n\t"                                                                             \
@@ -168,9 +162,11 @@ struct Interrupt_Frame {
     "mov %rsp, %rdi\n\t"                                                                        \
     "mov %rsp, %rbp\n\t"                                                                        \
     "and $-16, %rsp\n\t"                                                                        \
-    "fxsave idt_fpu_irq_save(%rip)\n\t"                                                         \
+    "movq %gs:0, %rax\n\t"                                                                      \
+    "fxsave  " CPU_LOCAL_ASM_STR(CPU_LOCAL_FPU_IRQ_SAVE_OFFSET) "(%rax)\n\t"                    \
     "call isr_dispatch\n\t"                                                                     \
-    "fxrstor idt_fpu_irq_save(%rip)\n\t"                                                        \
+    "movq %gs:0, %rax\n\t"                                                                      \
+    "fxrstor " CPU_LOCAL_ASM_STR(CPU_LOCAL_FPU_IRQ_SAVE_OFFSET) "(%rax)\n\t"                    \
     "mov %rbp, %rsp\n\t"                                                                        \
     "pop %r15\n\t"                                                                              \
     "pop %r14\n\t"                                                                              \
@@ -295,6 +291,7 @@ auto isr_handle_programmable_interval_timer() -> void {
 }
 
 auto isr_handle_local_apic_timer() -> void {
+    cpu_local::current().lapic_ticks += 1;
     ktime::on_tick();
 }
 
@@ -322,13 +319,13 @@ extern "C" auto isr_dispatch(Interrupt_Frame* frame) -> void {
     const u8 vector = static_cast<u8>(type);
     if (vector >= 32 && vector < 48) {
         // 8259-sourced lines (remapped IRQs).
-        pic::send_eoi(vector);
+        pic::send_end_of_interrupt(vector);
     } else if (type == LOCAL_APIC_TIMER) {
         lapic::signal_end_of_interrupt();
     }
 }
 
-auto set_gate(Interrupt_Vector_Type vector_type, void(*handler_function)(), u8 ist = 0) -> void {
+auto set_gate(Interrupt_Vector_Type vector_type, auto (*handler_function)() -> void, u8 ist = 0) -> void {
     auto& gate = table[static_cast<u8>(vector_type)];
     kstd_debug_assert(gate.selector == gdt::KERNEL_CODE_SEGMENT);
     kstd_debug_assert(gate.type.raw == GATE_PRESENT_RING0_INT.raw);

@@ -87,7 +87,7 @@ union IMR_Slave {
 constexpr u8 END_OF_INTERRUPT     = 0x20;
 constexpr u8 VECTOR_OFFSET_MASTER = 32;
 
-auto send_eoi(u8 vector) -> void {
+auto send_end_of_interrupt(u8 vector) -> void {
     kstd_debug_assert(vector >= VECTOR_OFFSET_MASTER);
 
     using namespace low_level_io;
