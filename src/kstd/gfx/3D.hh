@@ -6,6 +6,7 @@
 #include "kstd/resource.hh"
 
 #include "common.hh"
+#include "2D.hh"
 
 namespace gfx {
 

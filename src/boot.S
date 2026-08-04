@@ -81,8 +81,10 @@ header_end:
  */
 .section .bootstrap_stack, "aw", @nobits
 .align 16
+.global stack_bottom
 stack_bottom:
     .skip 8388608 /* 8 MiB */
+.global stack_top
 stack_top:
 
 /*

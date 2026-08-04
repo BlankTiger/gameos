@@ -158,8 +158,9 @@ temp pointers across a reset.
 - LMA - Long Mode Active (EFER). CPU is actually in long mode.
 - NX / NXE - No-eXecute / NX Enable (EFER.NXE + page bit. Marks pages non-executable.)
 - MSR - Model Specific Register (touched with `rdmsr` / `wrmsr`)
+- IA - Intel Architecture
 - IA32_APIC_BASE - MSR `0x1B` (LAPIC base phys address + global/x2APIC enable)
-- IA32_GS_BASE - MSR `0xC0000101` (kernel GS base. Common Cpu_Local pointer.)
+- IA32_GS_BASE - MSR `0xC0000101` (kernel GS base. Common Core_Info pointer.)
 - XCR0 - Extended Control Register 0 (XSAVE feature mask)
 
 ## Paging
