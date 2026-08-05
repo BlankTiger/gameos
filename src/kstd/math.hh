@@ -1425,4 +1425,35 @@ struct Rect {
     }
 };
 
+
+struct Plane {
+    f32 dx;
+    f32 dy;
+    f32 value;
+};
+
+auto make_plane(
+    f32 a1, f32 a2, f32 a3,
+    Vector4<f32> v1, Vector4<f32> v2, Vector4<f32> v3,
+    f32 inv_area, f32 start_x, f32 start_y
+) -> Plane {
+    Plane p;
+    // TLDR: compute gradients for a1 a2 a3 for change in x and y coordinates
+    //       value is the start value of these values
+    p.dx =
+        ((a2 - a1) * (v3.y - v1.y) -
+         (a3 - a1) * (v2.y - v1.y)) * inv_area;
+
+    p.dy =
+        ((a3 - a1) * (v2.x - v1.x) -
+         (a2 - a1) * (v3.x - v1.x)) * inv_area;
+
+    p.value =
+        a1 +
+        p.dx * (start_x - v1.x) +
+        p.dy * (start_y - v1.y);
+
+    return p;
+};
+
 }  // namespace math
