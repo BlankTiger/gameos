@@ -21,10 +21,10 @@ auto cubes_main() -> void {
 
     gfx::Mesh_Instance cool_cube{
         gfx::UNIT_CUBE,
+        @embed("cool.png"),
         {0.f, 2.f, -5.f},
         Quaternion<f32>::identity(),
     };
-    cool_cube.texture = @embed("cool.png");
 
     gfx::Mesh_Instance wireframe_cube{
         gfx::UNIT_CUBE,
@@ -40,14 +40,10 @@ auto cubes_main() -> void {
         last_tick = frame_start;
 
         const f32 angle = RAD_PER_SEC * static_cast<f32>(elapsed) / static_cast<f32>(TICK_RATE);
-        cube.rotation = Quaternion<f32>::from_axis_angle(SPIN_AXIS, angle) * cube.rotation;
-        cube.recompute_matrix();
 
-        cool_cube.rotation = Quaternion<f32>::from_axis_angle(SPIN_AXIS, angle) * cool_cube.rotation;
-        cool_cube.recompute_matrix();
-
-        wireframe_cube.rotation = Quaternion<f32>::from_axis_angle(SPIN_AXIS, angle) * wireframe_cube.rotation;
-        wireframe_cube.recompute_matrix();
+        cube.rotate(SPIN_AXIS, angle);
+        cool_cube.rotate(SPIN_AXIS, angle);
+        wireframe_cube.rotate(SPIN_AXIS, angle);
 
         gfx::clear(gfx::BLACK);
         gfx::draw_mesh(cube, camera);
