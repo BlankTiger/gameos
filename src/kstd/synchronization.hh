@@ -4,7 +4,7 @@
 
 #include "basic.hh"
 
-namespace sync {
+namespace synchronization {
 
 #if HOSTED
 
