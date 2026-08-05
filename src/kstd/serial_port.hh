@@ -1,6 +1,7 @@
 #pragma once
 
 #include "low_level_io.hh"
+#include "synchronization.hh"
 
 //
 // COM1 put_char only. No format.hh.
@@ -58,6 +59,8 @@ auto put_char(char c) -> void {
 }
 
 struct Backend {
+    sync::Spinlock lock;
+
     static auto put_char(char c) -> void {
         serial::put_char(c);
     }
