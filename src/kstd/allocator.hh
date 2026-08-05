@@ -7,6 +7,7 @@
 #include "assert.hh"
 #include "cstring.hh"
 #include "pointer_utils.hh"
+#include "synchronization.hh"
 
 template <typename T, usize N>
 struct Static_Array;
@@ -112,6 +113,8 @@ struct Buddy_Allocator final : Allocator {
     static constexpr usize PAGE_SIZE = 1ull << MIN_ORDER;
 
     Free_Block* free_lists[MAX_ORDER + 1]{};
+    // It's the main global allocator, so it has to have a lock on `alloc` and `free`.
+    sync::Spinlock lock;
 
     static auto floor_pow2(u64 n) -> u64 {
         if (n == 0) return 0;
@@ -195,6 +198,8 @@ struct Buddy_Allocator final : Allocator {
         const u64 required_size = static_cast<u64>(size) + static_cast<u64>(alignment) + sizeof(Allocation_Header);
         if (required_size < size) return nullptr;
 
+        auto scoped_lock = lock.scoped_irq_lock();
+
         const u64 target_block_size = next_block_size(required_size);
         if (target_block_size < PAGE_SIZE) return nullptr;
 
@@ -230,6 +235,8 @@ struct Buddy_Allocator final : Allocator {
     auto free(void* pointer, usize, usize alignment = alignof(std::max_align_t)) -> void override {
         (void)alignment;
         if (pointer == nullptr) return;
+
+        auto scoped_lock = lock.scoped_irq_lock();
 
         Allocation_Header header{};
         kstd_memcpy(&header, reinterpret_cast<void*>(ptr_addr(pointer) - sizeof(Allocation_Header)), sizeof(header));
