@@ -114,7 +114,7 @@ struct Buddy_Allocator final : Allocator {
 
     Free_Block* free_lists[MAX_ORDER + 1]{};
     // It's the main global allocator, so it has to have a lock on `alloc` and `free`.
-    sync::Spinlock lock;
+    synchronization::Spinlock lock;
 
     static auto floor_pow2(u64 n) -> u64 {
         if (n == 0) return 0;

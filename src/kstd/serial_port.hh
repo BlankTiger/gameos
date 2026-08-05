@@ -59,7 +59,7 @@ auto put_char(char c) -> void {
 }
 
 struct Backend {
-    sync::Spinlock lock;
+    synchronization::Spinlock lock;
 
     static auto put_char(char c) -> void {
         serial::put_char(c);

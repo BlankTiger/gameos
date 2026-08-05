@@ -61,7 +61,7 @@ force_inline auto get_ticks() -> u64 {
     // Only `get_ticks` needs a guard. `on_tick` runs in an interrupt so it's
     // implicitly running with interrupts off.
     //
-    sync::Interrupt_Guard guard{};
+    synchronization::Interrupt_Guard guard{};
     return hidden::tick_counter;
 }
 
