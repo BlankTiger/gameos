@@ -7,6 +7,7 @@
 #include "kstd/global_constructor_handling.hh"
 #include "kstd/global_descriptors.hh"
 #include "kstd/interrupts.hh"
+#include "kstd/ioapic.hh"
 #include "kstd/local_apic.hh"
 #include "kstd/memory.hh"
 #include "kstd/multiboot2.hh"
@@ -69,6 +70,9 @@ inline auto kernel_startup(u32 magic, const boot::Multiboot2_Info* mbi) -> void 
     // the local APIC and mask IRQ0 so both sources cannot advance ktime.
     lapic::calibrate_and_start_timer(ktime::TICK_RATE);
     pic::set_interrupt_request_line_masked(0, true);
+    pic::disable();
+    ioapic::initialize();
+    lapic::mask_lint0();
 
     krand::initialize();
 }

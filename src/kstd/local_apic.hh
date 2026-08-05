@@ -307,6 +307,8 @@ auto resolve_memory_mapped_base() -> void {
     hidden::memory_mapped_registers = reinterpret_cast<volatile u32*>(physical_base);
 }
 
+auto mask_lint0() -> void {}
+
 // Enable the local APIC in software on the bootstrap processor.
 // Leave LINT0 unmasked so the 8259 virtual-wire path still works.
 auto initialize_bootstrap_processor() -> void {
