@@ -70,7 +70,15 @@ struct Mesh_Instance {
     Mesh_Instance(Mesh model, Vector3<f32> translation = {}, Quaternion<f32> rotation = {}, Vector3<f32> scale = {1.f, 1.f, 1.f})
         : model(model), translation(translation), rotation(rotation), scale(scale)
         { recompute_matrix(); }
+    Mesh_Instance(Mesh model, Resource_View texture, Vector3<f32> translation = {}, Quaternion<f32> rotation = {}, Vector3<f32> scale = {1.f, 1.f, 1.f})
+        : model(model), texture(texture), translation(translation), rotation(rotation), scale(scale) { recompute_matrix(); }
+
+    auto rotate(Vector3<f32> spin_axis, f32 angle) {
+        rotation = Quaternion<f32>::from_axis_angle(spin_axis, angle) * rotation;
+        recompute_matrix();
+    }
 };
+
 
 struct Camera3D {
     Vector3<f32> position;
@@ -156,10 +164,8 @@ struct Draw_Command_3D {
 inline Array<Draw_Command_3D> draw_commands_world_3D(256);
 
 force_inline auto sample_texture(const Resource_View& res, f32 u, f32 v) -> Color {
-    if (u < 0.f) u = 0.f;
-    else if (u > 1.f) u = 1.f;
-    if (v < 0.f) v = 0.f;
-    else if (v > 1.f) v = 1.f;
+    u = std::clamp(u, f32(0), f32(1));
+    v = std::clamp(v, f32(0), f32(1));
     const u32 tx = static_cast<u32>(u * static_cast<f32>(res.width  - 1));
     const u32 ty = static_cast<u32>(v * static_cast<f32>(res.height - 1));
     const Color* colors = reinterpret_cast<const Color*>(res.data.data);
@@ -179,12 +185,7 @@ auto inner_draw_triangle_3d(
     f32 det = det_xy(a, b);
     bool is_counter_clockwise = det < 0.0f;
 
-    switch (cull_mode) {
-        case Cull_Mode::NONE: break;
-        case Cull_Mode::BACK_FACE: {
-            if (!is_counter_clockwise) return;
-        } break;
-    }
+    if (cull_mode == Cull_Mode::BACK_FACE && !is_counter_clockwise) return;
 
     if (is_counter_clockwise) {
         std::swap(v2, v3);
@@ -288,10 +289,10 @@ auto inner_draw_triangle_3d(
                 is_inside(e31, tl31)) {
 
                 Color color{
-                    static_cast<u8>(std::clamp(r, (f32) 0.f, (f32) 255.f)),
-                    static_cast<u8>(std::clamp(g, (f32) 0.f, (f32) 255.f)),
-                    static_cast<u8>(std::clamp(b, (f32) 0.f, (f32) 255.f)),
-                    static_cast<u8>(std::clamp(a, (f32) 0.f, (f32) 255.f))
+                    static_cast<u8>(std::clamp(r, f32(0), f32(255))),
+                    static_cast<u8>(std::clamp(g, f32(0), f32(255))),
+                    static_cast<u8>(std::clamp(b, f32(0), f32(255))),
+                    static_cast<u8>(std::clamp(a, f32(0), f32(255)))
                 };
 
                 if (textured) {
