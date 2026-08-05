@@ -16,6 +16,7 @@ namespace hidden = gfx::hidden;
 struct Vertex {
     Vector3<f32> position;
     Color        color;
+    Vector2<f32> uv;
 };
 
 using Index = Vector3<u32>;
@@ -30,17 +31,17 @@ struct Mesh {
 // UV: full texture per face, v down (image space).
 static Static_Array<Vertex, 24> unit_cube_vertices{{
     // +Z
-    {{ 1,  1,  1}, BLUE},    {{-1,  1,  1}, BLUE},    {{-1, -1,  1}, BLUE},    {{ 1, -1,  1}, BLUE},
+    {{ 1,  1,  1}, BLUE,    {1.f, 0.f}}, {{-1,  1,  1}, RED,     {0.f, 0.f}}, {{-1, -1,  1}, BLUE,    {0.f, 1.f}}, {{ 1, -1,  1}, RED,     {1.f, 1.f}},
     // +X
-    {{ 1,  1, -1}, GREEN},   {{ 1,  1,  1}, GREEN},   {{ 1, -1,  1}, GREEN},   {{ 1, -1, -1}, GREEN},
+    {{ 1,  1, -1}, GREEN,   {1.f, 0.f}}, {{ 1,  1,  1}, GREEN,   {0.f, 0.f}}, {{ 1, -1,  1}, GREEN,   {0.f, 1.f}}, {{ 1, -1, -1}, GREEN,   {1.f, 1.f}},
     // -Z
-    {{-1,  1, -1}, RED},     {{ 1,  1, -1}, RED},     {{ 1, -1, -1}, RED},     {{-1, -1, -1}, RED},
+    {{-1,  1, -1}, RED,     {0.f, 0.f}}, {{ 1,  1, -1}, RED,     {1.f, 0.f}}, {{ 1, -1, -1}, RED,     {1.f, 1.f}}, {{-1, -1, -1}, RED,     {0.f, 1.f}},
     // -X
-    {{-1,  1,  1}, YELLOW},  {{-1,  1, -1}, YELLOW},  {{-1, -1, -1}, YELLOW},  {{-1, -1,  1}, YELLOW},
+    {{-1,  1,  1}, YELLOW,  {1.f, 0.f}}, {{-1,  1, -1}, YELLOW,  {0.f, 0.f}}, {{-1, -1, -1}, YELLOW,  {0.f, 1.f}}, {{-1, -1,  1}, YELLOW,  {1.f, 1.f}},
     // +Y
-    {{ 1,  1, -1}, CYAN},    {{-1,  1, -1}, CYAN},    {{-1,  1,  1}, CYAN},    {{ 1,  1,  1}, CYAN},
+    {{ 1,  1, -1}, CYAN,    {1.f, 0.f}}, {{-1,  1, -1}, CYAN,    {0.f, 0.f}}, {{-1,  1,  1}, CYAN,    {0.f, 1.f}}, {{ 1,  1,  1}, CYAN,    {1.f, 1.f}},
     // -Y
-    {{-1, -1,  1}, MAGENTA}, {{-1, -1, -1}, MAGENTA}, {{ 1, -1, -1}, MAGENTA}, {{ 1, -1,  1}, MAGENTA},
+    {{-1, -1,  1}, MAGENTA, {0.f, 0.f}}, {{-1, -1, -1}, MAGENTA, {0.f, 1.f}}, {{ 1, -1, -1}, MAGENTA, {1.f, 1.f}}, {{ 1, -1,  1}, MAGENTA, {1.f, 0.f}},
 }};
 
 static Static_Array<Index, 12> unit_cube_indices{{
@@ -145,7 +146,6 @@ struct Wireframe_Command {
 struct Draw_Command_3D {
     Draw_Command_3D_Type type;
     Camera3D camera;
-    Depth depth = DEPTH_FAR; // only used when queued into draw_commands_world_2D
 
     union {
         Mesh_Command mesh;
@@ -154,6 +154,191 @@ struct Draw_Command_3D {
 };
 
 inline Array<Draw_Command_3D> draw_commands_world_3D(256);
+
+force_inline auto sample_texture(const Resource_View& res, f32 u, f32 v) -> Color {
+    if (u < 0.f) u = 0.f;
+    else if (u > 1.f) u = 1.f;
+    if (v < 0.f) v = 0.f;
+    else if (v > 1.f) v = 1.f;
+    const u32 tx = static_cast<u32>(u * static_cast<f32>(res.width  - 1));
+    const u32 ty = static_cast<u32>(v * static_cast<f32>(res.height - 1));
+    const Color* colors = reinterpret_cast<const Color*>(res.data.data);
+    return colors[ty * res.width + tx];
+}
+
+// Possible improvements:
+// - Iterate over chunks of pixels and check if bounding vertices are out of the triangle
+auto inner_draw_triangle_3d(
+    Vector4<f32> v1, Vector4<f32> v2, Vector4<f32> v3,
+    Vector2<f32> uv1, Vector2<f32> uv2, Vector2<f32> uv3,
+    Color color1, Color color2, Color color3,
+    Resource_View texture = {}
+) -> void {
+    Vector4<f32> a = v2 - v1;
+    Vector4<f32> b = v3 - v1;
+    f32 det = det_xy(a, b);
+    bool is_counter_clockwise = det < 0.0f;
+
+    switch (cull_mode) {
+        case Cull_Mode::NONE: break;
+        case Cull_Mode::BACK_FACE: {
+            if (!is_counter_clockwise) return;
+        } break;
+    }
+
+    if (is_counter_clockwise) {
+        std::swap(v2, v3);
+        std::swap(uv2, uv3);
+        det = -det;
+    }
+
+    Rect bounding_box{v1, v2, v3};
+    bounding_box.clip(width(), height());
+
+    f32 dx12 = v2.x - v1.x;
+    f32 dy12 = v2.y - v1.y;
+    f32 dx23 = v3.x - v2.x;
+    f32 dy23 = v3.y - v2.y;
+    f32 dx31 = v1.x - v3.x;
+    f32 dy31 = v1.y - v3.y;
+
+    f32 area = dx12 * (v3.y - v1.y) - dy12 * (v3.x - v1.x);
+    if (area == 0.f) return;
+
+    f32 inv_area = 1.f / area;
+
+    f32 start_x = bounding_box.x1 + 0.5f;
+    f32 start_y = bounding_box.y1 + 0.5f;
+
+    f32 e12 = dx12 * (start_y - v1.y) - dy12 * (start_x - v1.x);
+    f32 e23 = dx23 * (start_y - v2.y) - dy23 * (start_x - v2.x);
+    f32 e31 = dx31 * (start_y - v3.y) - dy31 * (start_x - v3.x);
+
+    bool tl12 = is_top_left(dx12, dy12);
+    bool tl23 = is_top_left(dx23, dy23);
+    bool tl31 = is_top_left(dx31, dy31);
+
+    const bool textured = texture.width != 0 && texture.height != 0;
+
+    f32 iw1 = v1.w != 0.f ? 1.f / v1.w : 0.f;
+    f32 iw2 = v2.w != 0.f ? 1.f / v2.w : 0.f;
+    f32 iw3 = v3.w != 0.f ? 1.f / v3.w : 0.f;
+
+    Plane z_plane = make_plane(v1.z, v2.z, v3.z, v1, v2, v3, inv_area, start_x, start_y);
+    Plane iw_plane = make_plane(iw1, iw2, iw3, v1, v2, v3, inv_area, start_x, start_y);
+
+    Plane u_plane = make_plane(
+        uv1.x * iw1,
+        uv2.x * iw2,
+        uv3.x * iw3,
+        v1, v2, v3,
+        inv_area,
+        start_x,
+        start_y
+    );
+
+    Plane v_plane = make_plane(
+        uv1.y * iw1,
+        uv2.y * iw2,
+        uv3.y * iw3,
+        v1, v2, v3,
+        inv_area,
+        start_x,
+        start_y
+    );
+
+    Plane r_plane = make_plane(color1.r, color2.r, color3.r, v1, v2, v3, inv_area, start_x, start_y);
+    Plane g_plane = make_plane(color1.g, color2.g, color3.g, v1, v2, v3, inv_area, start_x, start_y);
+    Plane b_plane = make_plane(color1.b, color2.b, color3.b, v1, v2, v3, inv_area, start_x, start_y);
+    Plane a_plane = make_plane(color1.a, color2.a, color3.a, v1, v2, v3, inv_area, start_x, start_y);
+
+    f32 row12 = e12;
+    f32 row23 = e23;
+    f32 row31 = e31;
+
+    f32 row_z = z_plane.value;
+    f32 row_iw = iw_plane.value;
+    f32 row_u = u_plane.value;
+    f32 row_v = v_plane.value;
+
+    f32 row_r = r_plane.value;
+    f32 row_g = g_plane.value;
+    f32 row_b = b_plane.value;
+    f32 row_a = a_plane.value;
+
+    for (u32 y = bounding_box.y1; y < bounding_box.y2; ++y) {
+        f32 e12 = row12;
+        f32 e23 = row23;
+        f32 e31 = row31;
+
+        f32 z = row_z;
+        f32 iw = row_iw;
+
+        f32 u = row_u;
+        f32 v = row_v;
+
+        f32 r = row_r;
+        f32 g = row_g;
+        f32 b = row_b;
+        f32 a = row_a;
+
+        for (u32 x = bounding_box.x1; x < bounding_box.x2; ++x) {
+            if (is_inside(e12, tl12) &&
+                is_inside(e23, tl23) &&
+                is_inside(e31, tl31)) {
+
+                Color color{
+                    static_cast<u8>(std::clamp(r, (f32) 0.f, (f32) 255.f)),
+                    static_cast<u8>(std::clamp(g, (f32) 0.f, (f32) 255.f)),
+                    static_cast<u8>(std::clamp(b, (f32) 0.f, (f32) 255.f)),
+                    static_cast<u8>(std::clamp(a, (f32) 0.f, (f32) 255.f))
+                };
+
+                if (textured) {
+                    f32 recip = 1.f / iw;
+                    set_pixel(
+                        x,
+                        y,
+                        sample_texture(texture, u * recip, v * recip),
+                        z
+                    );
+                } else {
+                    set_pixel(x, y, color, z);
+                }
+            }
+
+            e12 -= dy12;
+            e23 -= dy23;
+            e31 -= dy31;
+
+            z += z_plane.dx;
+            iw += iw_plane.dx;
+
+            u += u_plane.dx;
+            v += v_plane.dx;
+
+            r += r_plane.dx;
+            g += g_plane.dx;
+            b += b_plane.dx;
+            a += a_plane.dx;
+        }
+
+        row12 += dx12;
+        row23 += dx23;
+        row31 += dx31;
+
+        row_z += z_plane.dy;
+        row_iw += iw_plane.dy;
+
+        row_u += u_plane.dy;
+        row_v += v_plane.dy;
+
+        row_r += r_plane.dy;
+        row_g += g_plane.dy;
+        row_b += b_plane.dy;
+        row_a += a_plane.dy;
+    }
+}
 
 auto clip_to_screen(Vector4<f32> clip) -> Vector4<f32> {
     f32 inv_w = 1.f / clip.w;
@@ -180,32 +365,89 @@ force_inline static auto project(Mesh_Instance instance, Camera3D camera) -> Arr
     return projected_positions;
 }
 
-auto inner_draw_mesh(Mesh_Instance instance, Camera3D camera, Depth depth = DEPTH_FAR) -> void {
+auto inner_draw_mesh(Mesh_Instance instance, Camera3D camera) -> void {
     auto projected_positions = project(instance, camera);
+    const bool textured = instance.texture.width != 0 && instance.texture.height != 0;
     for (const auto& [i1, i2, i3]: instance.model.indices) {
         const Vector4<f32>& p1 = projected_positions[i1];
         const Vector4<f32>& p2 = projected_positions[i2];
         const Vector4<f32>& p3 = projected_positions[i3];
         if (p1.w <= 0.f || p2.w <= 0.f || p3.w <= 0.f) continue;
         const Vertex& a = instance.model.vertices[i1];
-        // const Vertex& b = instance.model.vertices[i2];
-        // const Vertex& c = instance.model.vertices[i3];
-        inner_draw_triangle(p1, p2, p3, a.color, depth); // TODO: shading using 3 vertices colors + interpolation
+        const Vertex& b = instance.model.vertices[i2];
+        const Vertex& c = instance.model.vertices[i3];
+        if (textured) {
+            inner_draw_triangle_3d(p1, p2, p3, a.uv, b.uv, c.uv, a.color, b.color, c.color, instance.texture);
+        } else {
+            inner_draw_triangle_3d(p1, p2, p3, {}, {}, {}, a.color, b.color, c.color); // TODO: shading using 3 vertices colors + interpolation
+        }
     }
 }
 
-auto draw_mesh(Mesh_Instance instance, Camera3D camera, Depth depth = DEPTH_FAR) -> void {
+auto draw_mesh(Mesh_Instance instance, Camera3D camera) -> void {
     draw_commands_world_3D.push_back(
         Draw_Command_3D{
             .type = Draw_Command_3D_Type::DRAW_MESH,
             .camera = camera,
-            .depth = depth,
             .mesh = Mesh_Command{.instance = instance}
         }
     );
 }
 
-auto inner_draw_wireframe(Mesh_Instance instance, Camera3D camera, Depth depth = DEPTH_FAR) -> void {
+auto inner_draw_raw_line_3d(
+    Vector4<f32> p1,
+    Vector4<f32> p2,
+    Color color
+) -> void {
+    u32 x1 = static_cast<u32>(p1.x);
+    u32 y1 = static_cast<u32>(p1.y);
+    u32 x2 = static_cast<u32>(p2.x);
+    u32 y2 = static_cast<u32>(p2.y);
+
+    bool steep = abs_diff(y1, y2) > abs_diff(x1, x2);
+    if (steep) {
+        std::swap(x1, y1);
+        std::swap(x2, y2);
+    }
+    if (x1 > x2) {
+        std::swap(x1, x2);
+        std::swap(y1, y2);
+        std::swap(p1, p2);
+    }
+
+    s32 dx = static_cast<s32>(x2 - x1);
+    s32 dy = abs(static_cast<s32>(y2) - static_cast<s32>(y1));
+
+    s32 y_step = y1 < y2 ? 1 : -1;
+    s32 error = dx / 2;
+    s32 y = static_cast<s32>(y1);
+
+    f32 dz = dx != 0
+        ? (p2.z - p1.z) / static_cast<f32>(dx)
+        : 0.f;
+
+    f32 z = p1.z;
+
+    for (u32 x = x1; x <= x2; ++x) {
+        if (steep) {
+            set_pixel(y, x, color, z);
+        }
+        else {
+            set_pixel(x, y, color, z);
+        }
+
+        if (dx != 0)
+            z += dz;
+
+        error -= dy;
+        if (error < 0) {
+            y += y_step;
+            error += dx;
+        }
+    }
+}
+
+auto inner_draw_wireframe(Mesh_Instance instance, Camera3D camera) -> void {
     auto projected_positions = project(instance, camera);
     for (const auto& [i1, i2, i3]: instance.model.indices) {
         const Vector4<f32>& p1 = projected_positions[i1];
@@ -215,18 +457,17 @@ auto inner_draw_wireframe(Mesh_Instance instance, Camera3D camera, Depth depth =
         const Vertex& a = instance.model.vertices[i1];
         const Vertex& b = instance.model.vertices[i2];
         // const Vertex& c = instance.model.vertices[i3];
-        inner_draw_raw_line(p1.x, p1.y, p2.x, p2.y, a.color, depth);
-        inner_draw_raw_line(p1.x, p1.y, p3.x, p3.y, a.color, depth);
-        inner_draw_raw_line(p2.x, p2.y, p3.x, p3.y, b.color, depth);
+        inner_draw_raw_line_3d(p1, p2, a.color);
+        inner_draw_raw_line_3d(p1, p3, a.color);
+        inner_draw_raw_line_3d(p2, p3, b.color);
     }
 }
 
-auto draw_wireframe(Mesh_Instance instance, Camera3D camera, Depth depth = DEPTH_FAR) -> void {
+auto draw_wireframe(Mesh_Instance instance, Camera3D camera) -> void {
     draw_commands_world_3D.push_back(
         Draw_Command_3D{
             .type = Draw_Command_3D_Type::DRAW_WIREFRAME,
             .camera = camera,
-            .depth = depth,
             .wireframe = Wireframe_Command{.instance = instance}
         }
     );
@@ -239,11 +480,11 @@ force_inline auto draw_world_3D() -> void {
         switch (command.type) {
             case DRAW_MESH: {
                 const Mesh_Command& cmd = command.mesh;
-                inner_draw_mesh(cmd.instance, command.camera, command.depth);
+                inner_draw_mesh(cmd.instance, command.camera);
             } break;
             case DRAW_WIREFRAME: {
                 const Mesh_Command& cmd = command.mesh;
-                inner_draw_wireframe(cmd.instance, command.camera, command.depth);
+                inner_draw_wireframe(cmd.instance, command.camera);
             } break;
         }
     }

@@ -467,12 +467,6 @@ auto is_inside(f32 e, bool top_left) -> bool {
 
 // Possible improvements:
 // - Iterate over chunks of pixels and check if bounding vertices are out of the triangle
-// - Barycentric coordinates & fragments?
-// - Each vertex should have it's own color, interpolate between them using barycentric coordinates
-//   Also use:
-//   struct Vertex
-//     Vector3<f32> position;
-//     Color        color;
 auto inner_draw_triangle(Vector4<f32> v1, Vector4<f32> v2, Vector4<f32> v3, Color color, Depth depth = DEPTH_FAR) -> void {
     Rect bounding_box{v1, v2, v3};
     bounding_box.clip(width(), height());
