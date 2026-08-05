@@ -1432,7 +1432,7 @@ struct Plane {
     f32 value;
 };
 
-auto make_plane(
+inline auto make_plane(
     f32 a1, f32 a2, f32 a3,
     Vector4<f32> v1, Vector4<f32> v2, Vector4<f32> v3,
     f32 inv_area, f32 start_x, f32 start_y
