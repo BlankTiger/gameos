@@ -5,6 +5,7 @@
 
 #include "basic.hh"
 #include "cstring.hh"
+#include "allocator.hh"
 
 //
 // Forward declare instead of including array.hh.
@@ -69,10 +70,6 @@ struct string {
         return !(*this == other);
     }
 
-    auto format() const -> string {
-        return *this;
-    }
-
     operator bool() const {
         return data != nullptr && size > 0;
     }
@@ -80,6 +77,43 @@ struct string {
     auto begin() const -> const char* { return data; }
     auto end() const -> const char* { return data + size; }
 };
+
+// Free heap bytes from copy_string / String_Builder::to_string / sprint / format().
+// allocator null -> current global allocator at free time (must match alloc heap).
+inline auto free_string(string s, mem::Allocator* allocator = nullptr) -> void {
+    if (s.data == nullptr || s.size == 0) return;
+    mem::resolve_allocator(allocator)->free(s.data, s.size, alignof(char));
+}
+
+// Free heap bytes from String_Builder::to_c_string / csprint.
+// allocator null -> current global allocator at free time (must match alloc heap).
+inline auto free_c_string(const char* s, mem::Allocator* allocator = nullptr) -> void {
+    if (s == nullptr) return;
+    mem::resolve_allocator(allocator)->free(
+        const_cast<char*>(s), kstd_strlen(s) + 1, alignof(char));
+}
+
+inline auto copy_string(string s, mem::Allocator* allocator = nullptr) -> string {
+    if (s.size == 0) return string{};
+
+    auto* destination_allocator = mem::resolve_allocator(allocator);
+    auto* data = static_cast<char*>(destination_allocator->alloc(s.size, alignof(char)));
+    kstd_assert(data != nullptr, "copy_string allocation failed");
+    kstd_memcpy(data, s.data, s.size);
+    return string(data, s.size);
+}
+
+force_inline auto tcopy(string s) -> string {
+    return copy_string(s, &mem::temporary_allocator);
+}
+
+// Null-terminated copy in temp (for C APIs). Not counted in the string length.
+inline auto temp_c_string(string s) -> const char* {
+    auto* data = static_cast<char*>(mem::talloc(s.size + 1, alignof(char)));
+    if (s.size > 0) kstd_memcpy(data, s.data, s.size);
+    data[s.size] = '\0';
+    return data;
+}
 
 #ifdef UNIT_TESTS_KSTD_STRING
 
