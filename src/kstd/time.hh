@@ -2,7 +2,7 @@
 
 #include "basic.hh"
 #include "low_level_io.hh"
-#include "critical_section.hh"
+#include "synchronization.hh"
 
 namespace ktime {
 
@@ -61,7 +61,7 @@ force_inline auto get_ticks() -> u64 {
     // Only `get_ticks` needs a guard. `on_tick` runs in an interrupt so it's
     // implicitly running with interrupts off.
     //
-    critical_section::Guard guard{};
+    sync::Interrupt_Guard guard{};
     return hidden::tick_counter;
 }
 
