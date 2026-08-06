@@ -18,6 +18,7 @@
 #include "kstd/serial_format.hh"
 #include "kstd/term.hh"
 #include "kstd/time.hh"
+#include "local_apic.hh"
 
 #if !defined(__x86_64__)
 #error "This kernel needs an x86_64-elf compiler"
@@ -69,10 +70,10 @@ inline auto kernel_startup(u32 magic, const boot::Multiboot2_Info* mbi) -> void 
     // Calibrate against the programmable interval timer, then hand ticks to
     // the local APIC and mask IRQ0 so both sources cannot advance ktime.
     lapic::calibrate_and_start_timer(ktime::TICK_RATE);
-    pic::set_interrupt_request_line_masked(0, true);
+
     pic::disable();
     ioapic::initialize();
-    lapic::mask_lint0();
+    lapic::stop_listening_to_pic_by_masking_lint0();
 
     krand::initialize();
 }

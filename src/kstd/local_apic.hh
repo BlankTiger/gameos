@@ -322,7 +322,24 @@ auto resolve_memory_mapped_base() -> void {
     hidden::memory_mapped_registers = reinterpret_cast<volatile u32*>(physical_base);
 }
 
-auto mask_lint0() -> void {}
+// Firmware/chipset wires legacy 8259 PIC output into BSP’s LINT0. This
+// effectively disables the legacy PIC.
+auto stop_listening_to_pic_by_masking_lint0() -> void {
+    write_register(
+        Register_Offset::LOCAL_VECTOR_TABLE_LINT0,
+        Local_Vector_Table_Lint_Register {
+            .vector                       = 0,
+            .delivery_mode                = Delivery_Mode::FIXED,
+            .reserved_bit_11              = 0,
+            .delivery_status              = 0,  // RO, write 0
+            .interrupt_input_pin_polarity = Polarity::HIGH,
+            .remote_interrupt_request     = 0,  // RO
+            .trigger_mode                 = Trigger_Mode::EDGE,
+            .masked                       = 1,
+            .reserved_high                = 0,
+        }
+    );
+}
 
 // Enable the local APIC in software on the bootstrap processor.
 // Leave LINT0 unmasked so the 8259 virtual-wire path still works.

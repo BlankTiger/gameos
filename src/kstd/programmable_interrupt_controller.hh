@@ -84,6 +84,25 @@ union IMR_Slave {
     u8 raw;
 } __attribute__((packed));
 
+enum struct ISA_Irq : u8 {
+    PIT           = 0,
+    PS2_KEYBOARD  = 1,
+    CASCADE       = 2,
+    COM2          = 3,
+    COM1          = 4,
+    LPT2          = 5,
+    FLOPPY        = 6,
+    LPT1          = 7,
+    RTC           = 8,
+    ACPI          = 9,
+    FREE_10       = 10,
+    FREE_11       = 11,
+    PS2_MOUSE     = 12,
+    FPU           = 13,
+    PRIMARY_ATA   = 14,
+    SECONDARY_ATA = 15,
+};
+
 constexpr u8 END_OF_INTERRUPT     = 0x20;
 constexpr u8 VECTOR_OFFSET_MASTER = 32;
 

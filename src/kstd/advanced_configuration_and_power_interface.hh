@@ -85,14 +85,26 @@ union Local_APIC_Flags {
 
 static_assert(sizeof(Local_APIC_Flags) == 4);
 
+enum struct Polarity : u16 {
+    BUS_DEFAULT = 0b00,
+    ACTIVE_HIGH = 0b01,
+    RESERVED    = 0b10,
+    ACTIVE_LOW  = 0b11,
+};
+
+enum struct Trigger : u16 {
+    BUS_DEFAULT = 0b00,
+    EDGE        = 0b01,
+    RESERVED    = 0b10,
+    LEVEL       = 0b11,
+};
+
 // MPS INTI flags (Interrupt Source Override / NMI).
-// polarity: 00 bus-default, 01 active-high, 10 reserved, 11 active-low
-// trigger:  00 bus-default, 01 edge,        10 reserved, 11 level
 union MPS_INTI_Flags {
     struct {
-        u16 polarity : 2;
-        u16 trigger  : 2;
-        u16 reserved : 12;
+        Polarity polarity : 2;
+        Trigger  trigger  : 2;
+        u16      reserved : 12;
     };
     u16 raw;
 } __attribute__((packed));
