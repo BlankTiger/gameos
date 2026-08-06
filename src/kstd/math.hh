@@ -1280,7 +1280,6 @@ struct Grid3 {
     }
 
     auto format() const -> string {
-        PUSH_ALLOCATOR(&mem::temporary_allocator);
         String_Builder builder;
         for (u32 layer_index = 0; layer_index < layers; ++layer_index) {
             for (u32 row_index = 0; row_index < rows; ++row_index) {

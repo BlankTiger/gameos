@@ -41,6 +41,11 @@ struct Temporary_Allocator final : Allocator {
     u8* current = nullptr;
     u8* end     = nullptr;
 
+    // @TODO(blanktiger): Should this be here? Temporary_Allocator is a global
+    // one by design I think, if a core / thread wants its own allocator then
+    // it can create one separately.
+    synchronization::Spinlock lock;
+
     auto init(void* memory, usize size) -> void {
         kstd_assert(memory != nullptr);
         kstd_assert(size > 0);
@@ -50,6 +55,7 @@ struct Temporary_Allocator final : Allocator {
     }
 
     auto reset() -> void {
+        auto scoped = lock.scoped_irq_lock();
         current = base;
     }
 
@@ -67,12 +73,15 @@ struct Temporary_Allocator final : Allocator {
 
     auto rewind(const u8* mark_point) -> void {
         kstd_assert(mark_point >= base && mark_point <= end);
+        auto scoped = lock.scoped_irq_lock();
         current = const_cast<u8*>(mark_point);
     }
 
     auto alloc(usize size, usize alignment = alignof(std::max_align_t)) -> void* override {
         if (alignment == 0) alignment = 1;
         if (size == 0) size = 1;
+
+        auto scoped = lock.scoped_irq_lock();
 
         auto aligned = reinterpret_cast<u8*>(align_up(ptr_addr(current), static_cast<usize>(alignment)));
         auto* next   = aligned + size;

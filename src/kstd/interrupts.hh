@@ -1,19 +1,24 @@
 #pragma once
 
 #include "allocator.hh"
-#include "basic.hh"
-#include "assert.hh"
 #include "array.hh"
-#include "halt_format.hh"
-#include "string_builder.hh"
-#include "low_level_io.hh"
-#include "time.hh"
-#include "programmable_interrupt_controller.hh"
-#include "global_descriptors.hh"
-#include "local_apic.hh"
+#include "assert.hh"
+#include "basic.hh"
 #include "cpu_local.hh"
-#include "term.hh"
+#include "global_descriptors.hh"
+#include "halt_format.hh"
+#include "local_apic.hh"
+#include "low_level_io.hh"
+#include "programmable_interrupt_controller.hh"
 #include "ps2.hh"
+#include "string_builder.hh"
+#include "term.hh"
+#include "time.hh"
+
+// Forward declaration.
+namespace ioapic {
+    auto get_bsp_owns_device_irqs() -> bool;
+}
 
 namespace idt {
 
@@ -317,9 +322,14 @@ extern "C" auto isr_dispatch(Interrupt_Frame* frame) -> void {
     }
 
     const u8 vector = static_cast<u8>(type);
-    if (vector >= 32 && vector < 48) {
-        // 8259-sourced lines (remapped IRQs).
-        pic::send_end_of_interrupt(vector);
+    bool is_io_vector = vector >= 32 && vector < 48;
+    if (is_io_vector) {
+        if (ioapic::get_bsp_owns_device_irqs()) {
+            lapic::signal_end_of_interrupt();
+        } else {
+            // 8259-sourced lines (remapped IRQs).
+            pic::send_end_of_interrupt(vector);
+        }
     } else if (type == LOCAL_APIC_TIMER) {
         lapic::signal_end_of_interrupt();
     }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "assert.hh"
+#include "array.hh"
 #include "basic.hh"
 #include "cpuid.hh"
 #include "cstring.hh"
@@ -84,14 +85,26 @@ union Local_APIC_Flags {
 
 static_assert(sizeof(Local_APIC_Flags) == 4);
 
+enum struct Polarity : u16 {
+    BUS_DEFAULT = 0b00,
+    ACTIVE_HIGH = 0b01,
+    RESERVED    = 0b10,
+    ACTIVE_LOW  = 0b11,
+};
+
+enum struct Trigger : u16 {
+    BUS_DEFAULT = 0b00,
+    EDGE        = 0b01,
+    RESERVED    = 0b10,
+    LEVEL       = 0b11,
+};
+
 // MPS INTI flags (Interrupt Source Override / NMI).
-// polarity: 00 bus-default, 01 active-high, 10 reserved, 11 active-low
-// trigger:  00 bus-default, 01 edge,        10 reserved, 11 level
 union MPS_INTI_Flags {
     struct {
-        u16 polarity : 2;
-        u16 trigger  : 2;
-        u16 reserved : 12;
+        Polarity polarity : 2;
+        Trigger  trigger  : 2;
+        u16      reserved : 12;
     };
     u16 raw;
 } __attribute__((packed));
@@ -181,16 +194,14 @@ struct MADT_Info {
     u32          local_apic_address;
     MADT_Flags   flags;
     u32          bsp_apic_id;
-    usize        cpu_count;
-    CPU_Desc     cpus[MAX_CPUS];
-    usize        ioapic_count;
-    IOAPIC_Desc  ioapics[MAX_IOAPICS];
-    usize        override_count;
-    ISA_Override overrides[MAX_INTERRUPT_OVERRIDES];
+
+    Bounded_Array<CPU_Desc,     MAX_CPUS>                cpus;
+    Bounded_Array<IOAPIC_Desc,  MAX_IOAPICS>             ioapics;
+    Bounded_Array<ISA_Override, MAX_INTERRUPT_OVERRIDES> overrides;
 };
 
 namespace hidden {
-inline MADT_Info madt_info{};
+    inline MADT_Info madt_info{};
 }
 
 force_inline auto madt() -> const MADT_Info& {
@@ -211,7 +222,7 @@ auto rsdp_valid(const RSDP* rsdp) -> bool {
 auto find_rsdp_in_range(u64 start, u64 end) -> const RSDP* {
     // RSDP is 16-byte aligned in the BIOS areas.
     for (u64 addr = start; addr + RSDP_V1_SIZE <= end; addr += 16) {
-        const auto* candidate = addr_as<const RSDP>(addr);
+        const auto* candidate = addr_as<const RSDP*>(addr);
         if (rsdp_valid(candidate)) return candidate;
     }
     return nullptr;
@@ -219,7 +230,7 @@ auto find_rsdp_in_range(u64 start, u64 end) -> const RSDP* {
 
 auto find_rsdp_bios_scan() -> const RSDP* {
     u16 extended_bios_data_area_segment = 0;
-    kstd_memcpy(&extended_bios_data_area_segment, addr_as<const u8>(0x40E), sizeof(extended_bios_data_area_segment));
+    kstd_memcpy(&extended_bios_data_area_segment, addr_as<const u8*>(0x40E), sizeof(extended_bios_data_area_segment));
     // Word at 0x40E is a real-mode segment, not a byte address.
     // One segment unit is 16 bytes, so base = segment * 16.
     const u64 extended_bios_data_area_base = static_cast<u64>(extended_bios_data_area_segment) << 4;
@@ -282,10 +293,10 @@ auto find_madt_in_rsdt(const SDT_Header* rsdt) -> const MADT* {
 
     const usize entry_bytes = rsdt->length - sizeof(SDT_Header);
     const usize entry_count = entry_bytes / sizeof(u32);
-    const auto* entries = addr_as<const u32>(ptr_addr(rsdt) + sizeof(SDT_Header));
+    const auto* entries = addr_as<const u32*>(ptr_addr(rsdt) + sizeof(SDT_Header));
 
     for (usize i = 0; i < entry_count; ++i) {
-        const auto* header = addr_as<const SDT_Header>(entries[i]);
+        const auto* header = addr_as<const SDT_Header*>(entries[i]);
         if (!sdt_valid(header)) continue;
         if (kstd_memeq(header->signature, MADT_SIGNATURE)) {
             return reinterpret_cast<const MADT*>(header);
@@ -300,10 +311,10 @@ auto find_madt_in_xsdt(const SDT_Header* xsdt) -> const MADT* {
 
     const usize entry_bytes = xsdt->length - sizeof(SDT_Header);
     const usize entry_count = entry_bytes / sizeof(u64);
-    const auto* entries = addr_as<const u64>(ptr_addr(xsdt) + sizeof(SDT_Header));
+    const auto* entries = addr_as<const u64*>(ptr_addr(xsdt) + sizeof(SDT_Header));
 
     for (usize i = 0; i < entry_count; ++i) {
-        const auto* header = addr_as<const SDT_Header>(entries[i]);
+        const auto* header = addr_as<const SDT_Header*>(entries[i]);
         if (!sdt_valid(header)) continue;
         if (kstd_memeq(header->signature, MADT_SIGNATURE)) {
             return reinterpret_cast<const MADT*>(header);
@@ -314,13 +325,13 @@ auto find_madt_in_xsdt(const SDT_Header* xsdt) -> const MADT* {
 
 auto find_madt(const RSDP* rsdp) -> const MADT* {
     if (rsdp->revision >= 2 && rsdp->xsdt_address != 0) {
-        const auto* xsdt = addr_as<const SDT_Header>(rsdp->xsdt_address);
+        const auto* xsdt = addr_as<const SDT_Header*>(rsdp->xsdt_address);
         const auto* table = find_madt_in_xsdt(xsdt);
         if (table != nullptr) return table;
     }
 
     if (rsdp->rsdt_address != 0) {
-        const auto* rsdt = addr_as<const SDT_Header>(rsdp->rsdt_address);
+        const auto* rsdt = addr_as<const SDT_Header*>(rsdp->rsdt_address);
         return find_madt_in_rsdt(rsdt);
     }
 
@@ -328,16 +339,17 @@ auto find_madt(const RSDP* rsdp) -> const MADT* {
 }
 
 auto push_cpu(MADT_Info& info, u32 apic_id, u32 acpi_id, bool enabled) -> void {
-    if (info.cpu_count >= MAX_CPUS) {
+    if (info.cpus.size >= MAX_CPUS) {
         serial::println("MADT: cpu list full, dropping apic_id=%", apic_id);
         return;
     }
-    info.cpus[info.cpu_count++] = {
+
+    info.cpus.push_back({
         .apic_id           = apic_id,
         .acpi_processor_id = acpi_id,
         .enabled           = enabled,
         .is_bsp            = (apic_id == info.bsp_apic_id),
-    };
+    });
 }
 
 auto parse_madt_entries(const MADT* table, MADT_Info& info) -> void {
@@ -368,30 +380,24 @@ auto parse_madt_entries(const MADT* table, MADT_Info& info) -> void {
 
             case IOAPIC: {
                 if (length < sizeof(MADT_IOAPIC)) break;
-                if (info.ioapic_count >= MAX_IOAPICS) {
-                    serial::println("MADT: ioapic list full");
-                    break;
-                }
+
                 const auto* e = reinterpret_cast<const MADT_IOAPIC*>(entry);
-                info.ioapics[info.ioapic_count++] = {
+                info.ioapics.push_back({
                     .id        = e->ioapic_id,
                     .gsi_base  = e->gsi_base,
                     .mmio_phys = e->address,
-                };
+                });
             } break;
 
             case ISO: {
                 if (length < sizeof(MADT_ISO)) break;
-                if (info.override_count >= MAX_INTERRUPT_OVERRIDES) {
-                    serial::println("MADT: override list full");
-                    break;
-                }
+
                 const auto* e = reinterpret_cast<const MADT_ISO*>(entry);
-                info.overrides[info.override_count++] = {
+                info.overrides.push_back({
                     .isa_irq = e->source,
                     .gsi     = e->gsi,
                     .flags   = e->flags,
-                };
+                });
             } break;
 
             case LOCAL_X2APIC: {
@@ -410,12 +416,12 @@ auto print_madt(const MADT_Info& info) -> void {
         "MADT lapic_addr=% pcat_compat=% cpus=% ioapics=% overrides=%",
         info.local_apic_address,
         info.flags.pcat_compat,
-        info.cpu_count,
-        info.ioapic_count,
-        info.override_count
+        info.cpus.size,
+        info.ioapics.size,
+        info.overrides.size
     );
 
-    for (usize i = 0; i < info.cpu_count; ++i) {
+    for (usize i = 0; i < info.cpus.size; ++i) {
         const auto& cpu = info.cpus[i];
         serial::println(
             "MADT cpu[%] -> apic_id=% acpi_id=% enabled=% bsp=%",
@@ -427,7 +433,7 @@ auto print_madt(const MADT_Info& info) -> void {
         );
     }
 
-    for (usize i = 0; i < info.ioapic_count; ++i) {
+    for (usize i = 0; i < info.ioapics.size; ++i) {
         const auto& io = info.ioapics[i];
         serial::println(
             "MADT ioapic[%] -> id=% mmio=% gsi_base=%",
@@ -438,7 +444,7 @@ auto print_madt(const MADT_Info& info) -> void {
         );
     }
 
-    for (usize i = 0; i < info.override_count; ++i) {
+    for (usize i = 0; i < info.overrides.size; ++i) {
         const auto& o = info.overrides[i];
         serial::println(
             "MADT override[%] -> isa_irq=% gsi=% polarity=% trigger=%",
@@ -476,8 +482,8 @@ auto parse_madt(const boot::Multiboot2_Info* mbi) -> bool {
 
     print_madt(madt_info);
 
-    kstd_assert(madt_info.cpu_count >= 1, "MADT listed no CPUs");
-    kstd_assert(madt_info.ioapic_count >= 1, "MADT listed no IOAPIC");
+    kstd_assert(madt_info.cpus.size    >= 1, "MADT listed no CPUs");
+    kstd_assert(madt_info.ioapics.size >= 1, "MADT listed no IOAPIC");
 
     return true;
 }

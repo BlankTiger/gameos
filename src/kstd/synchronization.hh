@@ -49,6 +49,7 @@ struct Interrupt_Guard {
 struct Spinlock {
     std::atomic_flag locked{};
 
+    // @TODO(blanktiger): Go back to the Fedor Pikus CppNow talk and reimplement this spinlock.
     auto lock() -> void {
         while (locked.test_and_set(std::memory_order_acquire))
             asm volatile("pause");

@@ -138,6 +138,16 @@ enum struct Delivery_Mode : u32 {
     EXTERNAL_INTERRUPT          = 0b111,
 };
 
+enum struct Polarity : u32 {
+    HIGH = 0,
+    LOW  = 1,
+};
+
+enum struct Trigger_Mode : u32 {
+    EDGE  = 0,
+    LEVEL = 1,
+};
+
 // At Register_Offset::LOCAL_VECTOR_TABLE_LINT0 and Register_Offset::LOCAL_VECTOR_TABLE_LINT1
 union Local_Vector_Table_Lint_Register {
     struct {
@@ -145,9 +155,9 @@ union Local_Vector_Table_Lint_Register {
         Delivery_Mode delivery_mode                : 3;
         u32           reserved_bit_11              : 1;
         u32           delivery_status              : 1; // read-only
-        u32           interrupt_input_pin_polarity : 1;
+        Polarity      interrupt_input_pin_polarity : 1;
         u32           remote_interrupt_request     : 1; // read-only
-        u32           trigger_mode                 : 1; // 0 = edge, 1 = level
+        Trigger_Mode  trigger_mode                 : 1;
         u32           masked                       : 1;
         u32           reserved_high                : 15;
     };
@@ -202,6 +212,11 @@ enum struct Destination_Mode : u32 {
     LOGICAL  = 1,
 };
 
+enum struct Level : u32 {
+    DEASSERT = 0,
+    ASSERT   = 1,
+};
+
 enum struct Destination_Shorthand : u32 {
     NONE               = 0b00,
     SELF               = 0b01,
@@ -217,8 +232,8 @@ union Interrupt_Command_Register_Low {
         Destination_Mode      destination_mode      : 1;
         u32                   delivery_pending      : 1; // read-only; 1 while delivery in flight
         u32                   reserved_bit_13       : 1;
-        u32                   level                 : 1; // 0 = deassert, 1 = assert (INIT)
-        u32                   trigger_mode          : 1; // 0 = edge, 1 = level
+        Level                 level                 : 1;
+        Trigger_Mode          trigger_mode          : 1;
         u32                   reserved_mid          : 2;
         Destination_Shorthand destination_shorthand : 2;
         u32                   reserved_high         : 12;
@@ -305,6 +320,25 @@ auto resolve_memory_mapped_base() -> void {
 
     const u64 physical_base = physical_base_address(apic_base);
     hidden::memory_mapped_registers = reinterpret_cast<volatile u32*>(physical_base);
+}
+
+// Firmware/chipset wires legacy 8259 PIC output into BSP’s LINT0. This
+// effectively disables the legacy PIC.
+auto stop_listening_to_pic_by_masking_lint0() -> void {
+    write_register(
+        Register_Offset::LOCAL_VECTOR_TABLE_LINT0,
+        Local_Vector_Table_Lint_Register {
+            .vector                       = 0,
+            .delivery_mode                = Delivery_Mode::FIXED,
+            .reserved_bit_11              = 0,
+            .delivery_status              = 0,  // RO, write 0
+            .interrupt_input_pin_polarity = Polarity::HIGH,
+            .remote_interrupt_request     = 0,  // RO
+            .trigger_mode                 = Trigger_Mode::EDGE,
+            .masked                       = 1,
+            .reserved_high                = 0,
+        }
+    );
 }
 
 // Enable the local APIC in software on the bootstrap processor.

@@ -2,7 +2,7 @@
 
 #include "enum_array.hh"
 #include "low_level_io.hh"
-#include "term.hh"
+#include "serial_format.hh"
 
 // PS/2 controller (Intel 8042) initialization.
 // Must be called after pic::initialize() and before idt::enable_interrupts().
@@ -253,11 +253,13 @@ auto isr_handle_ps2_keyboard() -> void {
 
     Scancode scancode = static_cast<Scancode>(key_value);
     keys[scancode] = !key_up;
+
+    serial::println("KEYBOARD");
 }
 
 auto isr_handle_ps2_mouse() -> void {
     u8 scancode = inb(PS2_DATA_PORT);
-    term::println("Mouse interrupt, scancode: %", scancode);
+    serial::println("Mouse interrupt, scancode: %", scancode);
 }
 
 }

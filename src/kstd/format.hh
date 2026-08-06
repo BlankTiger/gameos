@@ -36,13 +36,15 @@
 //
 // For a custom type to be easily displayed by anything implementing fmt
 // implement a `format` method on it. Return type must convert to string.
-// Lifetime must cover the print call (temp until reset is fine for tprint):
+// Returned string must be owned (sprint / copy_string / to_string);
+// print_value free_string's it after writing. Allocator must match free
+// (current global if you pass null to free_string / to_string).
 //
 // struct A {
-//     const char* message;
+//     int value;
 //
 //     auto format() const -> string {
-//         return string(message);
+//         return sprint("A(%)", value);
 //     }
 // }
 //
@@ -205,10 +207,13 @@ template <typename Backend, typename T>
 static force_inline auto print_value(Backend& backend, T&& value) -> int {
     using U = std::remove_cvref_t<T>;
 
-    if constexpr (requires { value.format(); }) {
-        return print_string(backend, value.format());
-    } else if constexpr (std::is_same_v<U, string>) {
+    if constexpr (std::is_same_v<U, string>) {
         return print_string(backend, value);
+    } else if constexpr (requires { value.format(); }) {
+        string formatted = value.format();
+        defer(free_string(formatted));
+        int written = print_string(backend, formatted);
+        return written;
     } else if constexpr (std::is_same_v<U, bool>) {
         return print_value(backend, (bool)value);
     } else if constexpr (std::is_same_v<U, char>) {
@@ -516,6 +521,35 @@ TEST(fmt, single_value) {
     fmt_test::Capture_Backend backend;
     fmt::print(backend, 42);
     EXPECT_STREQ(backend.buffer, "42");
+}
+
+namespace fmt_test {
+
+struct Owned_Format {
+    auto format() const -> string {
+        constexpr usize n = 5;
+        // Can't include string_builder.hh here.. 
+        auto* data = static_cast<char*>(mem::resolve_allocator(nullptr)->alloc(n, alignof(char)));
+        data[0] = 'o';
+        data[1] = 'w';
+        data[2] = 'n';
+        data[3] = 'e';
+        data[4] = 'd';
+        return string(data, n);
+    }
+};
+
+}
+
+TEST(fmt, frees_string_from_user_format) {
+    mem::Hosted_Allocator hosted{};
+    mem::Debug_Allocator  debug{&hosted};
+    PUSH_ALLOCATOR(&debug);
+
+    fmt_test::Capture_Backend backend;
+    fmt::print(backend, "%", fmt_test::Owned_Format{});
+    EXPECT_STREQ(backend.buffer, "owned");
+    // Debug_Allocator destructor asserts if format() result leaked.
 }
 
 #endif
