@@ -211,7 +211,7 @@ auto rsdp_valid(const RSDP* rsdp) -> bool {
 auto find_rsdp_in_range(u64 start, u64 end) -> const RSDP* {
     // RSDP is 16-byte aligned in the BIOS areas.
     for (u64 addr = start; addr + RSDP_V1_SIZE <= end; addr += 16) {
-        const auto* candidate = addr_as<const RSDP>(addr);
+        const auto* candidate = addr_as<const RSDP*>(addr);
         if (rsdp_valid(candidate)) return candidate;
     }
     return nullptr;
@@ -219,7 +219,7 @@ auto find_rsdp_in_range(u64 start, u64 end) -> const RSDP* {
 
 auto find_rsdp_bios_scan() -> const RSDP* {
     u16 extended_bios_data_area_segment = 0;
-    kstd_memcpy(&extended_bios_data_area_segment, addr_as<const u8>(0x40E), sizeof(extended_bios_data_area_segment));
+    kstd_memcpy(&extended_bios_data_area_segment, addr_as<const u8*>(0x40E), sizeof(extended_bios_data_area_segment));
     // Word at 0x40E is a real-mode segment, not a byte address.
     // One segment unit is 16 bytes, so base = segment * 16.
     const u64 extended_bios_data_area_base = static_cast<u64>(extended_bios_data_area_segment) << 4;
@@ -282,10 +282,10 @@ auto find_madt_in_rsdt(const SDT_Header* rsdt) -> const MADT* {
 
     const usize entry_bytes = rsdt->length - sizeof(SDT_Header);
     const usize entry_count = entry_bytes / sizeof(u32);
-    const auto* entries = addr_as<const u32>(ptr_addr(rsdt) + sizeof(SDT_Header));
+    const auto* entries = addr_as<const u32*>(ptr_addr(rsdt) + sizeof(SDT_Header));
 
     for (usize i = 0; i < entry_count; ++i) {
-        const auto* header = addr_as<const SDT_Header>(entries[i]);
+        const auto* header = addr_as<const SDT_Header*>(entries[i]);
         if (!sdt_valid(header)) continue;
         if (kstd_memeq(header->signature, MADT_SIGNATURE)) {
             return reinterpret_cast<const MADT*>(header);
@@ -300,10 +300,10 @@ auto find_madt_in_xsdt(const SDT_Header* xsdt) -> const MADT* {
 
     const usize entry_bytes = xsdt->length - sizeof(SDT_Header);
     const usize entry_count = entry_bytes / sizeof(u64);
-    const auto* entries = addr_as<const u64>(ptr_addr(xsdt) + sizeof(SDT_Header));
+    const auto* entries = addr_as<const u64*>(ptr_addr(xsdt) + sizeof(SDT_Header));
 
     for (usize i = 0; i < entry_count; ++i) {
-        const auto* header = addr_as<const SDT_Header>(entries[i]);
+        const auto* header = addr_as<const SDT_Header*>(entries[i]);
         if (!sdt_valid(header)) continue;
         if (kstd_memeq(header->signature, MADT_SIGNATURE)) {
             return reinterpret_cast<const MADT*>(header);
@@ -314,13 +314,13 @@ auto find_madt_in_xsdt(const SDT_Header* xsdt) -> const MADT* {
 
 auto find_madt(const RSDP* rsdp) -> const MADT* {
     if (rsdp->revision >= 2 && rsdp->xsdt_address != 0) {
-        const auto* xsdt = addr_as<const SDT_Header>(rsdp->xsdt_address);
+        const auto* xsdt = addr_as<const SDT_Header*>(rsdp->xsdt_address);
         const auto* table = find_madt_in_xsdt(xsdt);
         if (table != nullptr) return table;
     }
 
     if (rsdp->rsdt_address != 0) {
-        const auto* rsdt = addr_as<const SDT_Header>(rsdp->rsdt_address);
+        const auto* rsdt = addr_as<const SDT_Header*>(rsdp->rsdt_address);
         return find_madt_in_rsdt(rsdt);
     }
 

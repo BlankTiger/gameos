@@ -49,7 +49,7 @@ force_inline auto set_g_segment_base(const Core_Info* core_info) -> void {
 
 force_inline auto get_g_segment_base() -> Core_Info* {
     auto core_info_addr = low_level_io::read_model_specific_register(IA32_GS_BASE);
-    auto* core_info = addr_as<Core_Info>(core_info_addr);
+    auto* core_info = addr_as<Core_Info*>(core_info_addr);
     return core_info;
 }
 
