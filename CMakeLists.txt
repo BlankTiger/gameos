@@ -50,6 +50,7 @@ file(GLOB_RECURSE source_files CONFIGURE_DEPENDS
 
 set(GENERATED_SOURCES
     ${GENERATED_DIR}/src/boot.S
+    ${GENERATED_DIR}/src/smp_trampoline.S
     ${GENERATED_DIR}/src/main.cc
 )
 
