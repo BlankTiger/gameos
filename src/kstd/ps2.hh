@@ -130,7 +130,7 @@ constexpr u8 KEY_UP_RANGE_START = 128;
 // scancodes.  E.g. scancode set 1 Right Arrow is E0 4D -> 0x4D + 0x80 = 0xCD.
 constexpr u8 KEY_EXTENDED_OFFSET = 0x80;
 
-enum class Scancode : u16 {
+enum struct Scancode : u16 {
     ESCAPE          = 0x01,
     DIGIT_1         = 0x02,
     DIGIT_2         = 0x03,
@@ -225,6 +225,7 @@ enum class Scancode : u16 {
 
     COUNT           = KEY_UP_RANGE_START + KEY_EXTENDED_OFFSET, // MUST BE THE LAST ELEMENT
 };
+@enum_to_string(Scancode);
 
 inline Enum_Array<Scancode, bool> keys;
 inline bool extended_pending = false;
@@ -254,7 +255,7 @@ auto isr_handle_ps2_keyboard() -> void {
     Scancode scancode = static_cast<Scancode>(key_value);
     keys[scancode] = !key_up;
 
-    serial::println("KEYBOARD");
+    serial::println("KEYBOARD: %", scancode);
 }
 
 auto isr_handle_ps2_mouse() -> void {
