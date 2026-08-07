@@ -1,10 +1,5 @@
 #pragma once
 
-#define GFX_WIDTH @GFX_WIDTH@
-#define GFX_HEIGHT @GFX_HEIGHT@
-#define GFX_PIXEL_COUNT (GFX_WIDTH * GFX_HEIGHT)
-#define GFX_ASPECT_RATIO (static_cast<f32>(GFX_WIDTH) / static_cast<f32>(GFX_HEIGHT))
-
 #define TRAMPOLINE_PHYSICAL_ADDRESS 0x7000
 
 #define AP_STACK_SIZE (1 * 1024 * 1024)

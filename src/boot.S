@@ -7,6 +7,8 @@
  * 64-bit code segment (CS), then calls kernel_main(magic, mbi).
  */
 
+#include "config.hh"
+
 /* Multiboot2 constants */
 .set MAGIC,    0xE85250D6 /* Multiboot2 header magic number.               */
 .set ARCH,     0          /* Architecture: 0 = 32-bit protected-mode i386. */

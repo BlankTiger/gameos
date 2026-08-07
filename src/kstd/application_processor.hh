@@ -10,7 +10,7 @@
 #include "interrupts.hh"
 #include "local_apic.hh"
 #include "serial_format.hh"
-#include "config.hh"
+#include "smp_constants.hh"
 #include "time.hh"
 #include "pointer_utils.hh"
 #include "string_builder.hh"

@@ -9,7 +9,7 @@
 #include "local_apic.hh"
 #include "low_level_io.hh"
 #include "serial_format.hh"
-#include "config.hh"
+#include "smp_constants.hh"
 
 //
 // Stores information specific to a unique hardware CPU core.

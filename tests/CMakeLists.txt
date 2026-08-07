@@ -24,11 +24,6 @@ set(ASSETS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../assets)
 set(GENERATED_DIR ${CMAKE_BINARY_DIR}/generated)
 set(GENERATED_SRC_DIR ${GENERATED_DIR}/src)
 
-set(GFX_WIDTH 1024)
-set(GFX_HEIGHT 768)
-
-configure_file(${SRC_DIR}/config.hh.in ${GENERATED_DIR}/config.hh @ONLY)
-
 # src/ uses @embed/@T, so it must go through the same preprocessor as the
 # main build before it's valid C++ that the tests can #include.
 include(ExternalProject)

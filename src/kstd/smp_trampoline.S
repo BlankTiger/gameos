@@ -1,5 +1,5 @@
 /* AP real -> Protected Mode 32 -> Long Mode 64, then call ap_main */
-#include "config.hh"
+#include "smp_constants.hh"
 
 .set REAL_MODE_STACK_POINTER, 0x0E00
 
