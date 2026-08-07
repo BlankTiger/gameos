@@ -1,5 +1,6 @@
 #pragma once
 
+#include "application_processor.hh"
 #include "kstd/assert.hh"
 #include "kstd/cpuid.hh"
 #include "kstd/cpu_local.hh"
@@ -16,6 +17,7 @@
 #include "kstd/ps2.hh"
 #include "kstd/random.hh"
 #include "kstd/serial_format.hh"
+#include "kstd/application_processor.hh"
 #include "kstd/term.hh"
 #include "kstd/time.hh"
 #include "local_apic.hh"
@@ -70,6 +72,8 @@ inline auto kernel_startup(u32 magic, const boot::Multiboot2_Info* mbi) -> void 
     // Calibrate against the programmable interval timer, then hand ticks to
     // the local APIC and mask IRQ0 so both sources cannot advance ktime.
     lapic::calibrate_and_start_timer(ktime::TICK_RATE);
+
+    ap::initialize_aps();
 
     pic::disable();
     ioapic::initialize();

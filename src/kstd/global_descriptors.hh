@@ -6,24 +6,44 @@
 
 namespace gdt {
 
+enum struct Executable : u8 {
+    DATA = 0,
+    CODE = 1,
+};
+
+enum struct Code_Or_Data : u8 {
+    SYSTEM       = 0,
+    CODE_OR_DATA = 1,
+};
+
+enum struct Descriptor_Privilege_Level : u8 {
+    RING0     = 0,
+    USERSPACE = 3,
+};
+
+enum struct Granularity : u8 {
+    _1B   = 0,
+    _4KiB = 1,
+};
+
 struct Segment_Descriptor {
     u16 limit_low;
     u16 base_low;
     u8  base_mid;
 
-    u8 accessed     : 1;
-    u8 rw           : 1; // data: writable; code: readable
-    u8 dc           : 1; // data: expand-down; code: conforming
-    u8 executable   : 1; // 0 = data, 1 = code
-    u8 code_or_data : 1; // S: 1 = code/data, 0 = system
-    u8 dpl          : 2;
-    u8 present      : 1;
+    u8 accessed                    : 1;
+    u8 rw                          : 1; // data    : writable; code   : readable
+    u8 dc                          : 1; // data    : expand-down; code: conforming
+    Executable executable          : 1;
+    Code_Or_Data code_or_data      : 1;
+    Descriptor_Privilege_Level dpl : 2;
+    u8 present                     : 1;
 
-    u8 limit_high   : 4;
-    u8 available    : 1;
-    u8 long_mode    : 1; // L (code): 1 = 64-bit
-    u8 op_size      : 1; // D/B; must be 0 if long_mode
-    u8 granularity  : 1; // G: 1 = limit in 4KiB pages
+    u8 limit_high                  : 4;
+    u8 available                   : 1;
+    u8 long_mode                   : 1; // L (code): 1 = 64-bit
+    u8 op_size                     : 1; // D/B; must be 0 if long_mode
+    Granularity granularity        : 1;
 
     u8 base_high;
 } __attribute__((packed));
@@ -38,15 +58,15 @@ constexpr Segment_Descriptor KERNEL_CODE_SEGMENT_DESCRIPTOR = {
     .accessed     = 0,
     .rw           = 1,
     .dc           = 0,
-    .executable   = 1,
-    .code_or_data = 1,
-    .dpl          = 0,
+    .executable   = Executable::CODE,
+    .code_or_data = Code_Or_Data::CODE_OR_DATA,
+    .dpl          = Descriptor_Privilege_Level::RING0,
     .present      = 1,
     .limit_high   = 0xF,
     .available    = 0,
     .long_mode    = 1,
     .op_size      = 0,
-    .granularity  = 1,
+    .granularity  = Granularity::_4KiB,
     .base_high    = 0,
 };
 
@@ -59,15 +79,15 @@ constexpr Segment_Descriptor KERNEL_DATA_SEGMENT_DESCRIPTOR = {
     .accessed     = 0,
     .rw           = 1,
     .dc           = 0,
-    .executable   = 0,
-    .code_or_data = 1,
-    .dpl          = 0,
+    .executable   = Executable::DATA,
+    .code_or_data = Code_Or_Data::CODE_OR_DATA,
+    .dpl          = Descriptor_Privilege_Level::RING0,
     .present      = 1,
     .limit_high   = 0xF,
     .available    = 0,
     .long_mode    = 0,
     .op_size      = 1,
-    .granularity  = 1,
+    .granularity  = Granularity::_4KiB,
     .base_high    = 0,
 };
 

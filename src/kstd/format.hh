@@ -227,7 +227,7 @@ static force_inline auto print_value(Backend& backend, T&& value) -> int {
             return print_value(backend, (u64)value);
         }
     } else if constexpr (std::is_enum_v<U>) {
-        string name = enum_name(value);
+        string name = enum_to_string(value);
         if (name.size > 0) {
             return print_string(backend, name);
         }

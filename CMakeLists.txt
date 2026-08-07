@@ -33,6 +33,7 @@ ExternalProject_Add(preprocessor_build
         -DCMAKE_TOOLCHAIN_FILE=${CMAKE_SOURCE_DIR}/cmake/Toolchain-gcc.cmake
         -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
     BUILD_COMMAND ${CMAKE_COMMAND} --build .
+    BUILD_ALWAYS  TRUE
     INSTALL_COMMAND ""
 )
 
@@ -50,6 +51,7 @@ file(GLOB_RECURSE source_files CONFIGURE_DEPENDS
 
 set(GENERATED_SOURCES
     ${GENERATED_DIR}/src/boot.S
+    ${GENERATED_DIR}/src/smp_trampoline.S
     ${GENERATED_DIR}/src/main.cc
 )
 

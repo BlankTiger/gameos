@@ -352,7 +352,7 @@ auto tetris_main() -> void {
     constexpr auto TARGET_TICKS = ticks_per_frame(FPS_MAX);
 
     const auto* temporary_allocator_mark = mem::temporary_allocator.mark();
-    while (!ps2::is_pressed(ps2::Scancode::ESCAPE)) {
+    while (true || !ps2::is_pressed(ps2::Scancode::ESCAPE)) {
         const u64 frame_start = get_ticks();
         const u64 elapsed     = frame_start - last_tick;
         last_tick = frame_start;

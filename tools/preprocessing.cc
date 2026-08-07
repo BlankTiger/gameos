@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <mutex>
 #include <print>
 #include <string>
@@ -105,6 +106,7 @@ public:
 
     auto run(std::string_view source) -> std::pair<bool, std::string> {
         clear_state(source);
+        prescan_enums();
         using enum State;
         while (pos < input.size()) {
             switch (state) {
@@ -132,14 +134,17 @@ private:
     State state = State::Normal;
 
     std::string_view input;
-    size_t pos = 0;
+    size_t pos     = 0;
+    size_t line_no = 1;
     std::string output;
     bool has_embed = false;
+    std::map<std::string, std::vector<std::string>> enum_map;
 
     void clear_state(std::string_view source) {
-        input = source;
-        pos = 0;
-        output = "";
+        input     = source;
+        pos       = 0;
+        line_no   = 1;
+        output    = "";
         has_embed = false;
     }
 
@@ -150,7 +155,9 @@ private:
     }
 
     auto get() -> char {
-        return input[pos++];
+        char c = input[pos++];
+        if (c == '\n') line_no++;
+        return c;
     }
 
     auto match(std::string_view text) -> bool {
@@ -164,6 +171,14 @@ private:
     void normal_state() {
         if (match("@embed(")) {
             embed_state();
+            return;
+        }
+        else if (match("@enum_values(")) {
+            enum_values_state();
+            return;
+        }
+        else if (match("@enum_to_string(")) {
+            enum_to_string_state();
             return;
         }
         else if (match("@T(")) {
@@ -271,6 +286,144 @@ private:
         assert(depth == 0 && "Unterminated @T");
 
         output += "typename " + expr; // replace @T(expr) with "typename expr"
+    }
+
+    void prescan_enums() {
+        auto is_ws = [](char c) -> bool { return std::isspace(static_cast<unsigned char>(c)); };
+        auto is_id = [](char c) -> bool {
+            return std::isalnum(static_cast<unsigned char>(c)) || c == '_';
+        };
+
+        size_t i = 0;
+        while (i < input.size()) {
+            if (input[i] != 'e') { i++; continue; }
+            if (i + 4 > input.size() || input.substr(i, 4) != "enum") { i++; continue; }
+
+            i += 4;
+
+            while (i < input.size() && is_ws(input[i])) i++;
+            if (i + 5 < input.size() && input.substr(i, 6) == "struct") i += 6;
+            else if (i + 4 < input.size() && input.substr(i, 5) == "class") i += 5;
+            else { continue; }
+
+            while (i < input.size() && is_ws(input[i])) i++;
+            std::string name;
+            while (i < input.size() && is_id(input[i])) name += input[i++];
+            if (name.empty()) continue;
+
+            while (i < input.size() && is_ws(input[i])) i++;
+            if (i < input.size() && input[i] == ':') {
+                i++;
+                while (i < input.size() && is_ws(input[i])) i++;
+                while (i < input.size() && !is_ws(input[i]) && input[i] != '{') i++;
+            }
+
+            while (i < input.size() && is_ws(input[i])) i++;
+            if (i >= input.size() || input[i] != '{') continue;
+            i++;
+
+            std::vector<std::string> values;
+            int brace_depth = 1;
+            while (i < input.size() && brace_depth > 0) {
+                while (i < input.size() && is_ws(input[i])) i++;
+                if (i >= input.size()) break;
+
+                char c = input[i];
+                if (c == '}') { brace_depth--; i++; continue; }
+                if (c == '{') { brace_depth++; i++; continue; }
+                if (c == ',') { i++; continue; }
+
+                if (c == '/' && i + 1 < input.size()) {
+                    if (input[i+1] == '/') { while (i < input.size() && input[i] != '\n') i++; continue; }
+                    if (input[i+1] == '*') {
+                        i += 2;
+                        while (i + 1 < input.size() && !(input[i] == '*' && input[i+1] == '/')) i++;
+                        if (i < input.size()) i += 2;
+                        continue;
+                    }
+                }
+
+                if (std::isalpha(static_cast<unsigned char>(c)) || c == '_') {
+                    std::string val;
+                    while (i < input.size() && is_id(input[i])) val += input[i++];
+                    if (!val.empty()) values.push_back(val);
+
+                    while (i < input.size() && is_ws(input[i])) i++;
+                    if (i < input.size() && input[i] == '=') {
+                        i++;
+                        int depth = 0;
+                        while (i < input.size()) {
+                            c = input[i];
+                            if (c == ',' && depth == 0) break;
+                            if (c == '}') {
+                                if (depth == 0) break;
+                                depth--;
+                            }
+                            if (c == '{' || c == '(' || c == '<' || c == '[') depth++;
+                            if (c == '}' || c == ')' || c == '>' || c == ']') {
+                                if (depth > 0) depth--;
+                            }
+                            if (c == '/' && i + 1 < input.size()) {
+                                if (input[i+1] == '/') { while (i < input.size() && input[i] != '\n') i++; continue; }
+                                if (input[i+1] == '*') {
+                                    i += 2;
+                                    while (i + 1 < input.size() && !(input[i] == '*' && input[i+1] == '/')) i++;
+                                    if (i < input.size()) i += 2;
+                                    continue;
+                                }
+                            }
+                            i++;
+                        }
+                    }
+                    continue;
+                }
+
+                i++;
+            }
+
+            if (!name.empty() && !values.empty()) {
+                assert(enum_map.find(name) == enum_map.end() && "Duplicate enum name");
+                enum_map[name] = values;
+            }
+        }
+    }
+
+    void enum_values_state() {
+        std::string name;
+        while (peek() != ')' && peek() != '\0') name += get();
+        assert(get() == ')' && "Unterminated @enum_values");
+
+        auto it = enum_map.find(name);
+        assert(it != enum_map.end() && "enum_values: enum not found");
+
+        output += "{ ";
+        for (size_t j = 0; j < it->second.size(); ++j) {
+            if (j > 0) output += ", ";
+            output += it->first + "::" + it->second[j];
+        }
+        output += " }";
+    }
+
+    void enum_to_string_state() {
+        std::string name;
+        while (peek() != ')' && peek() != '\0') name += get();
+        assert(get() == ')' && "Unterminated @enum_to_string");
+
+        auto it = enum_map.find(name);
+        assert(it != enum_map.end() && "enum_to_string: enum not found");
+
+        size_t orig_line = line_no;
+
+        output += "constexpr auto enum_to_string(" + it->first + " value) -> string {\n";
+        output += "    switch (value) {\n";
+        for (size_t j = 0; j < it->second.size(); ++j) {
+            auto qualified = it->first + "::" + it->second[j];
+            output += "    case " + qualified + ": return \"" + qualified + "\";\n";
+        }
+        output += "    default: return string();\n";
+        output += "    }\n";
+        output += "}\n";
+        output += "#line " + std::to_string(orig_line) + "\n";
     }
 };
 
