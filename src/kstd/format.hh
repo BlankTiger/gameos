@@ -245,6 +245,30 @@ static force_inline auto print_value(Backend& backend, T&& value) -> int {
         return print_value(backend, (const char*)value);
     } else if constexpr (requires { value.c_str(); }) {
         return print_value(backend, value.c_str());
+    } else if constexpr (requires { value.elements(); value.size; }) {
+        // Prefer elements() over raw `data`: Bounded_Array stores elements in a
+        // u8 buffer, so walking `data` would print bytes, not typed elements.
+        if constexpr (std::is_convertible_v<decltype(value.elements()), const char*>) {
+            const char* data_ptr = value.elements();
+            usize sz = (usize)value.size;
+            for (usize i = 0; i < sz; ++i) { backend.put_char(data_ptr[i]); }
+            return (int)sz;
+        } else {
+            backend.put_char('[');
+            int written = 1;
+            auto* data_ptr = value.elements();
+            usize sz = (usize)value.size;
+            for (usize i = 0; i < sz; ++i) {
+                if (i > 0) {
+                    backend.put_char(',');
+                    backend.put_char(' ');
+                    written += 2;
+                }
+                written += print_value(backend, data_ptr[i]);
+            }
+            backend.put_char(']');
+            return written + 1;
+        }
     } else if constexpr (requires { value.data; value.size; } && !requires { value.data(); }) {
         if constexpr (std::is_convertible_v<decltype(value.data), const char*>) {
             const char* data_ptr = value.data;
@@ -552,7 +576,7 @@ namespace fmt_test {
 struct Owned_Format {
     auto format() const -> string {
         constexpr usize n = 5;
-        // Can't include string_builder.hh here.. 
+        // Can't include string_builder.hh here..
         auto* data = static_cast<char*>(mem::resolve_allocator(nullptr)->alloc(n, alignof(char)));
         data[0] = 'o';
         data[1] = 'w';
@@ -618,20 +642,15 @@ TEST(fmt, prints_array) {
 }
 
 TEST(fmt, prints_bounded_array) {
-    // Bounded_Array.data is raw u8[] storage, so print_value picks
-    // up u8* data + usize size and prints byte-by-byte as numbers.
     fmt_test::Capture_Backend backend;
     Bounded_Array<int, 4>     arr;
     arr.push_back(1);
     arr.push_back(2);
     arr.push_back(3);
-    // 3 elements * sizeof(int)=4 bytes = 12 bytes of data.
-    // arr.size = 3 (element count), so the printer iterates 3 bytes.
-    // On little-endian: bytes of int 1 are [1,0,0,0]; int 2 are [2,0,0,0].
-    // So first 3 bytes = 1,0,0.
+
     fmt::print(backend, arr);
 
-    EXPECT_STREQ(backend.buffer, "[1, 0, 0]");
+    EXPECT_STREQ(backend.buffer, "[1, 2, 3]");
 }
 
 TEST(fmt, prints_empty_dynamic_array_view) {
@@ -674,9 +693,6 @@ TEST(fmt, prints_empty_bounded_array) {
 }
 
 TEST(fmt, prints_partially_filled_bounded_array) {
-    // arr.size = 2 elements, but data is u8* so printer iterates 2 bytes:
-    // int 1 -> bytes [1,0,0,0]; int 2 -> bytes [2,0,0,0].
-    // First 2 bytes = 1,0.
     fmt_test::Capture_Backend backend;
     Bounded_Array<int, 4>     arr;
     arr.push_back(1);
@@ -684,7 +700,7 @@ TEST(fmt, prints_partially_filled_bounded_array) {
 
     fmt::print(backend, arr);
 
-    EXPECT_STREQ(backend.buffer, "[1, 0]");
+    EXPECT_STREQ(backend.buffer, "[1, 2]");
 }
 
 #endif
