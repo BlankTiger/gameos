@@ -134,15 +134,17 @@ private:
     State state = State::Normal;
 
     std::string_view input;
-    size_t pos = 0;
+    size_t pos     = 0;
+    size_t line_no = 1;
     std::string output;
     bool has_embed = false;
     std::map<std::string, std::vector<std::string>> enum_map;
 
     void clear_state(std::string_view source) {
-        input = source;
-        pos = 0;
-        output = "";
+        input     = source;
+        pos       = 0;
+        line_no   = 1;
+        output    = "";
         has_embed = false;
     }
 
@@ -153,7 +155,9 @@ private:
     }
 
     auto get() -> char {
-        return input[pos++];
+        char c = input[pos++];
+        if (c == '\n') line_no++;
+        return c;
     }
 
     auto match(std::string_view text) -> bool {
@@ -408,6 +412,8 @@ private:
         auto it = enum_map.find(name);
         assert(it != enum_map.end() && "enum_to_string: enum not found");
 
+        size_t orig_line = line_no;
+
         output += "constexpr auto enum_to_string(" + it->first + " value) -> string {\n";
         output += "    switch (value) {\n";
         for (size_t j = 0; j < it->second.size(); ++j) {
@@ -416,7 +422,8 @@ private:
         }
         output += "    default: return string();\n";
         output += "    }\n";
-        output += "}";
+        output += "}\n";
+        output += "#line " + std::to_string(orig_line) + "\n";
     }
 };
 
