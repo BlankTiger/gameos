@@ -27,16 +27,17 @@ extern "C" const psize smp_trampoline_size;
 extern "C" const psize boot_pml4_physical_address;
 
 enum struct Breadcrumb_Stage : u16 {
-    SMP_ENTRY = SMP_BREADCRUMB_ENTRY,
-    SMP_GDTR  = SMP_BREADCRUMB_GDTR,
-    SMP_PE    = SMP_BREADCRUMB_PE,
-    SMP_PM32  = SMP_BREADCRUMB_PM32,
-    SMP_CR3   = SMP_BREADCRUMB_CR3,
-    SMP_LME   = SMP_BREADCRUMB_LME,
-    SMP_PG    = SMP_BREADCRUMB_PG,
-    SMP_LM64  = SMP_BREADCRUMB_LM64,
-    SMP_STACK = SMP_BREADCRUMB_STACK,
-    SMP_GS    = SMP_BREADCRUMB_GS,
+    SMP_ENTRY   = SMP_BREADCRUMB_ENTRY,
+    SMP_GDTR    = SMP_BREADCRUMB_GDTR,
+    SMP_PE      = SMP_BREADCRUMB_PE,
+    SMP_PM32    = SMP_BREADCRUMB_PM32,
+    SMP_CR3     = SMP_BREADCRUMB_CR3,
+    SMP_LME     = SMP_BREADCRUMB_LME,
+    SMP_PG      = SMP_BREADCRUMB_PG,
+    SMP_LM64    = SMP_BREADCRUMB_LM64,
+    SMP_STACK   = SMP_BREADCRUMB_STACK,
+    SMP_GS      = SMP_BREADCRUMB_GS,
+    SMP_ENTRY64 = SMP_BREADCRUMB_ENTRY64,
 };
 @enum_to_string(Breadcrumb_Stage);
 
@@ -250,7 +251,7 @@ auto initialize_aps() -> void {
         asm volatile("mfence");
 
         auto apic_id = cpu.apic_id;
-        serial::println("Initializing AP index=%, apic_id=%", cpu_index, apic_id);
+        serial::println("Initializing AP index=%, apic_id=%", next_cpu_index, apic_id);
 
         set_up_a_new_stack();
         set_cpu_index(next_cpu_index);
@@ -272,7 +273,17 @@ auto initialize_aps() -> void {
         ktime::sleep_ms(1);
 
         // Wait for AP to initialize.
-        ktime::sleep_ms(3);
+        bool reached_timeout = false;
+        static constexpr auto RETRY_LIMIT = 50'000'000;
+        for (u64 retry_counter = 0; retry_counter < RETRY_LIMIT; ++retry_counter) {
+            if (retry_counter == RETRY_LIMIT - 1) reached_timeout = true;
+            if (cpus_online[next_cpu_index]) break;
+
+            asm volatile("pause");
+        }
+
+        if (reached_timeout)
+            serial::println("Timeout reached waiting for AP index=% to go online", next_cpu_index);
 
         for (auto stage : @enum_values(Breadcrumb_Stage))
             assert_breadcrumb_okay(stage);
