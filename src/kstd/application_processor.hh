@@ -2,10 +2,12 @@
 
 #include "advanced_configuration_and_power_interface.hh"
 #include "assert.hh"
+#include "array.hh"
 #include "basic.hh"
 #include "cpu_local.hh"
 #include "cstring.hh"
 #include "global_descriptors.hh"
+#include "interrupts.hh"
 #include "local_apic.hh"
 #include "serial_format.hh"
 #include "config.hh"
@@ -190,7 +192,13 @@ auto copy_pointer_to_core_info(u32 apic_id) -> void {
     *addr_as<volatile psize*>(TRAMPOLINE_PHYSICAL_ADDRESS + SMP_OFFSET_CORE_INFO) = ptr_addr(&cpu_local::core_infos[apic_id]);
 }
 
+alignas(64) inline Static_Array<volatile bool, acpi::MAX_CPUS> cpus_online;
+
 auto initialize_aps() -> void {
+    cpus_online.fill(false);
+    // Mark BSP as online.
+    cpus_online[0] = true;
+
     kstd_assert(smp_trampoline_size <= 0xF00, "This must fit for real mode to work.");
     kstd_assert(smp_trampoline_size > 0);
 
@@ -275,7 +283,25 @@ auto initialize_aps() -> void {
 
 extern "C" auto ap_main(u32 cpu_index) -> void {
     serial::println("AP index=% started", cpu_index);
-    
+    ap::cpus_online[cpu_index] = true;
+
+    // Switch away from the temporary GDT to the kernel GDT.
+    gdt::load_shared();
+
+    // Load kernel IDT (table already built by the BSP).
+    idt::load();
+
     auto* kernel_top = addr_as<u8*>(ap::STACK_POINTER_ADDR);
     cpu_local::initialize_application_processor(cpu_index, kernel_top);
+
+    kstd_assert(cpu_local::current().cpu_index == cpu_index);
+
+    lapic::initialize_application_processor();
+    lapic::start_timer_periodic(ktime::TICK_RATE);
+
+    idt::enable_interrupts();
+
+    serial::println("AP online index=% apic_id=%", cpu_index, lapic::local_apic_id());
+
+    for (;;) asm volatile("hlt"); // Wait for work.
 }

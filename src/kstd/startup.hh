@@ -73,11 +73,11 @@ inline auto kernel_startup(u32 magic, const boot::Multiboot2_Info* mbi) -> void 
     // the local APIC and mask IRQ0 so both sources cannot advance ktime.
     lapic::calibrate_and_start_timer(ktime::TICK_RATE);
 
-    ap::initialize_aps();
-
     pic::disable();
     ioapic::initialize();
     lapic::stop_listening_to_pic_by_masking_lint0();
+
+    ap::initialize_aps();
 
     krand::initialize();
 }
