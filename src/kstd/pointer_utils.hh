@@ -4,8 +4,8 @@
 #include "basic.hh"
 
 template <typename T>
-force_inline auto ptr_addr(const T* pointer) -> psize {
-    return reinterpret_cast<psize>(pointer);
+force_inline auto ptr_addr(T* pointer) -> psize {
+    return reinterpret_cast<psize>(reinterpret_cast<const void*>(pointer));
 }
 
 // Add a byte offset to a pointer. Keeps the pointed-to type (and cv).

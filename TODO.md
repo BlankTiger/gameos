@@ -57,9 +57,10 @@ base layer:
 utils:
 - [ ] todo list generator (gather notes from source code and generate a stable
       list that doesn't move stuff around, handles marking stuff as done, etc...)
-- [ ] metaprogramming framework - some metaprogram that would allow for example
+- [x] metaprogramming framework - some metaprogram that would allow for example
       to simply embed stuff by doing `auto* img = @embed(path_to_img);`, many more
       features could be added here
-- [ ] make the preprocessor output debug symbols based on the real paths, not the generated paths
-- [ ] pretty enum printing (autogenerate value -> pretty enum value as string mappings)
+- [x] make the preprocessor output debug symbols based on the real paths, not the generated paths
+- [x] pretty enum printing (autogenerate value -> pretty enum value as string mappings)
+- [ ] unfuck preprocessor (tokenizer?)
 - [ ] get rid of cmake (build.cc)

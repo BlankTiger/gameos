@@ -109,6 +109,12 @@ boot_pd0:
 boot_pt0:
     .skip 4096 * 2048 /* 2048 contiguous page tables (8 MiB) */
 
+.section .rodata
+.align 8
+.global boot_pml4_physical_address
+boot_pml4_physical_address:
+    .quad boot_pml4
+
 /*
  * Temporary Global Descriptor Table (GDT):
  *   null descriptor
