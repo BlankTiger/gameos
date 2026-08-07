@@ -75,6 +75,11 @@ struct Static_Array {
     static constexpr auto size_in_bytes = sizeof(T) * N;
     T data[N];
 
+    auto fill(const T&& value) -> void {
+        for (usize i = 0; i < N; ++i)
+            data[i] = value;
+    }
+
     auto operator [] (u64 index, const std::source_location& location = std::source_location::current()) -> T& {
         kstd_assert(index < size, "index out of bounds", location);
         return data[index];
@@ -181,6 +186,12 @@ struct Bounded_Array {
     alignas(T) u8 data[sizeof(T) * N];
 
     Bounded_Array() = default;
+
+    Bounded_Array(usize initial_size, const T& initial_value) : size(initial_size) {
+        kstd_assert(initial_size <= MAX_SIZE, "initial_size exceeds MAX_SIZE");
+        for (usize i = 0; i < size; ++i)
+            ::new (slot(i)) T(initial_value);
+    }
 
     ~Bounded_Array() {
         for (usize i = 0; i < size; ++i)
