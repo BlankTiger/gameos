@@ -5,8 +5,11 @@
 #include "advanced_configuration_and_power_interface.hh"
 #include "basic.hh"
 #include "assert.hh"
+#include "array.hh"
 #include "local_apic.hh"
 #include "low_level_io.hh"
+#include "serial_format.hh"
+#include "smp_constants.hh"
 
 //
 // Stores information specific to a unique hardware CPU core.
@@ -16,7 +19,6 @@
 // `wrmsr` / `rdmsr` instructions.
 //
 // For now every core still shares the same global allocator.
-// @TODO(blanktiger): Make sure it receives a lock as soon as possible.
 //
 namespace cpu_local {
 
@@ -35,8 +37,6 @@ struct Core_Info {
 #define CPU_LOCAL_ASM_STR(x) CPU_LOCAL_ASM_STR_HELPER(x)
 static_assert(offsetof(Core_Info, fpu_irq_save) == CPU_LOCAL_FPU_IRQ_SAVE_OFFSET);
 
-constexpr u32 IA32_GS_BASE = 0xC0000101;
-
 force_inline auto current() -> Core_Info& {
     Core_Info* self;
     asm volatile("movq %%gs:0, %0" : "=r"(self));
@@ -53,20 +53,23 @@ force_inline auto get_g_segment_base() -> Core_Info* {
     return core_info;
 }
 
+alignas(16) inline Static_Array<Core_Info, acpi::MAX_CPUS> core_infos;
+
 namespace hidden {
-    alignas(16) inline Core_Info core_infos[acpi::MAX_CPUS];
+    inline bool bsp_core_info_initialized = false;
 }
 
 // Must be called on the logical core that is being set up.
 auto initialize_application_processor(u32 index, u8* kernel_stack_top) -> void {
-    kstd_assert(index > 0 && index < acpi::MAX_CPUS);
+    if (hidden::bsp_core_info_initialized)
+        kstd_assert(index > 0);
     kstd_assert(kernel_stack_top != nullptr);
 
-    using namespace hidden;
+    serial::println("initialize_application_processor for AP index=%", index);
 
     core_infos[index].self             = &core_infos[index];
     core_infos[index].cpu_index        = index;
-    core_infos[index].lapic_id         = lapic::local_apic_id();
+    core_infos[index].lapic_id         = index == 0 ? lapic::bootstrap_processor_apic_id() : lapic::local_apic_id();
     core_infos[index].kernel_stack_top = kernel_stack_top;
     core_infos[index].lapic_ticks      = 0;
 
@@ -78,20 +81,10 @@ auto initialize_application_processor(u32 index, u8* kernel_stack_top) -> void {
 
 extern "C" u8 stack_top[];
 
-auto initialize_bootstrap_processor() -> void {
-    using namespace hidden;
-
-    // By convention takes the first spot in `hidden::core_infos`.
-    core_infos[0].self             = &core_infos[0];
-    core_infos[0].cpu_index        = 0;
-    core_infos[0].lapic_id         = lapic::bootstrap_processor_apic_id();
-    core_infos[0].kernel_stack_top = stack_top;
-    core_infos[0].lapic_ticks      = 0;
-
-    set_g_segment_base(&core_infos[0]);
-
-    kstd_assert(get_g_segment_base() == &core_infos[0]);
-    kstd_assert(&current()           == &core_infos[0]);
+force_inline auto initialize_bootstrap_processor() -> void {
+    // By convention takes the first spot in `core_infos`.
+    initialize_application_processor(0, stack_top);
+    hidden::bsp_core_info_initialized = true;
 }
 
 }

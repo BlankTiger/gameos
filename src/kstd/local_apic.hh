@@ -341,6 +341,59 @@ auto stop_listening_to_pic_by_masking_lint0() -> void {
     );
 }
 
+// Enable the local APIC in software on an application processor.
+auto initialize_application_processor() -> void {
+    resolve_memory_mapped_base();
+
+    write_register(
+        Register_Offset::SPURIOUS_INTERRUPT_VECTOR,
+        Spurious_Interrupt_Vector_Register {
+            .vector                                 = SPURIOUS_INTERRUPT_VECTOR,
+            .apic_software_enable                   = 1,
+            .focus_processor_checking               = 0,
+            .reserved_mid                           = 0,
+            .end_of_interrupt_broadcast_suppression = 0,
+            .reserved_high                          = 0,
+        }
+    );
+
+    write_register(
+        Register_Offset::TASK_PRIORITY,
+        Task_Priority_Register {
+            .priority_sub_class = 0,
+            .priority_class     = 0,
+            .reserved           = 0,
+        }
+    );
+
+    // Mask the timer and error entries until they are programmed.
+    write_register(
+        Register_Offset::LOCAL_VECTOR_TABLE_TIMER,
+        Local_Vector_Table_Timer_Register {
+            .vector          = TIMER_INTERRUPT_VECTOR,
+            .reserved_low    = 0,
+            .delivery_status = 0,
+            .reserved_mid    = 0,
+            .masked          = 1,
+            .timer_mode      = Timer_Mode::ONE_SHOT,
+            .reserved_high   = 0,
+        }
+    );
+    write_register(
+        Register_Offset::LOCAL_VECTOR_TABLE_ERROR,
+        Local_Vector_Table_Error_Register {
+            .vector          = 0,
+            .reserved_low    = 0,
+            .delivery_status = 0,
+            .reserved_mid    = 0,
+            .masked          = 1,
+            .reserved_high   = 0,
+        }
+    );
+
+    serial::println("AP LAPIC enabled apic_id=%", local_apic_id());
+}
+
 // Enable the local APIC in software on the bootstrap processor.
 // Leave LINT0 unmasked so the 8259 virtual-wire path still works.
 auto initialize_bootstrap_processor() -> void {
@@ -471,6 +524,24 @@ auto calibrate_and_start_timer(u32 frequency_hz) -> void {
         counts_per_interrupt,
         frequency_hz
     );
+}
+
+auto start_timer_periodic(u32 frequency_hz) -> void {
+    u32 counts_per_irq = hidden::timer_counts_per_second / frequency_hz;
+    write_register(Register_Offset::TIMER_DIVIDE_CONFIGURATION, TIMER_DIVIDE_BY_16);
+    write_register(
+        Register_Offset::LOCAL_VECTOR_TABLE_TIMER,
+        Local_Vector_Table_Timer_Register {
+            .vector          = TIMER_INTERRUPT_VECTOR,
+            .reserved_low    = 0,
+            .delivery_status = 0,
+            .reserved_mid    = 0,
+            .masked          = 0,
+            .timer_mode      = Timer_Mode::PERIODIC,
+            .reserved_high   = 0,
+        }
+    );
+    write_register(Register_Offset::TIMER_INITIAL_COUNT, counts_per_irq);
 }
 
 // Write destination_apic_id into Interrupt Command Register high bits 31:24

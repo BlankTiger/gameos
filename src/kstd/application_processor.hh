@@ -2,32 +2,42 @@
 
 #include "advanced_configuration_and_power_interface.hh"
 #include "assert.hh"
+#include "array.hh"
 #include "basic.hh"
+#include "cpu_local.hh"
 #include "cstring.hh"
 #include "global_descriptors.hh"
+#include "interrupts.hh"
 #include "local_apic.hh"
 #include "serial_format.hh"
-#include "config.hh"
+#include "smp_constants.hh"
 #include "time.hh"
 #include "pointer_utils.hh"
 #include "string_builder.hh"
 
-extern "C" auto ap_main() -> void {
-
-}
-
-extern "C" {
-    extern u8 smp_trampoline_start[];
-    extern u8 smp_trampoline_end[];
-    extern const u64 smp_trampoline_size;
-}
+extern "C" auto ap_main(u32 cpu_index) -> void;
 
 namespace ap {
 
+extern "C" u8 smp_trampoline_start[];
+extern "C" u8 smp_trampoline_end[];
+extern "C" u8 smp_trampoline_pm32[];
+extern "C" u8 smp_trampoline_lm64[];
+extern "C" const psize smp_trampoline_size;
+extern "C" const psize boot_pml4_physical_address;
+
 enum struct Breadcrumb_Stage : u16 {
-    SMP_ENTRY = SMP_BREADCRUMB_ENTRY,
-    SMP_GDTR  = SMP_BREADCRUMB_GDTR,
-    SMP_PE    = SMP_BREADCRUMB_PE,
+    SMP_ENTRY   = SMP_BREADCRUMB_ENTRY,
+    SMP_GDTR    = SMP_BREADCRUMB_GDTR,
+    SMP_PE      = SMP_BREADCRUMB_PE,
+    SMP_PM32    = SMP_BREADCRUMB_PM32,
+    SMP_CR3     = SMP_BREADCRUMB_CR3,
+    SMP_LME     = SMP_BREADCRUMB_LME,
+    SMP_PG      = SMP_BREADCRUMB_PG,
+    SMP_LM64    = SMP_BREADCRUMB_LM64,
+    SMP_STACK   = SMP_BREADCRUMB_STACK,
+    SMP_GS      = SMP_BREADCRUMB_GS,
+    SMP_ENTRY64 = SMP_BREADCRUMB_ENTRY64,
 };
 @enum_to_string(Breadcrumb_Stage);
 
@@ -40,12 +50,30 @@ auto set_all_breadcrumbs_to_zero() -> void {
 force_inline auto assert_breadcrumb_okay(Breadcrumb_Stage stage) -> void {
     auto value = *reinterpret_cast<volatile u8*>(TRAMPOLINE_PHYSICAL_ADDRESS + static_cast<u16>(stage));
     serial::println("Checking stage: %", stage);
-    kstd_assert(value == 67, ctprint("Stage %: expected 67, got %", stage, value));
+    kstd_assert(value == SMP_BREADCRUMB_OKAY_VALUE, ctprint("Stage %: expected %, got %", stage, SMP_BREADCRUMB_OKAY_VALUE, value));
+}
+
+auto adjust_asm_label_offsets() -> void {
+    {
+        auto far32_addr = TRAMPOLINE_PHYSICAL_ADDRESS + SMP_OFFSET_FAR32;
+        u32 pm32_phys = TRAMPOLINE_PHYSICAL_ADDRESS + (ptr_addr(smp_trampoline_pm32) - ptr_addr(smp_trampoline_start));
+
+        *addr_as<volatile u32*>(far32_addr)     = pm32_phys;
+        *addr_as<volatile u16*>(far32_addr + 4) = SMP_SEGMENT_OFFSET_IN_GDT_PM32_CODE;
+        serial::println("Adjusted the 32 bit protected-mode section offset");
+    }
+
+    {
+        auto far64_addr = TRAMPOLINE_PHYSICAL_ADDRESS + SMP_OFFSET_FAR64;
+        u32 lm64_phys = TRAMPOLINE_PHYSICAL_ADDRESS + (ptr_addr(smp_trampoline_lm64) - ptr_addr(smp_trampoline_start));
+
+        *addr_as<volatile u32*>(far64_addr)     = lm64_phys;
+        *addr_as<volatile u16*>(far64_addr + 4) = SMP_SEGMENT_OFFSET_IN_GDT_LM64_CODE;
+        serial::println("Adjusted the 64 bit protected-mode section offset");
+    }
 }
 
 auto copy_trampoline_code_to_the_expected_place() -> void {
-    kstd_assert(smp_trampoline_size > 0);
-
     auto* destination = reinterpret_cast<u8*>(TRAMPOLINE_PHYSICAL_ADDRESS);
     auto* source      = reinterpret_cast<u8*>(smp_trampoline_start);
     kstd_memcpy(destination, source, smp_trampoline_size);
@@ -115,6 +143,9 @@ struct Temp_Descriptor_Table {
 };
 
 static_assert(sizeof(Temp_Descriptor_Table) == 40);
+static_assert(offsetof(Temp_Descriptor_Table, code32) == SMP_SEGMENT_OFFSET_IN_GDT_PM32_CODE);
+static_assert(offsetof(Temp_Descriptor_Table, data)   == SMP_SEGMENT_OFFSET_IN_GDT_PM32_DATA);
+static_assert(offsetof(Temp_Descriptor_Table, code64) == SMP_SEGMENT_OFFSET_IN_GDT_LM64_CODE);
 
 auto copy_gdtr_to_the_expected_place() -> void {
     using namespace gdt;
@@ -129,9 +160,54 @@ auto copy_gdtr_to_the_expected_place() -> void {
     *addr_as<Temp_Descriptor_Table*>(TRAMPOLINE_PHYSICAL_ADDRESS            + SMP_OFFSET_GDT)  = temp_gdt;
 }
 
+auto copy_boot_pml4_to_the_expected_place() -> void {
+    *addr_as<volatile psize*>(TRAMPOLINE_PHYSICAL_ADDRESS + SMP_OFFSET_CR3) = boot_pml4_physical_address;
+}
+
+auto set_ap_main_as_offset_entry() -> void {
+    auto ap_main_address = ptr_addr(ap_main);
+    *addr_as<volatile psize*>(TRAMPOLINE_PHYSICAL_ADDRESS + SMP_OFFSET_ENTRY) = ap_main_address;
+}
+
+constexpr auto STACK_POINTER_ADDR = TRAMPOLINE_PHYSICAL_ADDRESS + SMP_OFFSET_STACK;
+
+auto get_stack_pointer() -> u8* {
+    return addr_as<u8*>(STACK_POINTER_ADDR);
+}
+
+// @TODO(blanktiger): Free this if something goes wrong later (if we decide that
+// we want to continue with an AP that failed to initialize).
+auto set_up_a_new_stack() -> void {
+    auto allocator = mem::resolve_allocator();
+    auto stack_mem = allocator->alloc(AP_STACK_SIZE, AP_STACK_ALIGNMENT);
+    auto stack_top = ptr_addr(stack_mem) + AP_STACK_SIZE;
+    *addr_as<volatile psize*>(STACK_POINTER_ADDR) = stack_top;
+    serial::println("Created a 1 MiB stack");
+}
+
+auto set_cpu_index(u32 cpu_index) -> void {
+    *addr_as<volatile u32*>(TRAMPOLINE_PHYSICAL_ADDRESS + SMP_OFFSET_CPU_INDEX) = cpu_index;
+}
+
+auto copy_pointer_to_core_info(u32 apic_id) -> void {
+    *addr_as<volatile psize*>(TRAMPOLINE_PHYSICAL_ADDRESS + SMP_OFFSET_CORE_INFO) = ptr_addr(&cpu_local::core_infos[apic_id]);
+}
+
+alignas(64) inline Static_Array<volatile bool, acpi::MAX_CPUS> cpus_online;
+
 auto initialize_aps() -> void {
+    cpus_online.fill(false);
+    // Mark BSP as online.
+    cpus_online[0] = true;
+
+    kstd_assert(smp_trampoline_size <= 0xF00, "This must fit for real mode to work.");
+    kstd_assert(smp_trampoline_size > 0);
+
     copy_trampoline_code_to_the_expected_place();
+    adjust_asm_label_offsets();
     copy_gdtr_to_the_expected_place();
+    copy_boot_pml4_to_the_expected_place();
+    set_ap_main_as_offset_entry();
 
     using namespace lapic;
 
@@ -163,36 +239,80 @@ auto initialize_aps() -> void {
         .reserved_high         = 0,
     };
 
-    for (auto cpu : acpi::madt().cpus) {
-        if (cpu.is_bsp) continue;
+    const auto& madt = acpi::madt();
+    u32 next_cpu_index = 1;
+    for (u32 cpu_index = 0; cpu_index < madt.cpus.size; ++cpu_index) {
+        const auto& cpu = madt.cpus[cpu_index];
+        if (!cpu.enabled || cpu.is_bsp) continue;
+
+        defer(++next_cpu_index);
 
         set_all_breadcrumbs_to_zero();
         asm volatile("mfence");
 
         auto apic_id = cpu.apic_id;
-        serial::println("Initializing AP%", apic_id);
+        serial::println("Initializing AP index=%, apic_id=%", next_cpu_index, apic_id);
+
+        set_up_a_new_stack();
+        set_cpu_index(next_cpu_index);
+        copy_pointer_to_core_info(next_cpu_index);
 
         // ICR INIT
-        serial::println("Sending INIT_ASSERT to AP%", apic_id);
+        serial::println("Sending INIT_ASSERT");
         lapic::send_inter_processor_interrupt(apic_id, INIT_ASSERT);
         ktime::sleep_ms(10);
 
         // ICR SIPI
-        serial::println("Sending SIPI to AP%", apic_id);
+        serial::println("Sending SIPI to AP");
         lapic::send_inter_processor_interrupt(apic_id, SIPI);
         ktime::sleep_ms(1);
 
         // ICR SIPI
-        serial::println("Sending SIPI to AP%", apic_id);
+        serial::println("Sending SIPI to AP");
         lapic::send_inter_processor_interrupt(apic_id, SIPI);
         ktime::sleep_ms(1);
 
         // Wait for AP to initialize.
-        ktime::sleep_ms(10);
+        bool reached_timeout = false;
+        static constexpr auto RETRY_LIMIT = 50'000'000;
+        for (u64 retry_counter = 0; retry_counter < RETRY_LIMIT; ++retry_counter) {
+            if (retry_counter == RETRY_LIMIT - 1) reached_timeout = true;
+            if (cpus_online[next_cpu_index]) break;
+
+            asm volatile("pause");
+        }
+
+        if (reached_timeout)
+            serial::println("Timeout reached waiting for AP index=% to go online", next_cpu_index);
 
         for (auto stage : @enum_values(Breadcrumb_Stage))
             assert_breadcrumb_okay(stage);
     }
 }
 
+}
+
+extern "C" auto ap_main(u32 cpu_index) -> void {
+    serial::println("AP index=% started", cpu_index);
+    ap::cpus_online[cpu_index] = true;
+
+    // Switch away from the temporary GDT to the kernel GDT.
+    gdt::load_shared();
+
+    // Load kernel IDT (table already built by the BSP).
+    idt::load();
+
+    auto* kernel_top = addr_as<u8*>(ap::STACK_POINTER_ADDR);
+    cpu_local::initialize_application_processor(cpu_index, kernel_top);
+
+    kstd_assert(cpu_local::current().cpu_index == cpu_index);
+
+    lapic::initialize_application_processor();
+    lapic::start_timer_periodic(ktime::TICK_RATE);
+
+    idt::enable_interrupts();
+
+    serial::println("AP online index=% apic_id=%", cpu_index, lapic::local_apic_id());
+
+    for (;;) asm volatile("hlt"); // Wait for work.
 }

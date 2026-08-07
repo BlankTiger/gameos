@@ -14,12 +14,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set(GENERATED_DIR ${CMAKE_BINARY_DIR}/generated)
 
-# Graphics settings
+# Graphics settings (keep in sync with src/config.hh)
 set(GFX_WIDTH 1024)
 set(GFX_HEIGHT 768)
 
-# Configure configuration header
-configure_file(${CMAKE_SOURCE_DIR}/src/config.hh.in ${GENERATED_DIR}/config.hh @ONLY)
 # Configure GRUB
 configure_file(${CMAKE_SOURCE_DIR}/grub.cfg.in ${GENERATED_DIR}/grub.cfg @ONLY)
 
@@ -51,8 +49,8 @@ file(GLOB_RECURSE source_files CONFIGURE_DEPENDS
 
 set(GENERATED_SOURCES
     ${GENERATED_DIR}/src/boot.S
-    ${GENERATED_DIR}/src/smp_trampoline.S
     ${GENERATED_DIR}/src/main.cc
+    ${GENERATED_DIR}/src/kstd/smp_trampoline.S
 )
 
 file(GLOB_RECURSE preprocessor_sources CONFIGURE_DEPENDS
@@ -121,7 +119,6 @@ foreach(source ${all_cxx_sources})
                 -std=c++23 -ffreestanding -fno-exceptions -fno-rtti -mno-red-zone
                 -Wall -Wextra
                 -I ${GENERATED_DIR}/src -I ${GENERATED_DIR}
-                -DGFX_WIDTH=${GFX_WIDTH} -DGFX_HEIGHT=${GFX_HEIGHT}
                 -fsyntax-only ${source}
         COMMAND ${CMAKE_COMMAND} -E touch ${stamp}
         DEPENDS ${source} ${GENERATED_DIR}/.stamp
@@ -141,8 +138,6 @@ target_compile_options(gameos PRIVATE
     $<$<COMPILE_LANGUAGE:C,CXX>:-mno-red-zone>
     $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions>
     $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
-    -DGFX_WIDTH=${GFX_WIDTH}
-    -DGFX_HEIGHT=${GFX_HEIGHT}
 )
 
 target_link_options(gameos PRIVATE

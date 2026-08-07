@@ -7,6 +7,8 @@
  * 64-bit code segment (CS), then calls kernel_main(magic, mbi).
  */
 
+#include "config.hh"
+
 /* Multiboot2 constants */
 .set MAGIC,    0xE85250D6 /* Multiboot2 header magic number.               */
 .set ARCH,     0          /* Architecture: 0 = 32-bit protected-mode i386. */
@@ -108,6 +110,12 @@ boot_pd0:
     .skip 4096 * 4   /* 4 contiguous page directories */
 boot_pt0:
     .skip 4096 * 2048 /* 2048 contiguous page tables (8 MiB) */
+
+.section .rodata
+.align 8
+.global boot_pml4_physical_address
+boot_pml4_physical_address:
+    .quad boot_pml4
 
 /*
  * Temporary Global Descriptor Table (GDT):

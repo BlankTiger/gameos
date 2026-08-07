@@ -297,7 +297,8 @@ auto isr_handle_programmable_interval_timer() -> void {
 
 auto isr_handle_local_apic_timer() -> void {
     cpu_local::current().lapic_ticks += 1;
-    ktime::on_tick();
+    if (cpu_local::current().cpu_index == 0)
+        ktime::on_tick();
 }
 
 auto isr_handle_local_apic_spurious() -> void {
@@ -347,6 +348,12 @@ auto set_gate(Interrupt_Vector_Type vector_type, auto (*handler_function)() -> v
     gate.handler_address_high = static_cast<u32>(handler_address >> 32);
     gate.ist                  = ist;
     gate.reserved             = 0;
+}
+
+auto load() -> void {
+    interrupt_descriptor_table_register.limit = table.size * sizeof(Gate) - 1;
+    interrupt_descriptor_table_register.base  = reinterpret_cast<psize>(&table[0]);
+    asm volatile("lidt %0" : : "m"(interrupt_descriptor_table_register));
 }
 
 auto initialize() -> void {
@@ -409,9 +416,7 @@ auto initialize() -> void {
         set_gate(LOCAL_APIC_SPURIOUS,           _isr_handle_local_apic_spurious);
     }
 
-    interrupt_descriptor_table_register.limit = table.size * sizeof(Gate) - 1;
-    interrupt_descriptor_table_register.base  = reinterpret_cast<psize>(&table[0]);
-    asm volatile("lidt %0" : : "m"(interrupt_descriptor_table_register));
+    load();
 }
 
 force_inline auto enable_interrupts() -> void {

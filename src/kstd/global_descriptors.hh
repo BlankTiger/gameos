@@ -221,4 +221,30 @@ auto initialize() -> void {
     asm volatile("ltr %0" : : "m"(TASK_STATE_SEGMENT));
 }
 
+auto load_shared() -> void {
+    asm volatile("lgdt %0" : : "m"(hidden::global_descriptor_table_register));
+
+    asm volatile(
+        "mov %[sel], %%ax\n"
+        "mov %%ax, %%ds\n"
+        "mov %%ax, %%es\n"
+        "mov %%ax, %%ss\n"
+        "mov %%ax, %%fs\n"
+        :
+        : [sel] "r"(KERNEL_DATA_SEGMENT)
+        : "ax"
+    );
+
+    asm volatile(
+        "pushq %[code_sel]\n"
+        "leaq 1f(%%rip), %%rax\n"
+        "pushq %%rax\n"
+        "lretq\n"
+        "1:\n"
+        :
+        : [code_sel] "i"(KERNEL_CODE_SEGMENT)
+        : "rax", "memory"
+    );
+}
+
 }
