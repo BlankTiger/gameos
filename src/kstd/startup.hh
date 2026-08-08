@@ -1,9 +1,10 @@
 #pragma once
 
-#include "application_processor.hh"
+#include "kstd/advanced_configuration_and_power_interface.hh"
+#include "kstd/application_processor.hh"
 #include "kstd/assert.hh"
-#include "kstd/cpuid.hh"
 #include "kstd/cpu_local.hh"
+#include "kstd/cpuid.hh"
 #include "kstd/gfx.hh"
 #include "kstd/global_constructor_handling.hh"
 #include "kstd/global_descriptors.hh"
@@ -12,15 +13,13 @@
 #include "kstd/local_apic.hh"
 #include "kstd/memory.hh"
 #include "kstd/multiboot2.hh"
-#include "kstd/advanced_configuration_and_power_interface.hh"
 #include "kstd/programmable_interrupt_controller.hh"
 #include "kstd/ps2.hh"
 #include "kstd/random.hh"
 #include "kstd/serial_format.hh"
-#include "kstd/application_processor.hh"
 #include "kstd/term.hh"
 #include "kstd/time.hh"
-#include "local_apic.hh"
+#include "kstd/translation_lookaside_buffer.hh"
 
 #if !defined(__x86_64__)
 #error "This kernel needs an x86_64-elf compiler"
