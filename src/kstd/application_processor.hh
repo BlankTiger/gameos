@@ -1,14 +1,15 @@
 #pragma once
 
 #include "advanced_configuration_and_power_interface.hh"
+#include "application_processor_state.hh"
 #include "assert.hh"
 #include "array.hh"
 #include "basic.hh"
 #include "cpu_local.hh"
 #include "cstring.hh"
 #include "global_descriptors.hh"
-#include "interrupts.hh"
 #include "interrupts_constants.hh"
+#include "interrupts.hh"
 #include "local_apic.hh"
 #include "serial_format.hh"
 #include "smp_constants.hh"
@@ -19,32 +20,6 @@
 extern "C" auto ap_main(u32 cpu_index) -> void;
 
 namespace ap {
-
-alignas(64) inline Static_Array<volatile bool, acpi::MAX_CPUS> cpus_online;
-alignas(64) inline Static_Array<volatile bool, acpi::MAX_CPUS> cpus_frozen;
-
-template <bool EXCLUDE_SELF = false>
-auto online_count() -> u32 { 
-    u32 count = 0;
-    if constexpr (EXCLUDE_SELF) {
-        u32 self = cpu_local::current().cpu_index;
-        for (u32 index = 0; index < acpi::MAX_CPUS; ++index) {
-            if (index == self || !cpus_online[index]) continue;
-            ++count;
-        }
-    } else {
-        for (u32 index = 0; index < acpi::MAX_CPUS; ++index) {
-            if (!cpus_online[index]) continue;
-            ++count;
-        }
-    }
-    return count;
-}
-
-force_inline auto online_count_excluding_self() -> u32 {
-    return online_count<false>();
-}
-
 
 // Stops all future interrupts and goes to sleep.
 force_inline auto freeze_cpu() -> void {

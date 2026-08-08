@@ -61,6 +61,7 @@ add_custom_command(
     OUTPUT
         ${GENERATED_DIR}/.stamp
         ${GENERATED_SOURCES}
+    COMMAND ${CMAKE_COMMAND} -E rm -rf ${GENERATED_DIR}/src
     COMMAND ${CMAKE_COMMAND} -E make_directory ${GENERATED_DIR}/src
     COMMAND ${PREPROCESSOR}
             ${CMAKE_SOURCE_DIR}/assets
@@ -84,6 +85,7 @@ add_dependencies(gameos generate_files)
 # on an include that some other header happened to pull in first.
 file(GLOB_RECURSE all_headers CONFIGURE_DEPENDS ${GENERATED_DIR}/src/*.hh)
 
+file(REMOVE_RECURSE ${CMAKE_BINARY_DIR}/header_checks)
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/header_checks)
 
 foreach(header ${all_headers})

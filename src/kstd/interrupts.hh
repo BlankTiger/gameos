@@ -1,6 +1,7 @@
 #pragma once
 
 #include "allocator.hh"
+#include "application_processor_state.hh"
 #include "array.hh"
 #include "assert.hh"
 #include "basic.hh"
@@ -16,6 +17,7 @@
 #include "string_builder.hh"
 #include "term.hh"
 #include "time.hh"
+#include "translation_lookaside_buffer_state.hh"
 #include "translation_lookaside_buffer.hh"
 
 // Forward declaration.
@@ -337,6 +339,8 @@ auto isr_handle_local_apic_stop() -> void {
 
 auto isr_handle_local_apic_tlb_shootdown() -> void {
     const auto address = tlb::state.virtual_address.load(std::memory_order_acquire);
+    tlb::flush_local(address);
+    tlb::state.acknowledgments.fetch_add(1, std::memory_order_release);
 }
 
 extern "C" auto isr_dispatch(Interrupt_Frame* frame) -> void {

@@ -1,28 +1,14 @@
 #pragma once
 
-#include <atomic>
-
 #include "advanced_configuration_and_power_interface.hh"
-#include "application_processor.hh"
+#include "application_processor_state.hh"
 #include "basic.hh"
 #include "cpu_local.hh"
 #include "interrupts_constants.hh"
 #include "local_apic.hh"
-#include "synchronization.hh"
+#include "translation_lookaside_buffer_state.hh"
 
 namespace tlb {
-
-inline constexpr u64 FLUSH_ALL = ~psize{0};
-
-struct Shootdown_State {
-    synchronization::Spinlock lock;
-
-    std::atomic<psize> virtual_address{FLUSH_ALL};
-    std::atomic<u32> acknowledgments{0};
-    std::atomic<u32> required_acknowledgments{0};
-};
-
-inline Shootdown_State state{};
 
 // @TODO(blanktiger): Maybe hide those, cause they aren't behind a lock.
 force_inline auto flush_local(psize address) -> void {
@@ -40,19 +26,19 @@ force_inline auto flush_local(psize address) -> void {
     }
 }
 
-force_inline auto flush_all() -> void {
-    flush_local(FLUSH_ALL);
-}
-
 auto shootdown(psize address) -> void {
-    if (ap::online_count() <= 1) {
+    u32 online   = ap::online_count();
+    u32 required = ap::online_count_excluding_self();
+
+    serial::println("TLB shootdown online=% required=% self=%", online, required, cpu_local::current().cpu_index);
+
+    if (online <= 1) {
         flush_local(address);
         return;
     }
 
     auto guard = state.lock.scoped_irq_lock();
 
-    u32 required = ap::online_count_excluding_self();
     if (required == 0) {
         flush_local(address);
         return;
@@ -89,6 +75,10 @@ auto shootdown(psize address) -> void {
     while (state.acknowledgments.load(std::memory_order_acquire) < state.required_acknowledgments.load(std::memory_order_acquire)) {
         asm volatile("pause");
     }
+}
+
+force_inline auto flush_all() -> void {
+    shootdown(FLUSH_ALL);
 }
 
 
