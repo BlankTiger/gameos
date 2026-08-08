@@ -11,6 +11,8 @@
 #include "low_level_io.hh"
 #include "programmable_interrupt_controller.hh"
 #include "ps2.hh"
+#include "smp_constants.hh"
+#include "interrupts_constants.hh"
 #include "string_builder.hh"
 #include "term.hh"
 #include "time.hh"
@@ -18,6 +20,12 @@
 // Forward declaration.
 namespace ioapic {
     auto get_bsp_owns_device_irqs() -> bool;
+}
+
+// Forward declaration.
+namespace ap {
+    auto freeze_cpu() -> void;
+    auto is_stop_requested() -> bool;
 }
 
 namespace idt {
@@ -66,60 +74,62 @@ inline Interrupt_Descriptor_Table_Register interrupt_descriptor_table_register;
 
 enum struct Interrupt_Vector_Type : u8 {
     // CPU exceptions (vectors 0-31)
-    DIVIDE_ERROR                  = 0,
-    DEBUG                         = 1,
-    NON_MASKABLE_INTERRUPT        = 2,
-    BREAKPOINT                    = 3,
-    OVERFLOW                      = 4,
-    BOUND_RANGE_EXCEEDED          = 5,
-    INVALID_OPCODE                = 6,
-    DEVICE_NOT_AVAILABLE          = 7,
-    DOUBLE_FAULT                  = 8,
-    COPROCESSOR_SEGMENT_OVERRUN   = 9,
-    INVALID_TSS                   = 10,
-    SEGMENT_NOT_PRESENT           = 11,
-    STACK_SEGMENT_FAULT           = 12,
-    GENERAL_PROTECTION_FAULT      = 13,
-    PAGE_FAULT                    = 14,
-    RESERVED_15                   = 15,
-    X87_FLOATING_POINT_EXCEPTION  = 16,
-    ALIGNMENT_CHECK               = 17,
-    MACHINE_CHECK                 = 18,
-    SIMD_FLOATING_POINT_EXCEPTION = 19,
-    VIRTUALISATION_EXCEPTION      = 20,
-    CONTROL_PROTECTION_EXCEPTION  = 21,
-    RESERVED_22                   = 22,
-    RESERVED_23                   = 23,
-    RESERVED_24                   = 24,
-    RESERVED_25                   = 25,
-    RESERVED_26                   = 26,
-    RESERVED_27                   = 27,
-    HYPERVISOR_INJECTION          = 28,
-    VMM_COMMUNICATION             = 29,
-    SECURITY_EXCEPTION            = 30,
-    RESERVED_31                   = 31,
+    DIVIDE_ERROR                  = VECTOR_DIVIDE_ERROR,
+    DEBUG                         = VECTOR_DEBUG,
+    NON_MASKABLE_INTERRUPT        = VECTOR_NON_MASKABLE_INTERRUPT,
+    BREAKPOINT                    = VECTOR_BREAKPOINT,
+    OVERFLOW                      = VECTOR_OVERFLOW,
+    BOUND_RANGE_EXCEEDED          = VECTOR_BOUND_RANGE_EXCEEDED,
+    INVALID_OPCODE                = VECTOR_INVALID_OPCODE,
+    DEVICE_NOT_AVAILABLE          = VECTOR_DEVICE_NOT_AVAILABLE,
+    DOUBLE_FAULT                  = VECTOR_DOUBLE_FAULT,
+    COPROCESSOR_SEGMENT_OVERRUN   = VECTOR_COPROCESSOR_SEGMENT_OVERRUN,
+    INVALID_TSS                   = VECTOR_INVALID_TSS,
+    SEGMENT_NOT_PRESENT           = VECTOR_SEGMENT_NOT_PRESENT,
+    STACK_SEGMENT_FAULT           = VECTOR_STACK_SEGMENT_FAULT,
+    GENERAL_PROTECTION_FAULT      = VECTOR_GENERAL_PROTECTION_FAULT,
+    PAGE_FAULT                    = VECTOR_PAGE_FAULT,
+    RESERVED_15                   = VECTOR_RESERVED_15,
+    X87_FLOATING_POINT_EXCEPTION  = VECTOR_X87_FLOATING_POINT_EXCEPTION,
+    ALIGNMENT_CHECK               = VECTOR_ALIGNMENT_CHECK,
+    MACHINE_CHECK                 = VECTOR_MACHINE_CHECK,
+    SIMD_FLOATING_POINT_EXCEPTION = VECTOR_SIMD_FLOATING_POINT_EXCEPTION,
+    VIRTUALISATION_EXCEPTION      = VECTOR_VIRTUALISATION_EXCEPTION,
+    CONTROL_PROTECTION_EXCEPTION  = VECTOR_CONTROL_PROTECTION_EXCEPTION,
+    RESERVED_22                   = VECTOR_RESERVED_22,
+    RESERVED_23                   = VECTOR_RESERVED_23,
+    RESERVED_24                   = VECTOR_RESERVED_24,
+    RESERVED_25                   = VECTOR_RESERVED_25,
+    RESERVED_26                   = VECTOR_RESERVED_26,
+    RESERVED_27                   = VECTOR_RESERVED_27,
+    HYPERVISOR_INJECTION          = VECTOR_HYPERVISOR_INJECTION,
+    VMM_COMMUNICATION             = VECTOR_VMM_COMMUNICATION,
+    SECURITY_EXCEPTION            = VECTOR_SECURITY_EXCEPTION,
+    RESERVED_31                   = VECTOR_RESERVED_31,
 
     // Hardware IRQs (vectors 32-47, after PIC remapping)
-    PIT_TIMER                     = 32,
-    PS2_KEYBOARD                  = 33,
-    CASCADE                       = 34,
-    COM2                          = 35,
-    COM1                          = 36,
-    LPT2                          = 37,
-    FLOPPY                        = 38,
-    LPT1_SPURIOUS                 = 39,
-    RTC                           = 40,
-    ACPI                          = 41,
-    FREE_IRQ10                    = 42,
-    FREE_IRQ11                    = 43,
-    PS2_MOUSE                     = 44,
-    FPU                           = 45,
-    PRIMARY_ATA                   = 46,
-    SECONDARY_ATA                 = 47,
+    PIT_TIMER                     = VECTOR_PIT_TIMER,
+    PS2_KEYBOARD                  = VECTOR_PS2_KEYBOARD,
+    CASCADE                       = VECTOR_CASCADE,
+    COM2                          = VECTOR_COM2,
+    COM1                          = VECTOR_COM1,
+    LPT2                          = VECTOR_LPT2,
+    FLOPPY                        = VECTOR_FLOPPY,
+    LPT1_SPURIOUS                 = VECTOR_LPT1_SPURIOUS,
+    RTC                           = VECTOR_RTC,
+    ACPI                          = VECTOR_ACPI,
+    FREE_IRQ10                    = VECTOR_FREE_IRQ10,
+    FREE_IRQ11                    = VECTOR_FREE_IRQ11,
+    PS2_MOUSE                     = VECTOR_PS2_MOUSE,
+    FPU                           = VECTOR_FPU,
+    PRIMARY_ATA                   = VECTOR_PRIMARY_ATA,
+    SECONDARY_ATA                 = VECTOR_SECONDARY_ATA,
 
     // This should be outside the 8259 remap window.
-    LOCAL_APIC_TIMER              = lapic::TIMER_INTERRUPT_VECTOR,
-    LOCAL_APIC_SPURIOUS           = lapic::SPURIOUS_INTERRUPT_VECTOR,
+    LOCAL_APIC_TIMER              = VECTOR_LOCAL_APIC_TIMER,
+    LOCAL_APIC_TLB_SHOOTDOWN      = VECTOR_LOCAL_APIC_TLB_SHOOTDOWN,
+    LOCAL_APIC_STOP               = VECTOR_LOCAL_APIC_STOP,
+    LOCAL_APIC_SPURIOUS           = VECTOR_LOCAL_APIC_SPURIOUS,
 };
 
 
@@ -148,124 +158,131 @@ struct Interrupt_Frame {
 // we align %rsp to 16 before `call` per SysV.
 //
 
-#define ISR_COMMON_BODY                                                                         \
-    "push %rax\n\t"                                                                             \
-    "push %rbx\n\t"                                                                             \
-    "push %rcx\n\t"                                                                             \
-    "push %rdx\n\t"                                                                             \
-    "push %rsi\n\t"                                                                             \
-    "push %rdi\n\t"                                                                             \
-    "push %rbp\n\t"                                                                             \
-    "push %r8\n\t"                                                                              \
-    "push %r9\n\t"                                                                              \
-    "push %r10\n\t"                                                                             \
-    "push %r11\n\t"                                                                             \
-    "push %r12\n\t"                                                                             \
-    "push %r13\n\t"                                                                             \
-    "push %r14\n\t"                                                                             \
-    "push %r15\n\t"                                                                             \
-    "mov %rsp, %rdi\n\t"                                                                        \
-    "mov %rsp, %rbp\n\t"                                                                        \
-    "and $-16, %rsp\n\t"                                                                        \
-    "movq %gs:0, %rax\n\t"                                                                      \
-    "fxsave  " CPU_LOCAL_ASM_STR(CPU_LOCAL_FPU_IRQ_SAVE_OFFSET) "(%rax)\n\t"                    \
-    "call isr_dispatch\n\t"                                                                     \
-    "movq %gs:0, %rax\n\t"                                                                      \
-    "fxrstor " CPU_LOCAL_ASM_STR(CPU_LOCAL_FPU_IRQ_SAVE_OFFSET) "(%rax)\n\t"                    \
-    "mov %rbp, %rsp\n\t"                                                                        \
-    "pop %r15\n\t"                                                                              \
-    "pop %r14\n\t"                                                                              \
-    "pop %r13\n\t"                                                                              \
-    "pop %r12\n\t"                                                                              \
-    "pop %r11\n\t"                                                                              \
-    "pop %r10\n\t"                                                                              \
-    "pop %r9\n\t"                                                                               \
-    "pop %r8\n\t"                                                                               \
-    "pop %rbp\n\t"                                                                              \
-    "pop %rdi\n\t"                                                                              \
-    "pop %rsi\n\t"                                                                              \
-    "pop %rdx\n\t"                                                                              \
-    "pop %rcx\n\t"                                                                              \
-    "pop %rbx\n\t"                                                                              \
-    "pop %rax\n\t"                                                                              \
-    "add $16, %rsp\n\t"                                                                         \
+#define ISR_COMMON_BODY                                                       \
+    "push %rax\n\t"                                                           \
+    "push %rbx\n\t"                                                           \
+    "push %rcx\n\t"                                                           \
+    "push %rdx\n\t"                                                           \
+    "push %rsi\n\t"                                                           \
+    "push %rdi\n\t"                                                           \
+    "push %rbp\n\t"                                                           \
+    "push %r8\n\t"                                                            \
+    "push %r9\n\t"                                                            \
+    "push %r10\n\t"                                                           \
+    "push %r11\n\t"                                                           \
+    "push %r12\n\t"                                                           \
+    "push %r13\n\t"                                                           \
+    "push %r14\n\t"                                                           \
+    "push %r15\n\t"                                                           \
+    "mov %rsp, %rdi\n\t"                                                      \
+    "mov %rsp, %rbp\n\t"                                                      \
+    "and $-16, %rsp\n\t"                                                      \
+    "movq %gs:0, %rax\n\t"                                                    \
+    "fxsave  " CPU_LOCAL_ASM_STR(CPU_LOCAL_FPU_IRQ_SAVE_OFFSET) "(%rax)\n\t"  \
+    "call isr_dispatch\n\t"                                                   \
+    "movq %gs:0, %rax\n\t"                                                    \
+    "fxrstor " CPU_LOCAL_ASM_STR(CPU_LOCAL_FPU_IRQ_SAVE_OFFSET) "(%rax)\n\t"  \
+    "mov %rbp, %rsp\n\t"                                                      \
+    "pop %r15\n\t"                                                            \
+    "pop %r14\n\t"                                                            \
+    "pop %r13\n\t"                                                            \
+    "pop %r12\n\t"                                                            \
+    "pop %r11\n\t"                                                            \
+    "pop %r10\n\t"                                                            \
+    "pop %r9\n\t"                                                             \
+    "pop %r8\n\t"                                                             \
+    "pop %rbp\n\t"                                                            \
+    "pop %rdi\n\t"                                                            \
+    "pop %rsi\n\t"                                                            \
+    "pop %rdx\n\t"                                                            \
+    "pop %rcx\n\t"                                                            \
+    "pop %rbx\n\t"                                                            \
+    "pop %rax\n\t"                                                            \
+    "add $16, %rsp\n\t"                                                       \
     "iretq\n\t"
 
-#define ISR_NO_ERROR_CODE(NAME, NUMBER)                                                         \
-    __attribute__((naked)) auto _isr_handle_##NAME() -> void {                                  \
-        asm volatile(                                                                           \
-            "push $0\n\t"                                                                       \
-            "push $" #NUMBER "\n\t"                                                             \
-            ISR_COMMON_BODY                                                                     \
-        );                                                                                      \
+#define ISR_STRFY(x) #x
+#define ISR_XSTRFY(x) ISR_STRFY(x)
+
+#define ISR_NO_ERROR_CODE(NAME, NUMBER)                                       \
+    __attribute__((naked)) auto _isr_handle_##NAME() -> void {                \
+        asm volatile(                                                         \
+            "push $0\n\t"                                                     \
+            "push $" ISR_XSTRFY(NUMBER) "\n\t"                                \
+            ISR_COMMON_BODY                                                   \
+        );                                                                    \
     }
 
-#define ISR_ERROR_CODE(NAME, NUMBER)                                                            \
-    __attribute__((naked)) auto _isr_handle_##NAME() -> void {                                  \
-        asm volatile(                                                                           \
-            "push $" #NUMBER "\n\t"                                                             \
-            ISR_COMMON_BODY                                                                     \
-        );                                                                                      \
+#define ISR_ERROR_CODE(NAME, NUMBER)                                          \
+    __attribute__((naked)) auto _isr_handle_##NAME() -> void {                \
+        asm volatile(                                                         \
+            "push $" ISR_XSTRFY(NUMBER) "\n\t"                                \
+            ISR_COMMON_BODY                                                   \
+        );                                                                    \
     }
 
 // CPU exceptions (vectors 0-31)
-ISR_NO_ERROR_CODE (divide_error,                  0)   // #DE
-ISR_NO_ERROR_CODE (debug,                         1)   // #DB
-ISR_NO_ERROR_CODE (non_maskable_interrupt,        2)   // NMI
-ISR_NO_ERROR_CODE (breakpoint,                    3)   // #BP
-ISR_NO_ERROR_CODE (overflow,                      4)   // #OF
-ISR_NO_ERROR_CODE (bound_range_exceeded,          5)   // #BR
-ISR_NO_ERROR_CODE (invalid_opcode,                6)   // #UD
-ISR_NO_ERROR_CODE (device_not_available,          7)   // #NM
-ISR_ERROR_CODE    (double_fault,                  8)   // #DF
-ISR_NO_ERROR_CODE (coprocessor_segment_overrun,   9)
-ISR_ERROR_CODE    (invalid_tss,                   10)  // #TS
-ISR_ERROR_CODE    (segment_not_present,           11)  // #NP
-ISR_ERROR_CODE    (stack_segment_fault,           12)  // #SS
-ISR_ERROR_CODE    (general_protection_fault,      13)  // #GP
-ISR_ERROR_CODE    (page_fault,                    14)  // #PF
-ISR_NO_ERROR_CODE (reserved_15,                   15)
-ISR_NO_ERROR_CODE (x87_floating_point_exception,  16)  // #MF
-ISR_ERROR_CODE    (alignment_check,               17)  // #AC
-ISR_NO_ERROR_CODE (machine_check,                 18)  // #MC
-ISR_NO_ERROR_CODE (simd_floating_point_exception, 19)  // #XM
-ISR_NO_ERROR_CODE (virtualisation_exception,      20)  // #VE
-ISR_ERROR_CODE    (control_protection_exception,  21)  // #CP
-ISR_NO_ERROR_CODE (reserved_22,                   22)
-ISR_NO_ERROR_CODE (reserved_23,                   23)
-ISR_NO_ERROR_CODE (reserved_24,                   24)
-ISR_NO_ERROR_CODE (reserved_25,                   25)
-ISR_NO_ERROR_CODE (reserved_26,                   26)
-ISR_NO_ERROR_CODE (reserved_27,                   27)
-ISR_NO_ERROR_CODE (hypervisor_injection,          28)  // #HV
-ISR_ERROR_CODE    (vmm_communication,             29)  // #VC
-ISR_ERROR_CODE    (security_exception,            30)  // #SX
-ISR_NO_ERROR_CODE (reserved_31,                   31)
+ISR_NO_ERROR_CODE (divide_error,                  VECTOR_DIVIDE_ERROR)                  // #DE
+ISR_NO_ERROR_CODE (debug,                         VECTOR_DEBUG)                         // #DB
+ISR_NO_ERROR_CODE (non_maskable_interrupt,        VECTOR_NON_MASKABLE_INTERRUPT)        // NMI
+ISR_NO_ERROR_CODE (breakpoint,                    VECTOR_BREAKPOINT)                    // #BP
+ISR_NO_ERROR_CODE (overflow,                      VECTOR_OVERFLOW)                      // #OF
+ISR_NO_ERROR_CODE (bound_range_exceeded,          VECTOR_BOUND_RANGE_EXCEEDED)          // #BR
+ISR_NO_ERROR_CODE (invalid_opcode,                VECTOR_INVALID_OPCODE)                // #UD
+ISR_NO_ERROR_CODE (device_not_available,          VECTOR_DEVICE_NOT_AVAILABLE)          // #NM
+ISR_ERROR_CODE    (double_fault,                  VECTOR_DOUBLE_FAULT)                  // #DF
+ISR_NO_ERROR_CODE (coprocessor_segment_overrun,   VECTOR_COPROCESSOR_SEGMENT_OVERRUN)
+ISR_ERROR_CODE    (invalid_tss,                   VECTOR_INVALID_TSS)                   // #TS
+ISR_ERROR_CODE    (segment_not_present,           VECTOR_SEGMENT_NOT_PRESENT)           // #NP
+ISR_ERROR_CODE    (stack_segment_fault,           VECTOR_STACK_SEGMENT_FAULT)           // #SS
+ISR_ERROR_CODE    (general_protection_fault,      VECTOR_GENERAL_PROTECTION_FAULT)      // #GP
+ISR_ERROR_CODE    (page_fault,                    VECTOR_PAGE_FAULT)                    // #PF
+ISR_NO_ERROR_CODE (reserved_15,                   VECTOR_RESERVED_15)
+ISR_NO_ERROR_CODE (x87_floating_point_exception,  VECTOR_X87_FLOATING_POINT_EXCEPTION)  // #MF
+ISR_ERROR_CODE    (alignment_check,               VECTOR_ALIGNMENT_CHECK)               // #AC
+ISR_NO_ERROR_CODE (machine_check,                 VECTOR_MACHINE_CHECK)                 // #MC
+ISR_NO_ERROR_CODE (simd_floating_point_exception, VECTOR_SIMD_FLOATING_POINT_EXCEPTION) // #XM
+ISR_NO_ERROR_CODE (virtualisation_exception,      VECTOR_VIRTUALISATION_EXCEPTION)      // #VE
+ISR_ERROR_CODE    (control_protection_exception,  VECTOR_CONTROL_PROTECTION_EXCEPTION)  // #CP
+ISR_NO_ERROR_CODE (reserved_22,                   VECTOR_RESERVED_22)
+ISR_NO_ERROR_CODE (reserved_23,                   VECTOR_RESERVED_23)
+ISR_NO_ERROR_CODE (reserved_24,                   VECTOR_RESERVED_24)
+ISR_NO_ERROR_CODE (reserved_25,                   VECTOR_RESERVED_25)
+ISR_NO_ERROR_CODE (reserved_26,                   VECTOR_RESERVED_26)
+ISR_NO_ERROR_CODE (reserved_27,                   VECTOR_RESERVED_27)
+ISR_NO_ERROR_CODE (hypervisor_injection,          VECTOR_HYPERVISOR_INJECTION)          // #HV
+ISR_ERROR_CODE    (vmm_communication,             VECTOR_VMM_COMMUNICATION)             // #VC
+ISR_ERROR_CODE    (security_exception,            VECTOR_SECURITY_EXCEPTION)            // #SX
+ISR_NO_ERROR_CODE (reserved_31,                   VECTOR_RESERVED_31)
 
 // Hardware IRQs (vectors 32-47, after PIC remapping)
-ISR_NO_ERROR_CODE (pit_timer,       32)  // IRQ0
-ISR_NO_ERROR_CODE (ps2_keyboard,    33)  // IRQ1
-ISR_NO_ERROR_CODE (cascade,         34)  // IRQ2
-ISR_NO_ERROR_CODE (com2,            35)  // IRQ3
-ISR_NO_ERROR_CODE (com1,            36)  // IRQ4
-ISR_NO_ERROR_CODE (lpt2,            37)  // IRQ5
-ISR_NO_ERROR_CODE (floppy,          38)  // IRQ6
-ISR_NO_ERROR_CODE (lpt1_spurious,   39)  // IRQ7
-ISR_NO_ERROR_CODE (rtc,             40)  // IRQ8
-ISR_NO_ERROR_CODE (acpi,            41)  // IRQ9
-ISR_NO_ERROR_CODE (free_irq10,      42)  // IRQ10
-ISR_NO_ERROR_CODE (free_irq11,      43)  // IRQ11
-ISR_NO_ERROR_CODE (ps2_mouse,       44)  // IRQ12
-ISR_NO_ERROR_CODE (fpu,             45)  // IRQ13
-ISR_NO_ERROR_CODE (primary_ata,     46)  // IRQ14
-ISR_NO_ERROR_CODE (secondary_ata,   47)  // IRQ15
+ISR_NO_ERROR_CODE (pit_timer,     VECTOR_PIT_TIMER)     // IRQ0
+ISR_NO_ERROR_CODE (ps2_keyboard,  VECTOR_PS2_KEYBOARD)  // IRQ1
+ISR_NO_ERROR_CODE (cascade,       VECTOR_CASCADE)       // IRQ2
+ISR_NO_ERROR_CODE (com2,          VECTOR_COM2)          // IRQ3
+ISR_NO_ERROR_CODE (com1,          VECTOR_COM1)          // IRQ4
+ISR_NO_ERROR_CODE (lpt2,          VECTOR_LPT2)          // IRQ5
+ISR_NO_ERROR_CODE (floppy,        VECTOR_FLOPPY)        // IRQ6
+ISR_NO_ERROR_CODE (lpt1_spurious, VECTOR_LPT1_SPURIOUS) // IRQ7
+ISR_NO_ERROR_CODE (rtc,           VECTOR_RTC)           // IRQ8
+ISR_NO_ERROR_CODE (acpi,          VECTOR_ACPI)          // IRQ9
+ISR_NO_ERROR_CODE (free_irq10,    VECTOR_FREE_IRQ10)    // IRQ10
+ISR_NO_ERROR_CODE (free_irq11,    VECTOR_FREE_IRQ11)    // IRQ11
+ISR_NO_ERROR_CODE (ps2_mouse,     VECTOR_PS2_MOUSE)     // IRQ12
+ISR_NO_ERROR_CODE (fpu,           VECTOR_FPU)           // IRQ13
+ISR_NO_ERROR_CODE (primary_ata,   VECTOR_PRIMARY_ATA)   // IRQ14
+ISR_NO_ERROR_CODE (secondary_ata, VECTOR_SECONDARY_ATA) // IRQ15
 
-ISR_NO_ERROR_CODE (local_apic_timer,    64)   // lapic::TIMER_INTERRUPT_VECTOR
-ISR_NO_ERROR_CODE (local_apic_spurious, 255)  // lapic::SPURIOUS_INTERRUPT_VECTOR
+ISR_NO_ERROR_CODE (local_apic_timer,         VECTOR_LOCAL_APIC_TIMER)
+ISR_NO_ERROR_CODE (local_apic_tlb_shootdown, VECTOR_LOCAL_APIC_TLB_SHOOTDOWN)
+ISR_NO_ERROR_CODE (local_apic_stop,          VECTOR_LOCAL_APIC_STOP)
+ISR_NO_ERROR_CODE (local_apic_spurious,      VECTOR_LOCAL_APIC_SPURIOUS)
 
 namespace hidden {
     // 8 KiB more than enough for error messages in interrupt handlers.
     Static_Array<u8, 8 * 1024> error_message_buffer{};
+
+    // @TODO(blanktiger): Give this a lock since now we are multithreaded.
     inline mem::Arena_Allocator emergency_error_message_allocator{error_message_buffer};
 }
 
@@ -280,6 +297,13 @@ auto isr_unimplemented_handler(Interrupt_Vector_Type type, u64 error) -> void {
 
 auto isr_handle_divide_error() -> void {
     halt::forever("Try not dividing by 0 m8.. glhf");
+}
+
+auto isr_handle_non_maskable_interrupt() -> void {
+    if (ap::is_stop_requested()) {
+        ap::freeze_cpu();
+    }
+    halt::forever("Unexpected Non-Maskable Interrupt");
 }
 
 auto isr_handle_double_fault(u64 error) -> void {
@@ -305,19 +329,31 @@ auto isr_handle_local_apic_spurious() -> void {
     // Hardware spurious: no end-of-interrupt required (Intel SDM).
 }
 
+auto isr_handle_local_apic_stop() -> void {
+    lapic::signal_end_of_interrupt();
+    ap::freeze_cpu();
+}
+
+auto isr_handle_local_apic_tlb_shootdown() -> void {
+    // @TODO(blanktiger): Implement.
+}
+
 extern "C" auto isr_dispatch(Interrupt_Frame* frame) -> void {
     auto type  = static_cast<Interrupt_Vector_Type>(frame->vector);
     u64  error = frame->error_code;
 
     using enum Interrupt_Vector_Type;
     switch (type) {
-        case DIVIDE_ERROR:        isr_handle_divide_error();                break;
-        case DOUBLE_FAULT:        isr_handle_double_fault(error);           break;
-        case PS2_KEYBOARD:        ps2::isr_handle_ps2_keyboard();           break;
-        case PS2_MOUSE:           ps2::isr_handle_ps2_mouse();              break;
-        case PIT_TIMER:           isr_handle_programmable_interval_timer(); break;
-        case LOCAL_APIC_TIMER:    isr_handle_local_apic_timer();            break;
-        case LOCAL_APIC_SPURIOUS: isr_handle_local_apic_spurious();         break;
+        case DIVIDE_ERROR:             isr_handle_divide_error();                break;
+        case NON_MASKABLE_INTERRUPT:   isr_handle_non_maskable_interrupt();      break;
+        case DOUBLE_FAULT:             isr_handle_double_fault(error);           break;
+        case PS2_KEYBOARD:             ps2::isr_handle_ps2_keyboard();           break;
+        case PS2_MOUSE:                ps2::isr_handle_ps2_mouse();              break;
+        case PIT_TIMER:                isr_handle_programmable_interval_timer(); break;
+        case LOCAL_APIC_TIMER:         isr_handle_local_apic_timer();            break;
+        case LOCAL_APIC_SPURIOUS:      isr_handle_local_apic_spurious();         break;
+        case LOCAL_APIC_TLB_SHOOTDOWN: isr_handle_local_apic_tlb_shootdown();    break;
+        case LOCAL_APIC_STOP:          isr_handle_local_apic_stop();             break;
 
         default: isr_unimplemented_handler(type, error); break;
     }
@@ -331,7 +367,7 @@ extern "C" auto isr_dispatch(Interrupt_Frame* frame) -> void {
             // 8259-sourced lines (remapped IRQs).
             pic::send_end_of_interrupt(vector);
         }
-    } else if (type == LOCAL_APIC_TIMER) {
+    } else if (type == LOCAL_APIC_TIMER || type == LOCAL_APIC_TLB_SHOOTDOWN) {
         lapic::signal_end_of_interrupt();
     }
 }
@@ -413,6 +449,8 @@ auto initialize() -> void {
         set_gate(SECONDARY_ATA,                 _isr_handle_secondary_ata);
 
         set_gate(LOCAL_APIC_TIMER,              _isr_handle_local_apic_timer);
+        set_gate(LOCAL_APIC_TLB_SHOOTDOWN,      _isr_handle_local_apic_tlb_shootdown);
+        set_gate(LOCAL_APIC_STOP,               _isr_handle_local_apic_stop);
         set_gate(LOCAL_APIC_SPURIOUS,           _isr_handle_local_apic_spurious);
     }
 

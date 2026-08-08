@@ -1,14 +1,20 @@
+[ ] - not done
+[/] - cancelled
+[x] - done
+[-] - in progress
+
 graphics:
 - [x] double buffering
 - [x] transparency
 - [x] blending
 - [x] circles
-- [ ] lines
+- [x] lines
 - [x] sprite embedding
 - [x] sprite drawing
-- [ ] move draw\_char draw\_text to other location
+- [x] move draw\_char draw\_text to other location
 - [x] draw_text_immediate for asserts and term::print
-- [ ] think of a better way of storing b,g,r channels, so we can both load rgb and use bgr elsewhere
+- [x] think of a better way of storing b,g,r channels, so we can both load rgb and use bgr elsewhere
+- [ ] draw tetris
 
 fonts:
 - [ ] embedding ttfs
@@ -22,27 +28,27 @@ base layer:
 - [x] timers
 - [x] interrupts
 - [x] PIC
-- [ ] APIC instead of PIC if available later on
+- [x] APIC instead of PIC if available later on
 - [ ] keyboard handling
 - [ ] mouse handling
 - [ ] multicore
 - [x] serial
 - [x] fix early asserts (term must be initialized for asserts to output anything currently and we have asserts that are before the term::initialize)
-- [ ] move all __variables to .cc files
+- [/] move all __variables to .cc files
 - [x] implement cpuid (https://wiki.osdev.org/CPUID)
 - [x] remove term declarations in halt.hh instead of that do a function pointer for term::print, that would decouple the two systems completely (could even do something like a list of print function pointers that would get called after halt fires)
 - [ ] fix booting on real hardware
 - [x] tests (gtest?)
 - [ ] stack unwinding (callstack on assert)
-- [ ] save floating point registers on an interrupt
-- [ ] save SIMD registers on an interrupt
+- [x] save floating point registers on an interrupt
+- [x] save SIMD registers on an interrupt
 - [x] get random numbers for the seed in random.hh
-- [ ] should Array_View and Static_Array do bounds checking or not?
+- [x] should Array_View and Static_Array do bounds checking or not? They should
 - [x] String_Builder
 - [x] keep allocator on structures that allocate
 - [x] temporary storage + tprint/tcopy/talloc
 - [x] string RAII vs allocator swap (option 2; see docs/string-allocator-plan.md)
-- [ ] test defer freeing string (test that it is really freed)
+- [x] test defer freeing string (test that it is really freed)
 - [ ] fix halt::Backend (look at the todo there)
 - [ ] mark unallocated pages as read only
 - [x] RAII push_allocator(Allocator* allocator) that sets an allocator for the current scope
@@ -53,6 +59,10 @@ base layer:
 - [ ] query_capabilities on Allocator
 - [ ] set_temporary_allocator (also make it wrappable with Debug_Allocator)
 - [ ] extract programmable_interval_timer.hh from time.hh
+- [x] extract interrupts.hh vector ids to a constants.hh type of file (currently they are duplicated throughout the file)
+- [ ] somehow deduplicate all the declarations that are made per an interrupt vector in interrupts.hh
+- [ ] make the serial_port.hh implementation universal (nowadays serial is usually only available through PCI extension cards and we would have to enumarate those)
+- [ ] Send a deassert in SMP startup code (spec says it should be there)
 
 utils:
 - [ ] todo list generator (gather notes from source code and generate a stable
@@ -62,5 +72,6 @@ utils:
       features could be added here
 - [x] make the preprocessor output debug symbols based on the real paths, not the generated paths
 - [x] pretty enum printing (autogenerate value -> pretty enum value as string mappings)
+- [ ] generate enums out of defines with @enum. Or maybe the other way around, generate defines from an enum, idk yet (look at interrupts_constants.hh)
 - [ ] unfuck preprocessor (tokenizer?)
 - [ ] get rid of cmake (build.cc)
