@@ -1,3 +1,8 @@
+[ ] - not done
+[/] - cancelled
+[x] - done
+[-] - in progress
+
 graphics:
 - [x] double buffering
 - [x] transparency
@@ -8,7 +13,7 @@ graphics:
 - [x] sprite drawing
 - [x] move draw\_char draw\_text to other location
 - [x] draw_text_immediate for asserts and term::print
-- [ ] think of a better way of storing b,g,r channels, so we can both load rgb and use bgr elsewhere
+- [x] think of a better way of storing b,g,r channels, so we can both load rgb and use bgr elsewhere
 - [ ] draw tetris
 
 fonts:
@@ -29,7 +34,7 @@ base layer:
 - [ ] multicore
 - [x] serial
 - [x] fix early asserts (term must be initialized for asserts to output anything currently and we have asserts that are before the term::initialize)
-- [-] move all __variables to .cc files
+- [/] move all __variables to .cc files
 - [x] implement cpuid (https://wiki.osdev.org/CPUID)
 - [x] remove term declarations in halt.hh instead of that do a function pointer for term::print, that would decouple the two systems completely (could even do something like a list of print function pointers that would get called after halt fires)
 - [ ] fix booting on real hardware
