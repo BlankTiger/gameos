@@ -20,8 +20,14 @@ extern "C" auto ap_main(u32 cpu_index) -> void;
 
 namespace ap {
 
+alignas(64) inline Static_Array<volatile bool, acpi::MAX_CPUS> cpus_online;
+alignas(64) inline Static_Array<volatile bool, acpi::MAX_CPUS> cpus_frozen;
+
+// Stops all future interrupts and goes to sleep.
 force_inline auto freeze_cpu() -> void {
-    // Stops all future interrupts and goes to sleep.
+    auto idx = cpu_local::current().cpu_index;
+    cpus_frozen[idx] = true;
+    asm volatile("" ::: "memory");
     asm volatile("cli" ::: "memory");
     for (;;) asm volatile("hlt");
 }
@@ -248,15 +254,16 @@ auto copy_pointer_to_core_info(u32 apic_id) -> void {
     *addr_as<volatile psize*>(TRAMPOLINE_PHYSICAL_ADDRESS + SMP_OFFSET_CORE_INFO) = ptr_addr(&cpu_local::core_infos[apic_id]);
 }
 
-alignas(64) inline Static_Array<volatile bool, acpi::MAX_CPUS> cpus_online;
-
 auto initialize_aps() -> void {
     cpus_online.fill(false);
+    cpus_frozen.fill(false);
     // Mark BSP as online.
     cpus_online[0] = true;
 
     kstd_assert(smp_trampoline_size <= 0xF00, "This must fit for real mode to work.");
     kstd_assert(smp_trampoline_size > 0);
+
+    halt::set_pre_halt_hook(ap::request_stop_of_all_other_aps);
 
     copy_trampoline_code_to_the_expected_place();
     adjust_asm_label_offsets();

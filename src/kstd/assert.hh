@@ -4,15 +4,17 @@
 
 #include "basic.hh"
 
+namespace halt {
+using Halt_Print_Fn = auto (*)(char) -> void;
+using Pre_Halt_Hook = auto (*)() -> void;
+}
+
 #if HOSTED
 
 #include <cstdio>
 #include <cstdlib>
 
 namespace halt {
-
-using Pre_Halt_Hook = auto (*)() -> void;
-using Halt_Print_Fn = auto (*)(char) -> void;
 
 force_inline auto add_printer(Halt_Print_Fn) -> void {}
 
@@ -39,7 +41,6 @@ constexpr force_inline auto kstd_assert(
 
 namespace halt {
 
-using Halt_Print_Fn = auto (*)(char) -> void;
 constexpr auto MAX_HALT_PRINT_COUNT = 10;
 
 namespace hidden {
@@ -126,6 +127,7 @@ forever(const char* message, const std::source_location& location = std::source_
         hidden::pre_halt_hook();
     }
 
+    // @TODO(blanktiger): Maybe instead of all of these pre_halt_hook shenanigans just make panicking an atomic.
     if (hidden::panicking) {
         for (;;) asm volatile("hlt");
     }
@@ -143,6 +145,7 @@ forever(const char* message, const std::source_location& location = std::source_
     put_char('\n');
     flush();
 
+    asm volatile("cli" ::: "memory");
     for (;;) asm volatile("hlt");
 }
 

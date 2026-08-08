@@ -449,7 +449,7 @@ auto initialize() -> void {
         set_gate(SECONDARY_ATA,                 _isr_handle_secondary_ata);
 
         set_gate(LOCAL_APIC_TIMER,              _isr_handle_local_apic_timer);
-        set_gate(LOCAL_APIC_TLB_SHOOTDOWN,      _isr_handle_local_apic_spurious);
+        set_gate(LOCAL_APIC_TLB_SHOOTDOWN,      _isr_handle_local_apic_tlb_shootdown);
         set_gate(LOCAL_APIC_STOP,               _isr_handle_local_apic_stop);
         set_gate(LOCAL_APIC_SPURIOUS,           _isr_handle_local_apic_spurious);
     }

@@ -56,6 +56,8 @@ base layer:
 - [ ] extract programmable_interval_timer.hh from time.hh
 - [x] extract interrupts.hh vector ids to a constants.hh type of file (currently they are duplicated throughout the file)
 - [ ] somehow deduplicate all the declarations that are made per an interrupt vector in interrupts.hh
+- [ ] make the serial_port.hh implementation universal (nowadays serial is usually only available through PCI extension cards and we would have to enumarate those)
+- [ ] Send a deassert in SMP startup code (spec says it should be there)
 
 utils:
 - [ ] todo list generator (gather notes from source code and generate a stable
