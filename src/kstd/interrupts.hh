@@ -7,15 +7,16 @@
 #include "cpu_local.hh"
 #include "global_descriptors.hh"
 #include "halt_format.hh"
+#include "interrupts_constants.hh"
 #include "local_apic.hh"
 #include "low_level_io.hh"
 #include "programmable_interrupt_controller.hh"
 #include "ps2.hh"
 #include "smp_constants.hh"
-#include "interrupts_constants.hh"
 #include "string_builder.hh"
 #include "term.hh"
 #include "time.hh"
+#include "translation_lookaside_buffer.hh"
 
 // Forward declaration.
 namespace ioapic {
@@ -335,7 +336,7 @@ auto isr_handle_local_apic_stop() -> void {
 }
 
 auto isr_handle_local_apic_tlb_shootdown() -> void {
-    // @TODO(blanktiger): Implement.
+    const auto address = tlb::state.virtual_address.load(std::memory_order_acquire);
 }
 
 extern "C" auto isr_dispatch(Interrupt_Frame* frame) -> void {
