@@ -54,7 +54,8 @@ base layer:
 - [ ] query_capabilities on Allocator
 - [ ] set_temporary_allocator (also make it wrappable with Debug_Allocator)
 - [ ] extract programmable_interval_timer.hh from time.hh
-- [ ] extract interrupts.hh vector ids to a constants.hh type of file (currently they are duplicated throughout the file)
+- [x] extract interrupts.hh vector ids to a constants.hh type of file (currently they are duplicated throughout the file)
+- [ ] somehow deduplicate all the declarations that are made per an interrupt vector in interrupts.hh
 
 utils:
 - [ ] todo list generator (gather notes from source code and generate a stable
@@ -64,5 +65,6 @@ utils:
       features could be added here
 - [x] make the preprocessor output debug symbols based on the real paths, not the generated paths
 - [x] pretty enum printing (autogenerate value -> pretty enum value as string mappings)
+- [ ] generate enums out of defines with @enum. Or maybe the other way around, generate defines from an enum, idk yet (look at interrupts_constants.hh)
 - [ ] unfuck preprocessor (tokenizer?)
 - [ ] get rid of cmake (build.cc)

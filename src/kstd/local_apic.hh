@@ -7,6 +7,7 @@
 #include "pointer_utils.hh"
 #include "serial_format.hh"
 #include "time.hh"
+#include "interrupts_constants.hh"
 
 //
 // Local Advanced Programmable Interrupt Controller in xAPIC memory-mapped mode.
@@ -14,11 +15,6 @@
 // Register layouts follow Intel SDM Vol. 3 (Local APIC).
 //
 namespace lapic {
-
-// Interrupt Descriptor Table vectors for the local APIC.
-// These sit outside the 8259 remap window (32 through 47).
-constexpr u8 TIMER_INTERRUPT_VECTOR    = 64;
-constexpr u8 SPURIOUS_INTERRUPT_VECTOR = 255;
 
 // Byte offsets from the local APIC memory-mapped base.
 enum struct Register_Offset : u32 {
@@ -348,7 +344,7 @@ auto initialize_application_processor() -> void {
     write_register(
         Register_Offset::SPURIOUS_INTERRUPT_VECTOR,
         Spurious_Interrupt_Vector_Register {
-            .vector                                 = SPURIOUS_INTERRUPT_VECTOR,
+            .vector                                 = VECTOR_LOCAL_APIC_SPURIOUS,
             .apic_software_enable                   = 1,
             .focus_processor_checking               = 0,
             .reserved_mid                           = 0,
@@ -370,7 +366,7 @@ auto initialize_application_processor() -> void {
     write_register(
         Register_Offset::LOCAL_VECTOR_TABLE_TIMER,
         Local_Vector_Table_Timer_Register {
-            .vector          = TIMER_INTERRUPT_VECTOR,
+            .vector          = VECTOR_LOCAL_APIC_TIMER,
             .reserved_low    = 0,
             .delivery_status = 0,
             .reserved_mid    = 0,
@@ -404,7 +400,7 @@ auto initialize_bootstrap_processor() -> void {
     write_register(
         Register_Offset::SPURIOUS_INTERRUPT_VECTOR,
         Spurious_Interrupt_Vector_Register {
-            .vector                                 = SPURIOUS_INTERRUPT_VECTOR,
+            .vector                                 = VECTOR_LOCAL_APIC_SPURIOUS,
             .apic_software_enable                   = 1,
             .focus_processor_checking               = 0,
             .reserved_mid                           = 0,
@@ -428,7 +424,7 @@ auto initialize_bootstrap_processor() -> void {
     write_register(
         Register_Offset::LOCAL_VECTOR_TABLE_TIMER,
         Local_Vector_Table_Timer_Register {
-            .vector          = TIMER_INTERRUPT_VECTOR,
+            .vector          = VECTOR_LOCAL_APIC_TIMER,
             .reserved_low    = 0,
             .delivery_status = 0,
             .reserved_mid    = 0,
@@ -481,7 +477,7 @@ auto calibrate_and_start_timer(u32 frequency_hz) -> void {
     write_register(
         Register_Offset::LOCAL_VECTOR_TABLE_TIMER,
         Local_Vector_Table_Timer_Register {
-            .vector          = TIMER_INTERRUPT_VECTOR,
+            .vector          = VECTOR_LOCAL_APIC_TIMER,
             .reserved_low    = 0,
             .delivery_status = 0,
             .reserved_mid    = 0,
@@ -507,7 +503,7 @@ auto calibrate_and_start_timer(u32 frequency_hz) -> void {
     write_register(
         Register_Offset::LOCAL_VECTOR_TABLE_TIMER,
         Local_Vector_Table_Timer_Register {
-            .vector          = TIMER_INTERRUPT_VECTOR,
+            .vector          = VECTOR_LOCAL_APIC_TIMER,
             .reserved_low    = 0,
             .delivery_status = 0,
             .reserved_mid    = 0,
@@ -532,7 +528,7 @@ auto start_timer_periodic(u32 frequency_hz) -> void {
     write_register(
         Register_Offset::LOCAL_VECTOR_TABLE_TIMER,
         Local_Vector_Table_Timer_Register {
-            .vector          = TIMER_INTERRUPT_VECTOR,
+            .vector          = VECTOR_LOCAL_APIC_TIMER,
             .reserved_low    = 0,
             .delivery_status = 0,
             .reserved_mid    = 0,
