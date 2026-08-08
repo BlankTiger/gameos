@@ -11,6 +11,7 @@
 
 namespace halt {
 
+using Pre_Halt_Hook = auto (*)() -> void;
 using Halt_Print_Fn = auto (*)(char) -> void;
 
 force_inline auto add_printer(Halt_Print_Fn) -> void {}
@@ -47,9 +48,15 @@ namespace hidden {
     inline auto current_halt_print_count = 0;
     inline Halt_Print_Fn halt_print_fns[MAX_HALT_PRINT_COUNT];
 
+    inline Pre_Halt_Hook pre_halt_hook = nullptr;
+
     constexpr auto HALT_PRINT_BUF_SIZE = 1024;
     inline char    halt_print_buf[HALT_PRINT_BUF_SIZE];
     inline usize   halt_print_len = 0;
+}
+
+force_inline auto set_pre_halt_hook(Pre_Halt_Hook hook) -> void {
+    hidden::pre_halt_hook = hook;
 }
 
 // Buffers one message, then dumps full buffer to each backend in turn (serial first).
@@ -115,6 +122,10 @@ force_inline auto flush() -> void {
 
 [[noreturn]] static auto
 forever(const char* message, const std::source_location& location = std::source_location::current()) -> void {
+    if (hidden::pre_halt_hook) {
+        hidden::pre_halt_hook();
+    }
+
     if (hidden::panicking) {
         for (;;) asm volatile("hlt");
     }
