@@ -22,6 +22,12 @@ namespace ioapic {
     auto get_bsp_owns_device_irqs() -> bool;
 }
 
+// Forward declaration.
+namespace ap {
+    auto freeze_cpu() -> void;
+    auto is_stop_requested() -> bool;
+}
+
 namespace idt {
 
 union Gate_Type_Attributes {
@@ -293,6 +299,13 @@ auto isr_handle_divide_error() -> void {
     halt::forever("Try not dividing by 0 m8.. glhf");
 }
 
+auto isr_handle_non_maskable_interrupt() -> void {
+    if (ap::is_stop_requested()) {
+        ap::freeze_cpu();
+    }
+    halt::forever("Unexpected Non-Maskable Interrupt");
+}
+
 auto isr_handle_double_fault(u64 error) -> void {
     auto error_message = csprint(
         &hidden::emergency_error_message_allocator,
@@ -318,9 +331,7 @@ auto isr_handle_local_apic_spurious() -> void {
 
 auto isr_handle_local_apic_stop() -> void {
     lapic::signal_end_of_interrupt();
-    // Stops all future interrupts and goes to sleep.
-    asm volatile("cli" ::: "memory");
-    for (;;) asm volatile("hlt");
+    ap::freeze_cpu();
 }
 
 auto isr_handle_local_apic_tlb_shootdown() -> void {
@@ -334,6 +345,7 @@ extern "C" auto isr_dispatch(Interrupt_Frame* frame) -> void {
     using enum Interrupt_Vector_Type;
     switch (type) {
         case DIVIDE_ERROR:             isr_handle_divide_error();                break;
+        case NON_MASKABLE_INTERRUPT:   isr_handle_non_maskable_interrupt();      break;
         case DOUBLE_FAULT:             isr_handle_double_fault(error);           break;
         case PS2_KEYBOARD:             ps2::isr_handle_ps2_keyboard();           break;
         case PS2_MOUSE:                ps2::isr_handle_ps2_mouse();              break;

@@ -8,6 +8,7 @@
 #include "cstring.hh"
 #include "global_descriptors.hh"
 #include "interrupts.hh"
+#include "interrupts_constants.hh"
 #include "local_apic.hh"
 #include "serial_format.hh"
 #include "smp_constants.hh"
@@ -18,6 +19,60 @@
 extern "C" auto ap_main(u32 cpu_index) -> void;
 
 namespace ap {
+
+force_inline auto freeze_cpu() -> void {
+    // Stops all future interrupts and goes to sleep.
+    asm volatile("cli" ::: "memory");
+    for (;;) asm volatile("hlt");
+}
+
+namespace hidden {
+    //
+    // @SAFETY: No need for an atomic as eventually all the APs will get to read the correct
+    //          value and go to sleep.
+    //
+    inline volatile bool stop_requested = false;
+}
+
+force_inline auto is_stop_requested() -> bool {
+    return hidden::stop_requested;
+}
+
+force_inline auto request_stop_of_all_other_aps() -> void {
+    hidden::stop_requested = true;
+    asm volatile("" ::: "memory");  // Compiler barrier (release semantics).
+
+    using namespace lapic;
+    static constexpr Interrupt_Command_Register_Low STOP_IPI = {
+        .vector                = VECTOR_LOCAL_APIC_STOP,
+        .delivery_mode         = Delivery_Mode::FIXED,
+        .destination_mode      = Destination_Mode::PHYSICAL,
+        .delivery_pending      = 0,
+        .reserved_bit_13       = 0,
+        .level                 = Level::ASSERT,
+        .trigger_mode          = Trigger_Mode::EDGE,
+        .reserved_mid          = 0,
+        .destination_shorthand = Destination_Shorthand::ALL_EXCLUDING_SELF,
+        .reserved_high         = 0,
+    };
+
+    static constexpr Interrupt_Command_Register_Low NMI_BACKUP = {
+        .vector                = 0,
+        .delivery_mode         = Delivery_Mode::NON_MASKABLE_INTERRUPT,
+        .destination_mode      = Destination_Mode::PHYSICAL,
+        .delivery_pending      = 0,
+        .reserved_bit_13       = 0,
+        .level                 = Level::ASSERT,
+        .trigger_mode          = Trigger_Mode::EDGE,
+        .reserved_mid          = 0,
+        .destination_shorthand = Destination_Shorthand::ALL_EXCLUDING_SELF,
+        .reserved_high         = 0,
+    };
+
+    send_inter_processor_interrupt(0, STOP_IPI);
+    // To be extra sure it won't get ignored.
+    send_inter_processor_interrupt(0, NMI_BACKUP);
+}
 
 extern "C" u8 smp_trampoline_start[];
 extern "C" u8 smp_trampoline_end[];
@@ -314,5 +369,10 @@ extern "C" auto ap_main(u32 cpu_index) -> void {
 
     serial::println("AP online index=% apic_id=%", cpu_index, lapic::local_apic_id());
 
-    for (;;) asm volatile("hlt"); // Wait for work.
+    for (;;) {
+        if (ap::is_stop_requested()) {
+            ap::freeze_cpu();
+        }
+        asm volatile("hlt"); // Wait for work.
+    }
 }
