@@ -50,6 +50,15 @@ struct string {
         return data[index];
     }
 
+    force_inline auto slice(usize index, usize count) const -> string {
+        if (index >= size)
+            return {};
+
+        auto remaining = size - index;
+        auto length    = count > remaining ? remaining : count;
+        return string{data + index, length};
+    }
+
     auto operator == (const string& other) const -> bool {
         if (size != other.size) return false;
         for (usize i = 0; i < size; ++i) {
@@ -167,6 +176,44 @@ TEST(string, bool_is_content_presence) {
     EXPECT_FALSE(static_cast<bool>(string(static_cast<const char*>(nullptr))));
     EXPECT_FALSE(static_cast<bool>(string("x", 0)));
     EXPECT_TRUE(static_cast<bool>(string("x")));
+}
+
+TEST(string, slice_returns_requested_range) {
+    string s = "hello";
+
+    auto part = s.slice(1, 3);
+
+    EXPECT_EQ(part, "ell");
+    EXPECT_EQ(part.data, s.data + 1);
+    EXPECT_EQ(part.size, 3);
+}
+
+TEST(string, slice_clamps_count_and_handles_out_of_bounds_index) {
+    string s = "hello";
+
+    EXPECT_EQ(s.slice(3, 20), "lo");
+    EXPECT_EQ(s.slice(1, 0).size, 0);
+    EXPECT_EQ(s.slice(s.size, 1).size, 0);
+    EXPECT_EQ(s.slice(s.size + 1, 1).size, 0);
+}
+
+TEST(string, slice_handles_empty_source) {
+    string s;
+
+    auto part = s.slice(0, 1);
+
+    EXPECT_EQ(part.data, nullptr);
+    EXPECT_EQ(part.size, 0);
+}
+
+TEST(string, slice_is_non_owning) {
+    char text[] = "hello";
+    string s{text, kstd_strlen(text)};
+
+    auto part = s.slice(1, 1);
+    part.data[0] = 'a';
+
+    EXPECT_EQ(s, "hallo");
 }
 
 #endif

@@ -33,6 +33,14 @@ struct Array_View {
     auto elements()       -> T*       { return data; }
     auto elements() const -> const T* { return data; }
 
+    force_inline auto slice(usize index, usize count) -> Array_View<T> {
+        return Array_View<T>{N, data}.slice(index, count);
+    }
+
+    force_inline auto slice(usize index, usize count) const -> Array_View<const T> {
+        return Array_View<const T>{N, data}.slice(index, count);
+    }
+
     // Byte views can be reinterpreted as text. Defined on this side (rather
     // than as a string constructor) so string.hh does not need to know about arrays.
     // This header includes it for its own asserts.
@@ -61,6 +69,24 @@ struct Array_View<T, DYNAMIC_EXTENT> {
 
     auto elements()       -> T*       { return data; }
     auto elements() const -> const T* { return data; }
+
+    force_inline auto slice(usize index, usize count) -> Array_View<T> {
+        if (index >= size)
+            return {0, data};
+
+        auto remaining = size - index;
+        auto length    = count > remaining ? remaining : count;
+        return {length, data + index};
+    }
+
+    force_inline auto slice(usize index, usize count) const -> Array_View<const T> {
+        if (index >= size)
+            return {0, data};
+
+        auto remaining = size - index;
+        auto length    = count > remaining ? remaining : count;
+        return {length, data + index};
+    }
 
     explicit operator string() const requires std::is_same_v<std::remove_const_t<T>, u8> {
         return string(reinterpret_cast<const char*>(data), size);
@@ -93,6 +119,14 @@ struct Static_Array {
 
     auto elements()       -> T*       { return data; }
     auto elements() const -> const T* { return data; }
+
+    force_inline auto slice(usize index, usize count) -> Array_View<T> {
+        return Array_View<T, N>{data}.slice(index, count);
+    }
+
+    force_inline auto slice(usize index, usize count) const -> Array_View<const T> {
+        return Array_View<const T, N>{data}.slice(index, count);
+    }
 
     operator Array_View<T, N>() { return Array_View<T, N>{data}; }
     operator Array_View<T>()    { return Array_View<T>{size, data}; }
@@ -267,6 +301,14 @@ struct Bounded_Array {
 
     auto elements()       -> T*       { return slot(0); }
     auto elements() const -> const T* { return slot(0); }
+
+    force_inline auto slice(usize index, usize count) -> Array_View<T> {
+        return Array_View<T>{size, slot(0)}.slice(index, count);
+    }
+
+    force_inline auto slice(usize index, usize count) const -> Array_View<const T> {
+        return Array_View<const T>{size, slot(0)}.slice(index, count);
+    }
 
     operator Array_View<T>() { return Array_View<T>{size, slot(0)}; }
 
@@ -518,6 +560,14 @@ struct Array {
     auto elements()       ->       T* { return data; }
     auto elements() const -> const T* { return data; }
 
+    force_inline auto slice(usize index, usize count) -> Array_View<T> {
+        return Array_View<T>{size, data}.slice(index, count);
+    }
+
+    force_inline auto slice(usize index, usize count) const -> Array_View<const T> {
+        return Array_View<const T>{size, data}.slice(index, count);
+    }
+
     operator Array_View<T>() { return Array_View<T>{size, data}; }
 
     ARRAY_ITERATOR()
@@ -744,6 +794,106 @@ TEST(Array, passes_implicitly_to_function_taking_array_view) {
     };
 
     EXPECT_EQ(sum(arr), 9);
+}
+
+TEST(Array_View, slice_returns_requested_range) {
+    Static_Array values{{1, 2, 3, 4}};
+    Array_View<int> view = values;
+
+    auto part = view.slice(1, 2);
+
+    EXPECT_EQ(part.size, 2);
+    EXPECT_EQ(part[0], 2);
+    EXPECT_EQ(part[1], 3);
+
+    part[0] = 9;
+    EXPECT_EQ(values[1], 9);
+}
+
+TEST(Array_View, slice_clamps_count_and_handles_out_of_bounds_index) {
+    Static_Array values{{1, 2, 3}};
+    Array_View<int, values.size> view{values.data};
+
+    EXPECT_EQ(view.slice(1, 20).size, 2);
+    EXPECT_EQ(view.slice(1, 0).size, 0);
+    EXPECT_EQ(view.slice(3, 1).size, 0);
+    EXPECT_EQ(view.slice(4, 1).size, 0);
+}
+
+TEST(Array_View, const_slice_returns_const_view) {
+    Static_Array values{{1, 2}};
+    const Array_View<int> view = values;
+
+    auto part = view.slice(0, 1);
+
+    EXPECT_EQ(part.size, 1);
+    EXPECT_EQ(part[0], 1);
+}
+
+TEST(Static_Array, slice_forwards_to_view) {
+    Static_Array<int, 3> arr{{1, 2, 3}};
+
+    auto part = arr.slice(1, 2);
+
+    EXPECT_EQ(part.size, 2);
+    EXPECT_EQ(part[0], 2);
+    EXPECT_EQ(part[1], 3);
+}
+
+TEST(Static_Array, const_slice_returns_const_view) {
+    Static_Array<int, 3> arr{{1, 2, 3}};
+    const auto& const_arr = arr;
+
+    auto part = const_arr.slice(1, 1);
+
+    EXPECT_EQ(part.size, 1);
+    EXPECT_EQ(part[0], 2);
+}
+
+TEST(Bounded_Array, slice_forwards_to_view) {
+    Bounded_Array<int, 3> arr;
+    arr.push_back(1);
+    arr.push_back(2);
+
+    auto part = arr.slice(1, 2);
+
+    EXPECT_EQ(part.size, 1);
+    EXPECT_EQ(part[0], 2);
+}
+
+TEST(Bounded_Array, const_slice_returns_const_view) {
+    Bounded_Array<int, 3> arr;
+    arr.push_back(1);
+    arr.push_back(2);
+    const auto& const_arr = arr;
+
+    auto part = const_arr.slice(1, 1);
+
+    EXPECT_EQ(part.size, 1);
+    EXPECT_EQ(part[0], 2);
+}
+
+TEST(Array, slice_forwards_to_view) {
+    Array<int> arr;
+    arr.push_back(1);
+    arr.push_back(2);
+
+    auto part = arr.slice(1, 2);
+
+    EXPECT_EQ(part.size, 1);
+    EXPECT_EQ(part[0], 2);
+}
+
+TEST(Array, const_slice_returns_const_view) {
+    Array<int> arr;
+    arr.push_back(1);
+    arr.push_back(2);
+    const auto& const_arr = arr;
+
+    auto part = const_arr.slice(1, 1);
+
+    EXPECT_EQ(part.size, 1);
+    EXPECT_EQ(part[0], 2);
 }
 
 #endif
