@@ -94,7 +94,7 @@ smp_trampoline_lm64:
     /* Set up the APs stack */
     mov $(TRAMPOLINE_PHYSICAL_ADDRESS + SMP_OFFSET_STACK), %rbx
     mov (%rbx), %rsp
-    and $~AP_STACK_ALIGNMENT, %rsp /* Make sure it's correctly aligned */
+    and $~(AP_STACK_ALIGNMENT - 1), %rsp /* Make sure it's correctly aligned */
     breadcrumb SMP_BREADCRUMB_STACK
 
     mov $(TRAMPOLINE_PHYSICAL_ADDRESS + SMP_OFFSET_CORE_INFO), %rbx

@@ -18,6 +18,7 @@
 #include "kstd/random.hh"
 #include "kstd/serial_format.hh"
 #include "kstd/term.hh"
+#include "kstd/threads.hh"
 #include "kstd/time.hh"
 #include "kstd/translation_lookaside_buffer.hh"
 
@@ -76,7 +77,9 @@ inline auto kernel_startup(u32 magic, const boot::Multiboot2_Info* mbi) -> void 
     ioapic::initialize();
     lapic::stop_listening_to_pic_by_masking_lint0();
 
+    threads::initialize();
     ap::initialize_aps();
+    threads::smoke_test();
 
     krand::initialize();
 }

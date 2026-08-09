@@ -13,11 +13,10 @@
 #include "local_apic.hh"
 #include "serial_format.hh"
 #include "smp_constants.hh"
+#include "threads.hh"
 #include "time.hh"
 #include "pointer_utils.hh"
 #include "string_builder.hh"
-
-extern "C" auto ap_main(u32 cpu_index) -> void;
 
 namespace ap {
 
@@ -223,12 +222,45 @@ auto copy_boot_pml4_to_the_expected_place() -> void {
     *addr_as<volatile psize*>(TRAMPOLINE_PHYSICAL_ADDRESS + SMP_OFFSET_CR3) = boot_pml4_physical_address;
 }
 
+constexpr auto STACK_POINTER_ADDR = TRAMPOLINE_PHYSICAL_ADDRESS + SMP_OFFSET_STACK;
+
+auto ap_main(u32 cpu_index) -> void {
+    serial::println("AP index=% started", cpu_index);
+    ap::cpus_online[cpu_index] = true;
+
+    // Switch away from the temporary GDT to the kernel GDT.
+    gdt::load_shared();
+
+    // Load kernel IDT (table already built by the BSP).
+    idt::load();
+
+    auto* kernel_top = addr_as<u8*>(ap::STACK_POINTER_ADDR);
+    cpu_local::initialize_application_processor(cpu_index, kernel_top);
+
+    kstd_assert(cpu_local::current().cpu_index == cpu_index);
+
+    lapic::initialize_application_processor();
+    lapic::start_timer_periodic(ktime::TICK_RATE);
+
+    idt::enable_interrupts();
+
+    serial::println("AP online index=% apic_id=%", cpu_index, lapic::local_apic_id());
+
+    for (;;) {
+        if (ap::is_stop_requested()) {
+            ap::freeze_cpu();
+        }
+
+        if (!threads::idle_poll()) {
+            asm volatile("hlt"); // Wait for work.
+        }
+    }
+}
+
 auto set_ap_main_as_offset_entry() -> void {
     auto ap_main_address = ptr_addr(ap_main);
     *addr_as<volatile psize*>(TRAMPOLINE_PHYSICAL_ADDRESS + SMP_OFFSET_ENTRY) = ap_main_address;
 }
-
-constexpr auto STACK_POINTER_ADDR = TRAMPOLINE_PHYSICAL_ADDRESS + SMP_OFFSET_STACK;
 
 auto get_stack_pointer() -> u8* {
     return addr_as<u8*>(STACK_POINTER_ADDR);
@@ -352,32 +384,3 @@ auto initialize_aps() -> void {
 
 }
 
-extern "C" auto ap_main(u32 cpu_index) -> void {
-    serial::println("AP index=% started", cpu_index);
-    ap::cpus_online[cpu_index] = true;
-
-    // Switch away from the temporary GDT to the kernel GDT.
-    gdt::load_shared();
-
-    // Load kernel IDT (table already built by the BSP).
-    idt::load();
-
-    auto* kernel_top = addr_as<u8*>(ap::STACK_POINTER_ADDR);
-    cpu_local::initialize_application_processor(cpu_index, kernel_top);
-
-    kstd_assert(cpu_local::current().cpu_index == cpu_index);
-
-    lapic::initialize_application_processor();
-    lapic::start_timer_periodic(ktime::TICK_RATE);
-
-    idt::enable_interrupts();
-
-    serial::println("AP online index=% apic_id=%", cpu_index, lapic::local_apic_id());
-
-    for (;;) {
-        if (ap::is_stop_requested()) {
-            ap::freeze_cpu();
-        }
-        asm volatile("hlt"); // Wait for work.
-    }
-}
