@@ -555,7 +555,7 @@ TEST(fmt, leading_zero_numbered_arg) {
 
 TEST(fmt, out_of_range_index_asserts) {
     fmt_test::Capture_Backend backend;
-    EXPECT_DEATH(fmt::print(backend, "%5 %", "a"), "");
+    EXPECT_DEATH(fmt::print(backend, "%5 %", "a"), "format arg index out of range");
 }
 
 TEST(fmt, char_31_is_literal_percent) {

@@ -160,7 +160,7 @@ TEST(string, equality_with_cstring) {
 
 TEST(string, index_out_of_bounds_assert) {
     string s = "abc";
-    EXPECT_DEATH(s[3], "");
+    EXPECT_DEATH(s[3], "index out of bounds");
 }
 
 TEST(string, iterator) {

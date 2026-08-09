@@ -157,7 +157,7 @@ TEST(Static_Array, elements_returns_data_pointer) {
 TEST(Static_Array, out_of_bounds_asserts) {
     Static_Array<int, 2> arr{{1, 2}};
 
-    EXPECT_DEATH(arr[2], "");
+    EXPECT_DEATH(arr[2], "index out of bounds");
 }
 
 TEST(Static_Array, converts_to_static_array_view) {
@@ -288,13 +288,13 @@ struct Bounded_Array {
     }
 
     auto push_back(T&& element) -> void {
-        kstd_assert(size < MAX_SIZE);
+        kstd_assert(size < MAX_SIZE, "push_back on full Bounded_Array");
         ::new (slot(size)) T(std::move(element));
         ++size;
     }
 
     auto push_back(const T& element) -> void {
-        kstd_assert(size < MAX_SIZE);
+        kstd_assert(size < MAX_SIZE, "push_back on full Bounded_Array");
         ::new (slot(size)) T(element);
         ++size;
     }
@@ -348,7 +348,7 @@ TEST(Bounded_Array, push_back_past_max_size_asserts) {
     arr.push_back(1);
     arr.push_back(2);
 
-    EXPECT_DEATH(arr.push_back(3), "");
+    EXPECT_DEATH(arr.push_back(3), "push_back on full Bounded_Array");
 }
 
 TEST(Bounded_Array, converts_to_array_view) {
@@ -719,7 +719,7 @@ TEST(Array, out_of_bounds_asserts) {
 
     arr.push_back(42);
 
-    EXPECT_DEATH(arr[1], "");
+    EXPECT_DEATH(arr[1], "index out of bounds");
 }
 
 TEST(Array, move_constructor_transfers_ownership) {
