@@ -22,6 +22,10 @@
 
 namespace threads {
 
+using Thread_Procedure = auto (*)(void*) -> void;
+
+namespace hidden {
+
 struct Context {
     u64 rbx, rbp, r12, r13, r14, r15;
     u64 rsp, rip;
@@ -38,8 +42,6 @@ static_assert(offsetof(Context, rsp) == CONTEXT_SWITCH_OFFSET_RSP);
 static_assert(offsetof(Context, rip) == CONTEXT_SWITCH_OFFSET_RIP);
 
 extern "C" auto threads_context_switch(Context* previous, Context* next) -> void;
-
-using Thread_Procedure = auto (*)(void*) -> void;
 
 enum struct State : u8 {
     FREE,
@@ -100,6 +102,8 @@ struct Thread {
 
 static_assert(std::atomic<State>::is_always_lock_free);
 
+}
+
 template <typename Result_Type>
 struct Thread_Handle {
     u32 index;
@@ -107,19 +111,24 @@ struct Thread_Handle {
     bool operator == (const Thread_Handle&) const = default;
 };
 
-inline Static_Array<Thread, THREAD_MAX_COUNT> threads;
-inline Ring_Buffer<u32,     THREAD_MAX_COUNT> ready_queue;
-inline synchronization::Spinlock ready_lock;
+namespace hidden {
+    inline Static_Array<Thread, THREAD_MAX_COUNT> threads;
+    inline Ring_Buffer<u32,     THREAD_MAX_COUNT> ready_queue;
+    inline synchronization::Spinlock ready_lock;
 
-inline Static_Array<Context, acpi::MAX_CPUS> idle_contexts;
-inline Static_Array<Thread*, acpi::MAX_CPUS> current_threads;
+    inline Static_Array<Context, acpi::MAX_CPUS> idle_contexts;
+    inline Static_Array<Thread*, acpi::MAX_CPUS> current_threads;
+}
 
 auto initialize() -> void {
+    using namespace hidden;
     threads.fill({});
     current_threads.fill(nullptr);
 
     ready_queue.clear();
 }
+
+namespace hidden {
 
 auto finish_current() -> void {
     const auto cpu = cpu_local::current().cpu_index;
@@ -202,7 +211,10 @@ auto create_thread(
     return {.index = handle};
 }
 
+}
+
 [[nodiscard]] auto spawn(Thread_Procedure procedure, void* data, u64 stack_size = THREAD_STACK_SIZE) -> Thread_Handle<void> {
+    using namespace hidden;
     auto* allocator = mem::resolve_allocator();
     auto* stack = allocator->alloc(stack_size, AP_STACK_ALIGNMENT);
     kstd_assert(stack != nullptr, "Thread stack allocation failed");
@@ -224,6 +236,7 @@ auto create_thread(
 }
 
 auto yield() -> void {
+    using namespace hidden;
     auto cpu = cpu_local::current().cpu_index;
 
     Thread* current;
@@ -247,6 +260,7 @@ auto yield() -> void {
 }
 
 auto idle_poll() -> bool {
+    using namespace hidden;
     auto cpu = cpu_local::current().cpu_index;
 
     u32 handle;
@@ -273,6 +287,8 @@ auto idle_poll() -> bool {
 //
 // Typed APIs.
 //
+
+namespace hidden {
 
 template <typename Procedure, typename... Arguments>
 using Procedure_Result_Type = std::invoke_result_t<Procedure&, std::decay_t<Arguments>&...>;
@@ -330,10 +346,13 @@ concept Typed_Procedure =
     std::invocable<Procedure&, std::decay_t<Arguments>&...> &&
     !std::is_void_v<Procedure_Result_Type<Procedure, Arguments...>>;
 
+}
+
 // @TODO(blanktiger): Allow specifying thread parameters as the last argument (do an overload like in format.hh).
 template <typename Procedure, typename... Arguments>
-requires Typed_Procedure<Procedure, Arguments...>
-auto spawn(Procedure procedure, Arguments&&... args) -> Thread_Handle<Procedure_Result_Type<Procedure, Arguments...>> {
+requires hidden::Typed_Procedure<Procedure, Arguments...>
+auto spawn(Procedure procedure, Arguments&&... args) -> Thread_Handle<hidden::Procedure_Result_Type<Procedure, Arguments...>> {
+    using namespace hidden;
     using Result_Type = Procedure_Result_Type<Procedure, Arguments...>;
     static_assert(!std::is_void_v<Result_Type>);
     static_assert(!std::is_reference_v<Result_Type>);
@@ -380,6 +399,7 @@ auto spawn(Procedure procedure, Arguments&&... args) -> Thread_Handle<Procedure_
 
 template <typename Result_Type>
 auto join(Thread_Handle<Result_Type> handle) -> Result_Type {
+    using namespace hidden;
     kstd_assert(handle.index < THREAD_MAX_COUNT, "Invalid typed thread handle");
 
     const auto cpu = cpu_local::current().cpu_index;
