@@ -2,6 +2,11 @@
 
 #include <atomic>
 #include <cstddef>
+#include <functional>
+#include <new>
+#include <tuple>
+#include <type_traits>
+#include <utility>
 
 #include "advanced_configuration_and_power_interface.hh"
 #include "allocator.hh"
@@ -50,6 +55,10 @@ struct Thread {
     void*            stack{};
     u64              stack_size{};
     mem::Allocator*  allocator{};
+    void*            typed_control{};
+    void*            typed_result{};
+    auto (*typed_run)(void*) -> void{};
+    auto (*typed_destroy)(void*) -> void{};
     State            state = State::FREE;
 };
 
@@ -84,15 +93,17 @@ auto thread_start() -> void {
     auto cpu = cpu_local::current().cpu_index;
     auto* thread = current_threads[cpu];
 
-    thread->procedure(thread->argument);
+    if (thread->typed_run != nullptr)
+        thread->typed_run(thread->typed_control);
+    else
+        thread->procedure(thread->argument);
 
     finish_current();
 
     unreachable("finish_current must never return");
 }
 
-// @TODO(blanktiger): Handle types.
-[[nodiscard]] auto spawn(Thread_Procedure procedure, void* data, u64 stack_size = THREAD_STACK_SIZE) -> u32 {
+auto create_thread(Thread_Procedure procedure, void* data, u64 stack_size, bool enqueue) -> u32 {
     auto guard = ready_lock.scoped_irq_lock();
 
     u32 handle = THREAD_MAX_COUNT;
@@ -125,9 +136,14 @@ auto thread_start() -> void {
     thread.argument    = data;
     thread.state       = State::READY;
 
-    ready_queue.push_back(handle);
+    if (enqueue)
+        ready_queue.push_back(handle);
 
     return handle;
+}
+
+[[nodiscard]] auto spawn(Thread_Procedure procedure, void* data, u64 stack_size = THREAD_STACK_SIZE) -> u32 {
+    return create_thread(procedure, data, stack_size, true);
 }
 
 auto yield() -> void {
@@ -186,7 +202,7 @@ auto idle_poll() -> bool {
 // the core configuration in a way that doesn't hinder performance and is
 // easy/intuitive to use.
 //
-auto join(u32 handle) -> void {
+auto wait_for_completion(u32 handle) -> void {
     // @TODO(blanktiger): Make state atomic or something like that, currently there is a race here.
     kstd_assert(handle < THREAD_MAX_COUNT, "Invalid thread handle");
 
@@ -204,19 +220,132 @@ auto join(u32 handle) -> void {
         }
     }
 
-    // Task is done. Reclaim resources.
-    {
-        auto guard = ready_lock.scoped_irq_lock();
-
-        auto& thread = threads[handle];
-        thread.allocator->free(thread.stack, thread.stack_size, AP_STACK_ALIGNMENT);
-        thread = {};
-    }
 }
 
-struct Yield_Test_Args {
-    u32 id;
+auto join(u32 handle) -> void {
+    wait_for_completion(handle);
+
+    auto guard = ready_lock.scoped_irq_lock();
+    auto& thread = threads[handle];
+    kstd_assert(thread.typed_control == nullptr, "Use handle-based join for result threads");
+    thread.allocator->free(thread.stack, thread.stack_size, AP_STACK_ALIGNMENT);
+    thread = {};
+}
+
+
+//
+// Typed APIs.
+//
+
+template <typename Result_Type>
+struct Thread_Handle {
+    u32 index;
 };
+
+template <typename Procedure, typename... Arguments>
+using Procedure_Result_Type = std::invoke_result_t<Procedure&, std::decay_t<Arguments>&...>;
+
+template <typename Procedure, typename Result_Type, typename... Arguments>
+struct Typed_Control {
+    Procedure procedure;
+    std::tuple<std::decay_t<Arguments>...> arguments;
+    alignas(Result_Type) u8 result_storage[sizeof(Result_Type)];
+    bool result_ready = false;
+
+    auto result() -> Result_Type* {
+        return reinterpret_cast<Result_Type*>(result_storage);
+    }
+};
+
+template <typename Procedure, typename Result_Type, typename... Arguments>
+auto run_typed_control(void* raw) -> void {
+    using Control = Typed_Control<Procedure, Result_Type, Arguments...>;
+    auto& control = *static_cast<Control*>(raw);
+
+    new (control.result_storage) Result_Type(std::apply(
+        [&](auto&... arguments) -> Result_Type {
+            return std::invoke(control.procedure, arguments...);
+        },
+        control.arguments
+    ));
+    control.result_ready = true;
+}
+
+template <typename Procedure, typename Result_Type, typename... Arguments>
+auto destroy_typed_control(void* raw) -> void {
+    using Control = Typed_Control<Procedure, Result_Type, Arguments...>;
+    auto* control = static_cast<Control*>(raw);
+
+    if (control->result_ready)
+        control->result()->~Result_Type();
+    control->~Control();
+    mem::resolve_allocator()->free(control, sizeof(Control), alignof(Control));
+}
+
+// @TODO(blanktiger): Allow specifying thread parameters as the last argument (do an overload like in format.hh).
+template <typename Procedure, typename... Arguments>
+requires (
+    std::invocable<Procedure&, std::decay_t<Arguments>&...> &&
+    !std::is_void_v<Procedure_Result_Type<Procedure, Arguments...>>
+)
+auto spawn(Procedure procedure, Arguments&&... args)
+    -> Thread_Handle<Procedure_Result_Type<Procedure, Arguments...>> {
+    using Result_Type = Procedure_Result_Type<Procedure, Arguments...>;
+    static_assert(!std::is_void_v<Result_Type>);
+    static_assert(!std::is_reference_v<Result_Type>);
+
+    using Control = Typed_Control<Procedure, Result_Type, Arguments...>;
+    auto* control = static_cast<Control*>(
+        mem::resolve_allocator()->alloc(sizeof(Control), alignof(Control))
+    );
+    kstd_assert(control != nullptr, "Typed thread control allocation failed");
+
+    new (control) Control {
+        .procedure = std::move(procedure),
+        .arguments = std::tuple<std::decay_t<Arguments>...>(
+            std::forward<Arguments>(args)...
+        ),
+        .result_storage = {},
+        .result_ready = false,
+    };
+
+    auto handle = create_thread(nullptr, nullptr, THREAD_STACK_SIZE, false);
+    auto& thread = threads[handle];
+    thread.typed_control = control;
+    thread.typed_result = control->result_storage;
+    thread.typed_run = &run_typed_control<Procedure, Result_Type, Arguments...>;
+    thread.typed_destroy = &destroy_typed_control<Procedure, Result_Type, Arguments...>;
+
+    {
+        auto guard = ready_lock.scoped_irq_lock();
+        kstd_assert(!ready_queue.full(), "Ready queue full");
+        ready_queue.push_back(handle);
+    }
+
+    return Thread_Handle<Result_Type>{.index = handle};
+}
+
+template <typename Result_Type>
+auto join(Thread_Handle<Result_Type> handle) -> Result_Type {
+    kstd_assert(handle.index < THREAD_MAX_COUNT, "Invalid typed thread handle");
+    wait_for_completion(handle.index);
+
+    auto guard = ready_lock.scoped_irq_lock();
+    auto& thread = threads[handle.index];
+    kstd_assert(thread.state == State::DONE, "Typed thread is not done");
+    kstd_assert(thread.typed_control != nullptr, "Thread is not typed");
+    kstd_assert(thread.typed_result != nullptr, "Thread has no typed result");
+    kstd_assert(thread.typed_destroy != nullptr, "Thread has no typed destructor");
+
+    auto* result = static_cast<Result_Type*>(thread.typed_result);
+    Result_Type value = std::move(*result);
+
+    thread.typed_destroy(thread.typed_control);
+    thread.allocator->free(thread.stack, thread.stack_size, AP_STACK_ALIGNMENT);
+    thread = {};
+
+    return value;
+}
 
 auto smoke_test() -> void {
     // Will assert if we leaked anything in this smoke test.
@@ -241,20 +370,20 @@ auto smoke_test() -> void {
 
     // Verify yielding allows for switching tasks on the same cores.
     {
-        const auto yield_test_proc = [](void* data) -> void {
-            auto* args = reinterpret_cast<Yield_Test_Args*>(data);
+        const auto yield_test_proc = [](void* u32_id) -> void {
+            auto id = *static_cast<u32*>(u32_id);
 
             for (u32 step = 0; step < 3; ++step) {
-                serial::println("yield test task=% step=%", args->id, step);
+                serial::println("yield test task=% step=%", id, step);
                 if (step != 2) yield();
             }
         };
 
-        Yield_Test_Args args_a{.id = 1};
-        Yield_Test_Args args_b{.id = 2};
+        u32 id_a = 1;
+        u32 id_b = 2;
 
-        auto thread_a = spawn(yield_test_proc, &args_a);
-        auto thread_b = spawn(yield_test_proc, &args_b);
+        auto thread_a = spawn(yield_test_proc, &id_a);
+        auto thread_b = spawn(yield_test_proc, &id_b);
 
         join(thread_a);
         join(thread_b);
@@ -275,7 +404,22 @@ auto smoke_test() -> void {
     }
 
     {
+        const auto typed_test_sum_proc = [](u32 start, u32 end) -> u64 {
+            u64 sum = 0;
+            for (u32 index = start; index < end; ++index) {
+                sum += index;
+            }
+            return sum;
+        };
 
+        auto thread_a = spawn(typed_test_sum_proc, 1, 3);
+        auto thread_b = spawn(typed_test_sum_proc, 2, 3);
+
+        auto result_a = join(thread_a);
+        auto result_b = join(thread_b);
+
+        kstd_assert(result_a == 3);
+        kstd_assert(result_b == 2);
     }
 }
 
