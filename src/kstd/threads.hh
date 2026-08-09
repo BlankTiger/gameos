@@ -10,6 +10,7 @@
 #include "assert.hh"
 #include "basic.hh"
 #include "cpu_local.hh"
+#include "ring_buffer.hh"
 #include "smp_constants.hh"
 #include "synchronization.hh"
 #include "string_builder.hh"
@@ -51,12 +52,8 @@ struct Thread {
 };
 
 inline Static_Array<Thread, THREAD_MAX_COUNT> threads;
-inline Static_Array<u32,    THREAD_MAX_COUNT> ready_queue;
+inline Ring_Buffer<u32,     THREAD_MAX_COUNT> ready_queue;
 inline synchronization::Spinlock ready_lock;
-
-inline u32 ready_head = 0;
-inline u32 ready_tail = 0;
-inline u32 ready_size = 0;
 
 inline Static_Array<Context, acpi::MAX_CPUS> idle_contexts;
 inline Static_Array<Thread*, acpi::MAX_CPUS> current_threads;
@@ -65,9 +62,7 @@ auto initialize() -> void {
     threads.fill({});
     current_threads.fill(nullptr);
 
-    ready_head = 0;
-    ready_tail = 0;
-    ready_size = 0;
+    ready_queue.clear();
 }
 
 auto finish_current() -> void {
@@ -106,7 +101,7 @@ auto thread_start() -> void {
         }
     }
     kstd_assert(handle < THREAD_MAX_COUNT, "Thread table full");
-    kstd_assert(ready_size < THREAD_MAX_COUNT, "Ready queue full");
+    kstd_assert(!ready_queue.full(), "Ready queue full");
 
     auto& thread = threads[handle];
     thread.stack = reinterpret_cast<u8*>(mem::resolve_allocator()->alloc(stack_size, AP_STACK_ALIGNMENT));
@@ -125,9 +120,7 @@ auto thread_start() -> void {
     thread.argument    = data;
     thread.state       = State::READY;
 
-    ready_queue[ready_tail] = handle;
-    ready_tail = (ready_tail + 1) % THREAD_MAX_COUNT;
-    ++ready_size;
+    ready_queue.push_back(handle);
 
     return handle;
 }
@@ -143,14 +136,12 @@ auto yield() -> void {
         current = current_threads[cpu];
         kstd_assert(current != nullptr);
         kstd_assert(current->state == State::RUNNING);
-        kstd_assert(ready_size < THREAD_MAX_COUNT);
+        kstd_assert(!ready_queue.full());
 
         handle = static_cast<u32>(current - threads.elements());
 
         current->state = State::READY;
-        ready_queue[ready_tail] = handle;
-        ready_tail = (ready_tail + 1) % THREAD_MAX_COUNT;
-        ++ready_size;
+        ready_queue.push_back(handle);
 
         current_threads[cpu] = nullptr;
     }
@@ -165,11 +156,9 @@ auto idle_poll() -> bool {
     {
         auto guard = ready_lock.scoped_irq_lock();
 
-        if (ready_size == 0) return false;
+        if (ready_queue.empty()) return false;
 
-        handle = ready_queue[ready_head];
-        ready_head = (ready_head + 1) % THREAD_MAX_COUNT;
-        --ready_size;
+        handle = ready_queue.pop_front();
     }
 
     auto& thread = threads[handle];
