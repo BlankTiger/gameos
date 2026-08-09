@@ -55,9 +55,11 @@ struct Thread {
     void*            stack{};
     u64              stack_size{};
     mem::Allocator*  allocator{};
+    void*            storage{};
+    u64              storage_size{};
+    u64              storage_alignment{};
     void*            typed_control{};
     void*            typed_result{};
-    auto (*typed_run)(void*) -> void{};
     auto (*typed_destroy)(void*) -> void{};
     State            state = State::FREE;
 };
@@ -93,17 +95,14 @@ auto thread_start() -> void {
     auto cpu = cpu_local::current().cpu_index;
     auto* thread = current_threads[cpu];
 
-    if (thread->typed_run != nullptr)
-        thread->typed_run(thread->typed_control);
-    else
-        thread->procedure(thread->argument);
+    thread->procedure(thread->argument);
 
     finish_current();
 
     unreachable("finish_current must never return");
 }
 
-auto create_thread(Thread_Procedure procedure, void* data, u64 stack_size, bool enqueue) -> u32 {
+auto reserve_thread() -> u32 {
     auto guard = ready_lock.scoped_irq_lock();
 
     u32 handle = THREAD_MAX_COUNT;
@@ -115,13 +114,37 @@ auto create_thread(Thread_Procedure procedure, void* data, u64 stack_size, bool 
     }
     kstd_assert(handle < THREAD_MAX_COUNT, "Thread table full");
     kstd_assert(!ready_queue.full(), "Ready queue full");
+    threads[handle].state = State::READY;
+    return handle;
+}
 
+auto enqueue_thread(u32 handle) -> void {
+    auto guard = ready_lock.scoped_irq_lock();
+    kstd_assert(!ready_queue.full(), "Ready queue full");
+    ready_queue.push_back(handle);
+}
+
+auto initialize_thread(
+    u32 handle,
+    Thread_Procedure procedure,
+    void* data,
+    void* stack,
+    u64 stack_size,
+    mem::Allocator* allocator,
+    void* storage,
+    u64 storage_size,
+    u64 storage_alignment,
+    psize entry
+) -> void {
     auto& thread = threads[handle];
-    auto* allocator = mem::resolve_allocator();
-    thread.stack      = allocator->alloc(stack_size, AP_STACK_ALIGNMENT);
-    thread.stack_size = stack_size;
-    thread.allocator  = allocator;
-    kstd_assert(thread.stack != nullptr, "Thread stack allocation failed");
+    thread.procedure      = procedure;
+    thread.argument       = data;
+    thread.stack          = stack;
+    thread.stack_size     = stack_size;
+    thread.allocator      = allocator;
+    thread.storage          = storage;
+    thread.storage_size     = storage_size;
+    thread.storage_alignment = storage_alignment;
 
     auto stack_top = ptr_addr(thread.stack) + stack_size;
     stack_top &= ~u64{AP_STACK_ALIGNMENT - 1}; // Make sure it's really aligned correctly.
@@ -131,19 +154,34 @@ auto create_thread(Thread_Procedure procedure, void* data, u64 stack_size, bool 
 
     thread.context = {};
     thread.context.rsp = stack_top;
-    thread.context.rip = ptr_addr(thread_start);
-    thread.procedure   = procedure;
-    thread.argument    = data;
-    thread.state       = State::READY;
+    thread.context.rip = entry;
+}
 
-    if (enqueue)
-        ready_queue.push_back(handle);
+auto create_thread(Thread_Procedure procedure, void* data, u64 stack_size) -> u32 {
+    auto handle = reserve_thread();
+    auto* allocator = mem::resolve_allocator();
+    auto* stack = allocator->alloc(stack_size, AP_STACK_ALIGNMENT);
+    kstd_assert(stack != nullptr, "Thread stack allocation failed");
+
+    initialize_thread(
+        handle,
+        procedure,
+        data,
+        stack,
+        stack_size,
+        allocator,
+        stack,
+        stack_size,
+        AP_STACK_ALIGNMENT,
+        ptr_addr(thread_start)
+    );
+    enqueue_thread(handle);
 
     return handle;
 }
 
 [[nodiscard]] auto spawn(Thread_Procedure procedure, void* data, u64 stack_size = THREAD_STACK_SIZE) -> u32 {
-    return create_thread(procedure, data, stack_size, true);
+    return create_thread(procedure, data, stack_size);
 }
 
 auto yield() -> void {
@@ -228,7 +266,7 @@ auto join(u32 handle) -> void {
     auto guard = ready_lock.scoped_irq_lock();
     auto& thread = threads[handle];
     kstd_assert(thread.typed_control == nullptr, "Use handle-based join for result threads");
-    thread.allocator->free(thread.stack, thread.stack_size, AP_STACK_ALIGNMENT);
+    thread.allocator->free(thread.storage, thread.storage_size, thread.storage_alignment);
     thread = {};
 }
 
@@ -272,6 +310,18 @@ auto run_typed_control(void* raw) -> void {
 }
 
 template <typename Procedure, typename Result_Type, typename... Arguments>
+auto typed_thread_start() -> void {
+    const auto cpu = cpu_local::current().cpu_index;
+    auto* thread = current_threads[cpu];
+    kstd_assert(thread != nullptr, "No current typed thread");
+
+    run_typed_control<Procedure, Result_Type, Arguments...>(thread->typed_control);
+    finish_current();
+
+    unreachable("Finished typed thread resumed");
+}
+
+template <typename Procedure, typename Result_Type, typename... Arguments>
 auto destroy_typed_control(void* raw) -> void {
     using Control = Typed_Control<Procedure, Result_Type, Arguments...>;
     auto* control = static_cast<Control*>(raw);
@@ -279,25 +329,30 @@ auto destroy_typed_control(void* raw) -> void {
     if (control->result_ready)
         control->result()->~Result_Type();
     control->~Control();
-    mem::resolve_allocator()->free(control, sizeof(Control), alignof(Control));
 }
+
+template <typename Procedure, typename... Arguments>
+concept Typed_Procedure =
+    std::invocable<Procedure&, std::decay_t<Arguments>&...> &&
+    !std::is_void_v<Procedure_Result_Type<Procedure, Arguments...>>;
 
 // @TODO(blanktiger): Allow specifying thread parameters as the last argument (do an overload like in format.hh).
 template <typename Procedure, typename... Arguments>
-requires (
-    std::invocable<Procedure&, std::decay_t<Arguments>&...> &&
-    !std::is_void_v<Procedure_Result_Type<Procedure, Arguments...>>
-)
-auto spawn(Procedure procedure, Arguments&&... args)
-    -> Thread_Handle<Procedure_Result_Type<Procedure, Arguments...>> {
+requires Typed_Procedure<Procedure, Arguments...>
+auto spawn(Procedure procedure, Arguments&&... args) -> Thread_Handle<Procedure_Result_Type<Procedure, Arguments...>> {
     using Result_Type = Procedure_Result_Type<Procedure, Arguments...>;
     static_assert(!std::is_void_v<Result_Type>);
     static_assert(!std::is_reference_v<Result_Type>);
 
     using Control = Typed_Control<Procedure, Result_Type, Arguments...>;
-    auto* control = static_cast<Control*>(
-        mem::resolve_allocator()->alloc(sizeof(Control), alignof(Control))
-    );
+    constexpr usize stack_alignment = AP_STACK_ALIGNMENT;
+    constexpr usize control_alignment = alignof(Control) > stack_alignment ? alignof(Control) : stack_alignment;
+    constexpr usize stack_offset = (sizeof(Control) + stack_alignment - 1) & ~(stack_alignment - 1);
+    constexpr usize storage_size = stack_offset + THREAD_STACK_SIZE;
+
+    auto* allocator = mem::resolve_allocator();
+    auto* storage = allocator->alloc(storage_size, control_alignment);
+    auto* control = static_cast<Control*>(storage);
     kstd_assert(control != nullptr, "Typed thread control allocation failed");
 
     new (control) Control {
@@ -309,18 +364,26 @@ auto spawn(Procedure procedure, Arguments&&... args)
         .result_ready = false,
     };
 
-    auto handle = create_thread(nullptr, nullptr, THREAD_STACK_SIZE, false);
+    auto handle = reserve_thread();
+    auto* stack = addr_as<void*>(ptr_addr(storage) + stack_offset);
+    initialize_thread(
+        handle,
+        nullptr,
+        nullptr,
+        stack,
+        THREAD_STACK_SIZE,
+        allocator,
+        storage,
+        storage_size,
+        control_alignment,
+        ptr_addr(typed_thread_start<Procedure, Result_Type, Arguments...>)
+    );
+
     auto& thread = threads[handle];
     thread.typed_control = control;
     thread.typed_result = control->result_storage;
-    thread.typed_run = &run_typed_control<Procedure, Result_Type, Arguments...>;
     thread.typed_destroy = &destroy_typed_control<Procedure, Result_Type, Arguments...>;
-
-    {
-        auto guard = ready_lock.scoped_irq_lock();
-        kstd_assert(!ready_queue.full(), "Ready queue full");
-        ready_queue.push_back(handle);
-    }
+    enqueue_thread(handle);
 
     return Thread_Handle<Result_Type>{.index = handle};
 }
@@ -341,7 +404,7 @@ auto join(Thread_Handle<Result_Type> handle) -> Result_Type {
     Result_Type value = std::move(*result);
 
     thread.typed_destroy(thread.typed_control);
-    thread.allocator->free(thread.stack, thread.stack_size, AP_STACK_ALIGNMENT);
+    thread.allocator->free(thread.storage, thread.storage_size, thread.storage_alignment);
     thread = {};
 
     return value;
