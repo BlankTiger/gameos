@@ -83,10 +83,10 @@ struct Spinlock {
     }
 
     struct Scoped_IRQ {
-        Spinlock&       spinlock;
         Interrupt_Guard irq_guard;
+        Spinlock&       spinlock;
 
-        explicit Scoped_IRQ(Spinlock& lock) : spinlock(lock) {
+        explicit Scoped_IRQ(Spinlock& lock) : irq_guard(), spinlock(lock) {
             spinlock.lock();
         }
 

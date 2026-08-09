@@ -1,14 +1,15 @@
 #pragma once
 
 #include "advanced_configuration_and_power_interface.hh"
+#include "application_processor_state.hh"
 #include "assert.hh"
 #include "array.hh"
 #include "basic.hh"
 #include "cpu_local.hh"
 #include "cstring.hh"
 #include "global_descriptors.hh"
-#include "interrupts.hh"
 #include "interrupts_constants.hh"
+#include "interrupts.hh"
 #include "local_apic.hh"
 #include "serial_format.hh"
 #include "smp_constants.hh"
@@ -19,9 +20,6 @@
 extern "C" auto ap_main(u32 cpu_index) -> void;
 
 namespace ap {
-
-alignas(64) inline Static_Array<volatile bool, acpi::MAX_CPUS> cpus_online;
-alignas(64) inline Static_Array<volatile bool, acpi::MAX_CPUS> cpus_frozen;
 
 // Stops all future interrupts and goes to sleep.
 force_inline auto freeze_cpu() -> void {
