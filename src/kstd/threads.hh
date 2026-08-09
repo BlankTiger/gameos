@@ -47,7 +47,9 @@ struct Thread {
     Context          context{};
     Thread_Procedure procedure{};
     void*            argument{};
-    u8*              stack{};
+    void*            stack{};
+    u64              stack_size{};
+    mem::Allocator*  allocator{};
     State            state = State::FREE;
 };
 
@@ -104,7 +106,10 @@ auto thread_start() -> void {
     kstd_assert(!ready_queue.full(), "Ready queue full");
 
     auto& thread = threads[handle];
-    thread.stack = reinterpret_cast<u8*>(mem::resolve_allocator()->alloc(stack_size, AP_STACK_ALIGNMENT));
+    auto* allocator = mem::resolve_allocator();
+    thread.stack      = allocator->alloc(stack_size, AP_STACK_ALIGNMENT);
+    thread.stack_size = stack_size;
+    thread.allocator  = allocator;
     kstd_assert(thread.stack != nullptr, "Thread stack allocation failed");
 
     auto stack_top = ptr_addr(thread.stack) + stack_size;
@@ -198,6 +203,15 @@ auto join(u32 handle) -> void {
             asm volatile("pause");
         }
     }
+
+    // Task is done. Reclaim resources.
+    {
+        auto guard = ready_lock.scoped_irq_lock();
+
+        auto& thread = threads[handle];
+        thread.allocator->free(thread.stack, thread.stack_size, AP_STACK_ALIGNMENT);
+        thread = {};
+    }
 }
 
 struct Yield_Test_Args {
@@ -205,14 +219,18 @@ struct Yield_Test_Args {
 };
 
 auto smoke_test() -> void {
-    {
-        const auto smoke_proc = [](void* data) -> void {
-            auto* sum = reinterpret_cast<u32*>(data);
-            for (u32 index = 0; index < 100; ++index) {
-                *sum += index;
-            }
-        };
+    // Will assert if we leaked anything in this smoke test.
+    mem::Debug_Allocator dbg_allocator{mem::resolve_allocator()};
+    PUSH_ALLOCATOR(&dbg_allocator);
 
+    const auto smoke_proc = [](void* data) -> void {
+        auto* sum = reinterpret_cast<u32*>(data);
+        for (u32 index = 0; index < 100; ++index) {
+            *sum += index;
+        }
+    };
+
+    {
         u32 result = 0;
         auto thread = spawn(smoke_proc, &result);
         join(thread);
@@ -221,6 +239,7 @@ auto smoke_test() -> void {
         kstd_assert(result == expected, ctprint("Actual result: %, expected: %", result, expected));
     }
 
+    // Verify yielding allows for switching tasks on the same cores.
     {
         const auto yield_test_proc = [](void* data) -> void {
             auto* args = reinterpret_cast<Yield_Test_Args*>(data);
@@ -239,6 +258,24 @@ auto smoke_test() -> void {
 
         join(thread_a);
         join(thread_b);
+    }
+
+    // Verify handle reuse (thread is correctly freed after the work is done in join).
+    {
+        u32 result_a = 0;
+        u32 result_b = 0;
+
+        auto thread_a = spawn(smoke_proc, &result_a);
+        join(thread_a);
+
+        auto thread_b = spawn(smoke_proc, &result_b);
+        join(thread_b);
+
+        kstd_assert(thread_a == thread_b);
+    }
+
+    {
+
     }
 }
 
