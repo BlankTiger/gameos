@@ -2,6 +2,7 @@
 
 #include "array.hh"
 #include "basic.hh"
+#include "string_builder.hh"
 
 template <typename T, usize N>
 struct Ring_Buffer {
@@ -41,6 +42,17 @@ struct Ring_Buffer {
         head = 0;
         tail = 0;
         size = 0;
+    }
+
+    auto format() const -> string {
+        String_Builder builder;
+        builder.append("[");
+        for (usize index = 0; index < size; ++index) {
+            if (index > 0) builder.append(", ");
+            builder.print(data[(head + index) % N]);
+        }
+        builder.append("]");
+        return builder.to_string();
     }
 };
 
@@ -96,6 +108,32 @@ TEST(Ring_Buffer, clear_resets_buffer) {
     EXPECT_TRUE(buffer.empty());
     buffer.push_back(3);
     EXPECT_EQ(buffer.pop_front(), 3);
+}
+
+TEST(Ring_Buffer, formats_logical_contents) {
+    Ring_Buffer<int, 3> buffer;
+    String_Builder      builder;
+
+    buffer.push_back(1);
+    buffer.push_back(2);
+    buffer.pop_front();
+    buffer.push_back(3);
+    buffer.push_back(4);
+
+    builder.print(buffer);
+    auto formatted = builder.to_string();
+    defer(free_string(formatted));
+    EXPECT_EQ(formatted, "[2, 3, 4]");
+}
+
+TEST(Ring_Buffer, formats_empty_buffer) {
+    Ring_Buffer<int, 3> buffer;
+    String_Builder      builder;
+
+    builder.print(buffer);
+    auto formatted = builder.to_string();
+    defer(free_string(formatted));
+    EXPECT_EQ(formatted, "[]");
 }
 
 #endif
