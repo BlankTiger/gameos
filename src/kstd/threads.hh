@@ -139,7 +139,6 @@ auto thread_start() -> void {
     auto* thread = current_threads[cpu];
 
     thread->procedure(thread->argument);
-
     finish_current();
 
     unreachable("finish_current must never return");
@@ -270,34 +269,6 @@ auto idle_poll() -> bool {
     return true;
 }
 
-//
-// @TODO(blanktiger): Currently BSP is treated differently from all the
-// additional cores we manage to get. If there is more than 1 then we don't
-// ever switch it's task. That however is a detail that the user of this
-// library probably wants to control so we have to figure out a way to switch
-// the core configuration in a way that doesn't hinder performance and is
-// easy/intuitive to use.
-//
-auto wait_for_completion(u32 handle) -> void {
-    kstd_assert(handle < THREAD_MAX_COUNT, "Invalid thread handle");
-
-    const auto cpu = cpu_local::current().cpu_index;
-    while (threads[handle].state.load(std::memory_order_acquire) != State::DONE) {
-        if (current_threads[cpu] != nullptr) {
-            yield();
-        } else if (ap::online_count() <= 1) {
-            // No AP exists. BSP must run work.
-            if (!idle_poll())
-                asm volatile("pause");
-        } else {
-            // APs are available. Leave ready work for them.
-            asm volatile("pause");
-        }
-    }
-}
-
-
-
 
 //
 // Typed APIs.
@@ -308,10 +279,10 @@ using Procedure_Result_Type = std::invoke_result_t<Procedure&, std::decay_t<Argu
 
 template <typename Procedure, typename Result_Type, typename... Arguments>
 struct Typed_Control {
-    Procedure procedure;
+    Procedure                              procedure;
     std::tuple<std::decay_t<Arguments>...> arguments;
-    alignas(Result_Type) u8 result_storage[sizeof(Result_Type)];
-    bool result_ready = false;
+    alignas(Result_Type) u8                result_storage[sizeof(Result_Type)];
+    bool                                   result_ready = false;
 
     auto result() -> Result_Type* {
         return reinterpret_cast<Result_Type*>(result_storage);
@@ -367,11 +338,11 @@ auto spawn(Procedure procedure, Arguments&&... args) -> Thread_Handle<Procedure_
     static_assert(!std::is_void_v<Result_Type>);
     static_assert(!std::is_reference_v<Result_Type>);
 
+    // To reduce allocations we allocate only once for Control and for the thread's stack.
     using Control = Typed_Control<Procedure, Result_Type, Arguments...>;
-    constexpr usize stack_alignment = AP_STACK_ALIGNMENT;
-    constexpr usize control_alignment = alignof(Control) > stack_alignment ? alignof(Control) : stack_alignment;
-    constexpr usize stack_offset = (sizeof(Control) + stack_alignment - 1) & ~(stack_alignment - 1);
-    constexpr usize storage_size = stack_offset + THREAD_STACK_SIZE;
+    constexpr usize control_alignment = alignof(Control) > AP_STACK_ALIGNMENT ? alignof(Control) : AP_STACK_ALIGNMENT;
+    constexpr usize stack_offset      = (sizeof(Control) + AP_STACK_ALIGNMENT - 1) & ~(AP_STACK_ALIGNMENT - 1);
+    constexpr usize storage_size      = stack_offset + THREAD_STACK_SIZE;
 
     auto* allocator = mem::resolve_allocator();
     auto* storage = allocator->alloc(storage_size, control_alignment);
@@ -379,12 +350,10 @@ auto spawn(Procedure procedure, Arguments&&... args) -> Thread_Handle<Procedure_
     kstd_assert(control != nullptr, "Typed thread control allocation failed");
 
     new (control) Control {
-        .procedure = std::move(procedure),
-        .arguments = std::tuple<std::decay_t<Arguments>...>(
-            std::forward<Arguments>(args)...
-        ),
+        .procedure      = std::move(procedure),
+        .arguments      = std::tuple<std::decay_t<Arguments>...>(std::forward<Arguments>(args)...),
         .result_storage = {},
-        .result_ready = false,
+        .result_ready   = false,
     };
 
     auto* stack = addr_as<void*>(ptr_addr(storage) + stack_offset);
@@ -402,7 +371,7 @@ auto spawn(Procedure procedure, Arguments&&... args) -> Thread_Handle<Procedure_
 
     auto& thread = threads[handle.index];
     thread.typed_control = control;
-    thread.typed_result = control->result_storage;
+    thread.typed_result  = control->result_storage;
     thread.typed_destroy = &destroy_typed_control<Procedure, Result_Type, Arguments...>;
     enqueue_thread(handle);
 
@@ -412,7 +381,20 @@ auto spawn(Procedure procedure, Arguments&&... args) -> Thread_Handle<Procedure_
 template <typename Result_Type>
 auto join(Thread_Handle<Result_Type> handle) -> Result_Type {
     kstd_assert(handle.index < THREAD_MAX_COUNT, "Invalid typed thread handle");
-    wait_for_completion(handle.index);
+
+    const auto cpu = cpu_local::current().cpu_index;
+    while (threads[handle.index].state.load(std::memory_order_acquire) != State::DONE) {
+        if (current_threads[cpu] != nullptr) {
+            yield();
+        } else if (ap::online_count() <= 1) {
+            // No AP exists. BSP must run work.
+            if (!idle_poll())
+                asm volatile("pause");
+        } else {
+            // APs are available. Leave ready work for them.
+            asm volatile("pause");
+        }
+    }
 
     auto guard = ready_lock.scoped_irq_lock();
     auto& thread = threads[handle.index];
@@ -422,9 +404,10 @@ auto join(Thread_Handle<Result_Type> handle) -> Result_Type {
         kstd_assert(thread.typed_control == nullptr, "Void handle belongs to typed thread");
         thread.allocator->free(thread.storage, thread.storage_size, thread.storage_alignment);
         thread = {};
+        return;
     } else {
         kstd_assert(thread.typed_control != nullptr, "Result handle belongs to untyped thread");
-        kstd_assert(thread.typed_result != nullptr, "Thread has no typed result");
+        kstd_assert(thread.typed_result  != nullptr, "Thread has no typed result");
         kstd_assert(thread.typed_destroy != nullptr, "Thread has no typed destructor");
 
         auto* result = static_cast<Result_Type*>(thread.typed_result);
@@ -436,6 +419,8 @@ auto join(Thread_Handle<Result_Type> handle) -> Result_Type {
 
         return value;
     }
+
+    unreachable();
 }
 
 auto smoke_test() -> void {
@@ -494,6 +479,7 @@ auto smoke_test() -> void {
         kstd_assert(thread_a == thread_b);
     }
 
+    // Typed APIs
     {
         const auto typed_test_sum_proc = [](u32 start, u32 end) -> u64 {
             u64 sum = 0;
