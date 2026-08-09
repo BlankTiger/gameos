@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+
 #include "advanced_configuration_and_power_interface.hh"
 #include "application_processor_state.hh"
 #include "assert.hh"
@@ -23,7 +25,7 @@ namespace ap {
 // Stops all future interrupts and goes to sleep.
 force_inline auto freeze_cpu() -> void {
     auto idx = cpu_local::current().cpu_index;
-    cpus_frozen[idx] = true;
+    cpus_frozen[idx].store(true, std::memory_order_release);
     asm volatile("" ::: "memory");
     asm volatile("cli" ::: "memory");
     for (;;) asm volatile("hlt");
@@ -34,15 +36,15 @@ namespace hidden {
     // @SAFETY: No need for an atomic as eventually all the APs will get to read the correct
     //          value and go to sleep.
     //
-    inline volatile bool stop_requested = false;
+    inline std::atomic<bool> stop_requested{false};
 }
 
 force_inline auto is_stop_requested() -> bool {
-    return hidden::stop_requested;
+    return hidden::stop_requested.load(std::memory_order_acquire);
 }
 
 force_inline auto request_stop_of_all_other_aps() -> void {
-    hidden::stop_requested = true;
+    hidden::stop_requested.store(true, std::memory_order_release);
     asm volatile("" ::: "memory");  // Compiler barrier (release semantics).
 
     using namespace lapic;
@@ -226,7 +228,7 @@ constexpr auto STACK_POINTER_ADDR = TRAMPOLINE_PHYSICAL_ADDRESS + SMP_OFFSET_STA
 
 auto ap_main(u32 cpu_index) -> void {
     serial::println("AP index=% started", cpu_index);
-    ap::cpus_online[cpu_index] = true;
+    ap::cpus_online[cpu_index].store(true, std::memory_order_release);
 
     // Switch away from the temporary GDT to the kernel GDT.
     gdt::load_shared();
@@ -285,10 +287,12 @@ auto copy_pointer_to_core_info(u32 apic_id) -> void {
 }
 
 auto initialize_aps() -> void {
-    cpus_online.fill(false);
-    cpus_frozen.fill(false);
+    for (u32 index = 0; index < acpi::MAX_CPUS; ++index) {
+        cpus_online[index].store(false, std::memory_order_relaxed);
+        cpus_frozen[index].store(false, std::memory_order_relaxed);
+    }
     // Mark BSP as online.
-    cpus_online[0] = true;
+    cpus_online[0].store(true, std::memory_order_release);
 
     kstd_assert(smp_trampoline_size <= 0xF00, "This must fit for real mode to work.");
     kstd_assert(smp_trampoline_size > 0);
@@ -369,7 +373,7 @@ auto initialize_aps() -> void {
         static constexpr auto RETRY_LIMIT = 50'000'000;
         for (u64 retry_counter = 0; retry_counter < RETRY_LIMIT; ++retry_counter) {
             if (retry_counter == RETRY_LIMIT - 1) reached_timeout = true;
-            if (cpus_online[next_cpu_index]) break;
+            if (cpus_online[next_cpu_index].load(std::memory_order_acquire)) break;
 
             asm volatile("pause");
         }
@@ -383,4 +387,3 @@ auto initialize_aps() -> void {
 }
 
 }
-

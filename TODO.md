@@ -31,7 +31,7 @@ base layer:
 - [x] APIC instead of PIC if available later on
 - [ ] keyboard handling
 - [ ] mouse handling
-- [ ] multicore
+- [x] multicore
 - [x] serial
 - [x] fix early asserts (term must be initialized for asserts to output anything currently and we have asserts that are before the term::initialize)
 - [/] move all __variables to .cc files
@@ -63,6 +63,7 @@ base layer:
 - [ ] somehow deduplicate all the declarations that are made per an interrupt vector in interrupts.hh
 - [ ] make the serial_port.hh implementation universal (nowadays serial is usually only available through PCI extension cards and we would have to enumarate those)
 - [ ] Send a deassert in SMP startup code (spec says it should be there)
+- [ ] create a Thread_Config structure that user of threads.hh can use to configure threads, similar thing should be also possible to do for a core
 
 utils:
 - [ ] todo list generator (gather notes from source code and generate a stable

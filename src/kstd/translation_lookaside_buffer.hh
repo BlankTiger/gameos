@@ -65,7 +65,7 @@ auto shootdown(psize address) -> void {
 
     const auto self = cpu_local::current().cpu_index;
     for (u32 index = 0; index < acpi::MAX_CPUS; ++index) {
-        if (index == self || !ap::cpus_online[index]) continue;
+        if (index == self || !ap::cpus_online[index].load(std::memory_order_acquire)) continue;
 
         lapic::send_inter_processor_interrupt(cpu_local::core_infos[index].lapic_id, SHOOTDOWN_COMMAND);
     }

@@ -61,8 +61,44 @@ struct Thread {
     void*            typed_control{};
     void*            typed_result{};
     auto (*typed_destroy)(void*) -> void{};
-    State            state = State::FREE;
+    std::atomic<State> state{State::FREE};
+
+    Thread() = default;
+
+    Thread(const Thread& other)
+        : context(other.context),
+          procedure(other.procedure),
+          argument(other.argument),
+          stack(other.stack),
+          stack_size(other.stack_size),
+          allocator(other.allocator),
+          storage(other.storage),
+          storage_size(other.storage_size),
+          storage_alignment(other.storage_alignment),
+          typed_control(other.typed_control),
+          typed_result(other.typed_result),
+          typed_destroy(other.typed_destroy),
+          state(other.state.load(std::memory_order_relaxed)) {}
+
+    auto operator = (const Thread& other) -> Thread& {
+        context           = other.context;
+        procedure         = other.procedure;
+        argument          = other.argument;
+        stack             = other.stack;
+        stack_size        = other.stack_size;
+        allocator         = other.allocator;
+        storage           = other.storage;
+        storage_size      = other.storage_size;
+        storage_alignment = other.storage_alignment;
+        typed_control     = other.typed_control;
+        typed_result      = other.typed_result;
+        typed_destroy     = other.typed_destroy;
+        state.store(other.state.load(std::memory_order_relaxed), std::memory_order_relaxed);
+        return *this;
+    }
 };
+
+static_assert(std::atomic<State>::is_always_lock_free);
 
 template <typename Result_Type>
 struct Thread_Handle {
@@ -90,7 +126,7 @@ auto finish_current() -> void {
     auto* thread = current_threads[cpu];
     kstd_assert(thread != nullptr, "No current thread even tho there should be one");
 
-    thread->state = State::DONE;
+    thread->state.store(State::DONE, std::memory_order_release);
     current_threads[cpu] = nullptr;
 
     threads_context_switch(&thread->context, &idle_contexts[cpu]);
@@ -133,7 +169,7 @@ auto create_thread(
         auto guard = ready_lock.scoped_irq_lock();
 
         for (u32 index = 0; index < THREAD_MAX_COUNT; ++index) {
-            if (threads[index].state == State::FREE) {
+            if (threads[index].state.load(std::memory_order_relaxed) == State::FREE) {
                 handle = index;
                 break;
             }
@@ -141,7 +177,7 @@ auto create_thread(
 
         kstd_assert(handle < THREAD_MAX_COUNT, "Thread table full");
         kstd_assert(!ready_queue.full(), "Ready queue full");
-        threads[handle].state = State::READY;
+        threads[handle].state.store(State::READY, std::memory_order_relaxed);
     }
 
     auto& thread = threads[handle];
@@ -197,12 +233,12 @@ auto yield() -> void {
 
         current = current_threads[cpu];
         kstd_assert(current != nullptr);
-        kstd_assert(current->state == State::RUNNING);
+        kstd_assert(current->state.load(std::memory_order_relaxed) == State::RUNNING);
         kstd_assert(!ready_queue.full());
 
         u32 handle = static_cast<u32>(current - threads.elements());
 
-        current->state = State::READY;
+        current->state.store(State::READY, std::memory_order_relaxed);
         ready_queue.push_back(handle);
 
         current_threads[cpu] = nullptr;
@@ -223,9 +259,9 @@ auto idle_poll() -> bool {
     }
 
     auto& thread = threads[handle];
-    kstd_assert(thread.state == State::READY, "Dequeued thread is not ready");
+    kstd_assert(thread.state.load(std::memory_order_relaxed) == State::READY, "Dequeued thread is not ready");
 
-    thread.state = State::RUNNING;
+    thread.state.store(State::RUNNING, std::memory_order_relaxed);
     current_threads[cpu] = &thread;
 
     threads_context_switch(&idle_contexts[cpu], &thread.context);
@@ -243,11 +279,10 @@ auto idle_poll() -> bool {
 // easy/intuitive to use.
 //
 auto wait_for_completion(u32 handle) -> void {
-    // @TODO(blanktiger): Make state atomic or something like that, currently there is a race here.
     kstd_assert(handle < THREAD_MAX_COUNT, "Invalid thread handle");
 
     const auto cpu = cpu_local::current().cpu_index;
-    while (threads[handle].state != State::DONE) {
+    while (threads[handle].state.load(std::memory_order_acquire) != State::DONE) {
         if (current_threads[cpu] != nullptr) {
             yield();
         } else if (ap::online_count() <= 1) {
@@ -381,7 +416,7 @@ auto join(Thread_Handle<Result_Type> handle) -> Result_Type {
 
     auto guard = ready_lock.scoped_irq_lock();
     auto& thread = threads[handle.index];
-    kstd_assert(thread.state == State::DONE, "Thread is not done");
+    kstd_assert(thread.state.load(std::memory_order_acquire) == State::DONE, "Thread is not done");
 
     if constexpr (std::is_void_v<Result_Type>) {
         kstd_assert(thread.typed_control == nullptr, "Void handle belongs to typed thread");
