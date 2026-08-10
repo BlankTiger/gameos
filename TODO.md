@@ -70,9 +70,14 @@ base layer:
       library probably wants to control so we have to figure out a way to switch
       the core configuration in a way that doesn't hinder performance and is
       easy/intuitive to use.
-- [ ] CPU pinning for threads
-- [ ] detach
+- [x] CPU pinning for threads
+- [x] detach
 - [ ] copy FPU and SSE state when doing a context switch
+- [ ] cpu affinity - in Thread_Config there should probably be something like "first chosen" to set the core number dynamically when it first gets sheduled on some core
+- [x] check FPS before multithreaded GPU
+- [ ] paging - map all given memory
+- [ ] paging - helpers for marking the pages as invalid
+- [ ] profiler
 
 
 utils:
@@ -86,3 +91,4 @@ utils:
 - [ ] generate enums out of defines with @enum. Or maybe the other way around, generate defines from an enum, idk yet (look at interrupts_constants.hh)
 - [ ] unfuck preprocessor (tokenizer?)
 - [ ] get rid of cmake (build.cc)
+- [ ] MEMORY_DEBUGGER (codex)
