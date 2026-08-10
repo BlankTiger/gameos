@@ -78,8 +78,8 @@ struct Draw_Command_2D {
     };
 };
 
-inline Array<Draw_Command_2D> draw_commands_ui(256);
-inline Array<Draw_Command_2D> draw_commands_world_2D(256);
+inline Array<Draw_Command_2D> draw_commands_ui[2]{Array<Draw_Command_2D>(256), Array<Draw_Command_2D>(256)};
+inline Array<Draw_Command_2D> draw_commands_world_2D[2]{Array<Draw_Command_2D>(256), Array<Draw_Command_2D>(256)};
 
 template <bool IMMEDIATE>
 auto inner_draw_char(u32 x, u32 y, char c, Color fg, Color bg, Depth depth = DEPTH_FAR) -> void {
@@ -107,7 +107,7 @@ auto inner_draw_char(u32 x, u32 y, char c, Color fg, Color bg, Depth depth = DEP
 
 auto draw_char(u32 x, u32 y, char c, Color fg, Color bg, u8 z = 1, Render_Pass pass = Render_Pass::UI, Depth depth = DEPTH_FAR) -> void {
     if (x >= width() || y >= height()) return;
-    auto& queue = (pass == Render_Pass::WORLD_2D) ? draw_commands_world_2D : draw_commands_ui;
+    auto& queue = (pass == Render_Pass::WORLD_2D) ? draw_commands_world_2D[hidden::active_frame_slot] : draw_commands_ui[hidden::active_frame_slot];
     queue.push_back(
         Draw_Command_2D{
             .type      = Draw_Command_2D_Type::DRAW_CHAR,
@@ -149,7 +149,7 @@ auto inner_draw_text(u32 x, u32 y, string text, Color fg = WHITE, Color bg = TRA
 }
 
 auto draw_text(u32 x, u32 y, const string text, Color fg = WHITE, Color bg = TRANSPARENT, u8 z = 1, Render_Pass pass = Render_Pass::UI, Depth depth = DEPTH_FAR) -> void {
-    auto& queue = (pass == Render_Pass::WORLD_2D) ? draw_commands_world_2D : draw_commands_ui;
+    auto& queue = (pass == Render_Pass::WORLD_2D) ? draw_commands_world_2D[hidden::active_frame_slot] : draw_commands_ui[hidden::active_frame_slot];
     queue.push_back(
         Draw_Command_2D{
             .type  = Draw_Command_2D_Type::DRAW_TEXT,
@@ -228,7 +228,7 @@ auto inner_draw_circle(u32 x, u32 y, u32 r, Color color, Depth depth = DEPTH_FAR
 
 auto draw_circle(u32 x, u32 y, u32 r, Color color, u8 z = 1, Render_Pass pass = Render_Pass::UI, Depth depth = DEPTH_FAR) -> void {
     if (x >= width() || y >= height()) return;
-    auto& queue = (pass == Render_Pass::WORLD_2D) ? draw_commands_world_2D : draw_commands_ui;
+    auto& queue = (pass == Render_Pass::WORLD_2D) ? draw_commands_world_2D[hidden::active_frame_slot] : draw_commands_ui[hidden::active_frame_slot];
     queue.push_back(
         Draw_Command_2D{
             .type   = Draw_Command_2D_Type::DRAW_CIRCLE,
@@ -339,7 +339,7 @@ auto draw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color, u8 z = 1, Render_Pas
     x2 = std::min(x2, max_x);
     y2 = std::min(y2, max_y);
 
-    auto& queue = (pass == Render_Pass::WORLD_2D) ? draw_commands_world_2D : draw_commands_ui;
+    auto& queue = (pass == Render_Pass::WORLD_2D) ? draw_commands_world_2D[hidden::active_frame_slot] : draw_commands_ui[hidden::active_frame_slot];
     queue.push_back(
         Draw_Command_2D{
             .type  = Draw_Command_2D_Type::DRAW_LINE,
@@ -398,7 +398,7 @@ auto draw_raw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color, u8 z = 1, Render
     x2 = std::min(x2, max_x);
     y2 = std::min(y2, max_y);
 
-    auto& queue = (pass == Render_Pass::WORLD_2D) ? draw_commands_world_2D : draw_commands_ui;
+    auto& queue = (pass == Render_Pass::WORLD_2D) ? draw_commands_world_2D[hidden::active_frame_slot] : draw_commands_ui[hidden::active_frame_slot];
     queue.push_back(
         Draw_Command_2D{
             .type  = Draw_Command_2D_Type::DRAW_RAW_LINE,
@@ -421,7 +421,7 @@ auto inner_draw_rect(u32 x, u32 y, u32 w, u32 h, Color color, Depth depth = DEPT
 
 auto draw_rect(u32 x, u32 y, u32 w, u32 h, Color color, u8 z = 1, Render_Pass pass = Render_Pass::UI, Depth depth = DEPTH_FAR) -> void {
     if (x >= width() || y >= height()) return;
-    auto& queue = (pass == Render_Pass::WORLD_2D) ? draw_commands_world_2D : draw_commands_ui;
+    auto& queue = (pass == Render_Pass::WORLD_2D) ? draw_commands_world_2D[hidden::active_frame_slot] : draw_commands_ui[hidden::active_frame_slot];
     queue.push_back(
         Draw_Command_2D{
             .type      = Draw_Command_2D_Type::DRAW_RECT,
@@ -446,7 +446,7 @@ auto inner_draw_sprite(const Resource_View res, u32 x, u32 y, Depth depth = DEPT
 auto draw_sprite(const Resource_View res, u32 x, u32 y, u8 z = 1, Render_Pass pass = Render_Pass::UI, Depth depth = DEPTH_FAR) -> void {
     if (res.width == 0 || res.height == 0) return;
     if (x >= width() || y >= height()) return;
-    auto& queue = (pass == Render_Pass::WORLD_2D) ? draw_commands_world_2D : draw_commands_ui;
+    auto& queue = (pass == Render_Pass::WORLD_2D) ? draw_commands_world_2D[hidden::active_frame_slot] : draw_commands_ui[hidden::active_frame_slot];
     queue.push_back(
         Draw_Command_2D{
             .type   = Draw_Command_2D_Type::DRAW_SPRITE,
@@ -539,7 +539,7 @@ auto draw_triangle(Vector4<f32> v1, Vector4<f32> v2, Vector4<f32> v3, Color colo
         std::swap(v2, v3);
         det = -det;
     }
-    draw_commands_world_2D.push_back(
+    draw_commands_world_2D[hidden::active_frame_slot].push_back(
         Draw_Command_2D{
             .type = Draw_Command_2D_Type::DRAW_TRIANGLE,
             .z = z,
@@ -551,14 +551,14 @@ auto draw_triangle(Vector4<f32> v1, Vector4<f32> v2, Vector4<f32> v3, Color colo
 template <bool z_sort = true>
 force_inline auto draw_ui() -> void {
     if (z_sort) {
-        std::stable_sort(draw_commands_ui.begin(), draw_commands_ui.end(),
+        std::stable_sort(draw_commands_ui[hidden::active_frame_slot].begin(), draw_commands_ui[hidden::active_frame_slot].end(),
             [](const Draw_Command_2D& a, const Draw_Command_2D& b) {
                 return a.z < b.z;
             }
         );
     }
 
-    for (const auto& command : draw_commands_ui) {
+    for (const auto& command : draw_commands_ui[hidden::active_frame_slot]) {
         using enum Draw_Command_2D_Type;
         switch (command.type) {
             case DRAW_CHAR: {
@@ -596,11 +596,11 @@ force_inline auto draw_ui() -> void {
         }
     }
 
-    draw_commands_ui.clear();
+    draw_commands_ui[hidden::active_frame_slot].clear();
 }
 
 force_inline auto draw_world_2D() -> void {
-    for (const auto& command : draw_commands_world_2D) {
+    for (const auto& command : draw_commands_world_2D[hidden::active_frame_slot]) {
         using enum Draw_Command_2D_Type;
         switch (command.type) {
             case DRAW_CHAR: {
@@ -638,7 +638,7 @@ force_inline auto draw_world_2D() -> void {
         }
     }
 
-    draw_commands_world_2D.clear();
+    draw_commands_world_2D[hidden::active_frame_slot].clear();
 }
 
 }  // namespace gfx

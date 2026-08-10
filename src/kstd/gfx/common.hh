@@ -104,8 +104,10 @@ constexpr Depth DEPTH_FAR = static_cast<Depth>(-1); // 0xFFFFFFFF, memset-able w
 namespace hidden {
     inline Framebuffer front_buffer;
     // @TODO(blanktiger): Should probably be runtime allocated cause this takes more than 6MB off of our stack.
-    inline Static_Array<Pixel, GFX_PIXEL_COUNT> back_buffer;
-    inline Static_Array<Depth, GFX_PIXEL_COUNT> depth_buffer; // smaller means closer
+    inline Static_Array<Pixel, GFX_PIXEL_COUNT> ram_back_buffers[2];
+    inline Array_View<Pixel, GFX_PIXEL_COUNT> back_buffers[2];
+    inline Static_Array<Depth, GFX_PIXEL_COUNT> depth_buffers[2]; // smaller means closer
+    inline u8 active_frame_slot = 0;
     inline bool framebuffer_initialized;
 }
 
@@ -113,7 +115,8 @@ force_inline auto swap_buffers() -> void {
     using namespace hidden;
 
     kstd_debug_assert(front_buffer.pixels.data != nullptr);
-    kstd_memcpy(front_buffer.pixels.data, back_buffer.data, front_buffer.pixels.size_in_bytes);
+    kstd_memcpy(front_buffer.pixels.data, back_buffers[active_frame_slot].data, front_buffer.pixels.size_in_bytes);
+    active_frame_slot ^= 1;
 }
 
 [[nodiscard]] auto initialize(const boot::Multiboot2_Info* mbi) -> bool {
@@ -144,11 +147,16 @@ force_inline auto swap_buffers() -> void {
     );
 
     static_assert(sizeof(Pixel) == sizeof(u32));
-    kstd_memset32(back_buffer.data, 0, back_buffer.size_in_bytes / sizeof(Pixel));
-    swap_buffers();
+    for (u8 slot = 0; slot < 2; ++slot)
+        back_buffers[slot] = Array_View<Pixel, GFX_PIXEL_COUNT>{ram_back_buffers[slot].data};
+
+    for (auto& back_buffer : back_buffers)
+        kstd_memset32(back_buffer.data, 0, back_buffer.size_in_bytes / sizeof(Pixel));
+    kstd_memcpy(front_buffer.pixels.data, back_buffers[0].data, front_buffer.pixels.size_in_bytes);
 
     static_assert(sizeof(Depth) == sizeof(u32));
-    kstd_memset32(depth_buffer.data, DEPTH_FAR, depth_buffer.size_in_bytes / sizeof(Depth));
+    for (auto& depth_buffer : depth_buffers)
+        kstd_memset32(depth_buffer.data, DEPTH_FAR, depth_buffer.size_in_bytes / sizeof(Depth));
 
     framebuffer_initialized = true;
     return true;
@@ -176,9 +184,9 @@ static force_inline auto set_pixel(u32 x, u32 y, Color color) -> void {
     auto index = y * front_buffer.stride + x;
     if constexpr(IMMEDIATE) {
         front_buffer.pixels[index].blend_with(color);
-        back_buffer[index].blend_with(color);
+        back_buffers[active_frame_slot][index].blend_with(color);
     } else {
-        back_buffer[index].blend_with(color);
+        back_buffers[active_frame_slot][index].blend_with(color);
     }
 }
 
@@ -192,10 +200,10 @@ static force_inline auto set_pixel(u32 x, u32 y, Color color, Depth depth = DEPT
     using namespace hidden;
 
     auto index = y * front_buffer.stride + x;
-    if (depth != DEPTH_FAR && depth >= depth_buffer[index]) return;
+    if (depth != DEPTH_FAR && depth >= depth_buffers[active_frame_slot][index]) return;
 
-    back_buffer[index].blend_with(color);
-    if (depth != DEPTH_FAR) depth_buffer[index] = depth;
+    back_buffers[active_frame_slot][index].blend_with(color);
+    if (depth != DEPTH_FAR) depth_buffers[active_frame_slot][index] = depth;
 }
 
 // @TODO(blanktiger): Optimize.
@@ -207,7 +215,7 @@ auto clear(Color color) -> void {
     }
 
     static_assert(sizeof(Depth) == sizeof(u32));
-    kstd_memset32(hidden::depth_buffer.data, DEPTH_FAR, hidden::depth_buffer.size_in_bytes / sizeof(Depth));
+    kstd_memset32(hidden::depth_buffers[hidden::active_frame_slot].data, DEPTH_FAR, hidden::depth_buffers[hidden::active_frame_slot].size_in_bytes / sizeof(Depth));
 }
 
 enum struct Render_Pass : u8 {

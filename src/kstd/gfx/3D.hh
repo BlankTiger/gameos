@@ -161,7 +161,7 @@ struct Draw_Command_3D {
     };
 };
 
-inline Array<Draw_Command_3D> draw_commands_world_3D(256);
+inline Array<Draw_Command_3D> draw_commands_world_3D[2]{Array<Draw_Command_3D>(256), Array<Draw_Command_3D>(256)};
 
 force_inline auto sample_texture(const Resource_View& res, f32 u, f32 v) -> Color {
     u = std::clamp(u, f32(0), f32(1));
@@ -386,7 +386,7 @@ auto inner_draw_mesh(Mesh_Instance instance, Camera3D camera) -> void {
 }
 
 auto draw_mesh(Mesh_Instance instance, Camera3D camera) -> void {
-    draw_commands_world_3D.push_back(
+    draw_commands_world_3D[hidden::active_frame_slot].push_back(
         Draw_Command_3D{
             .type = Draw_Command_3D_Type::DRAW_MESH,
             .camera = camera,
@@ -465,7 +465,7 @@ auto inner_draw_wireframe(Mesh_Instance instance, Camera3D camera) -> void {
 }
 
 auto draw_wireframe(Mesh_Instance instance, Camera3D camera) -> void {
-    draw_commands_world_3D.push_back(
+    draw_commands_world_3D[hidden::active_frame_slot].push_back(
         Draw_Command_3D{
             .type = Draw_Command_3D_Type::DRAW_WIREFRAME,
             .camera = camera,
@@ -476,7 +476,7 @@ auto draw_wireframe(Mesh_Instance instance, Camera3D camera) -> void {
 
 
 force_inline auto draw_world_3D() -> void {
-    for (const auto& command : draw_commands_world_3D) {
+    for (const auto& command : draw_commands_world_3D[hidden::active_frame_slot]) {
         using enum Draw_Command_3D_Type;
         switch (command.type) {
             case DRAW_MESH: {
@@ -489,7 +489,7 @@ force_inline auto draw_world_3D() -> void {
             } break;
         }
     }
-    draw_commands_world_3D.clear();
+    draw_commands_world_3D[hidden::active_frame_slot].clear();
 }
 
 }  // namespace gfx
