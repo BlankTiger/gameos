@@ -540,6 +540,22 @@ auto start_timer_periodic(u32 frequency_hz) -> void {
     write_register(Register_Offset::TIMER_INITIAL_COUNT, counts_per_irq);
 }
 
+auto stop_timer() -> void {
+    write_register(
+        Register_Offset::LOCAL_VECTOR_TABLE_TIMER,
+        Local_Vector_Table_Timer_Register {
+            .vector          = VECTOR_LOCAL_APIC_TIMER,
+            .reserved_low    = 0,
+            .delivery_status = 0,
+            .reserved_mid    = 0,
+            .masked          = 1,
+            .timer_mode      = Timer_Mode::PERIODIC,
+            .reserved_high   = 0,
+        }
+    );
+    write_register(Register_Offset::TIMER_INITIAL_COUNT, 0u);
+}
+
 // Write destination_apic_id into Interrupt Command Register high bits 31:24
 // (xAPIC). The command holds the vector, delivery mode, level, trigger, and
 // shorthand. Poll delivery_pending until it clears.

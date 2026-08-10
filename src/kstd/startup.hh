@@ -79,6 +79,12 @@ inline auto kernel_startup(u32 magic, const boot::Multiboot2_Info* mbi) -> void 
 
     threads::initialize();
     ap::initialize_aps();
+    if (ap::online_count() > 1) {
+        ktime::set_tick_cpu(1);
+        lapic::stop_timer();
+    } else {
+        ktime::set_tick_cpu(0);
+    }
     threads::smoke_test();
 
     krand::initialize();

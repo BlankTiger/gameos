@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+
 #include "basic.hh"
 #include "low_level_io.hh"
 #include "synchronization.hh"
@@ -19,6 +21,15 @@ constexpr auto TICK_RATE_DIVISOR = PIT_FREQUENCY_HZ / TICK_RATE;
 
 namespace hidden {
     inline volatile u64 tick_counter = 0;
+    inline std::atomic<u32> tick_cpu{0};
+}
+
+auto set_tick_cpu(u32 cpu_index) -> void {
+    hidden::tick_cpu.store(cpu_index, std::memory_order_release);
+}
+
+force_inline auto owns_tick_cpu(u32 cpu_index) -> bool {
+    return hidden::tick_cpu.load(std::memory_order_relaxed) == cpu_index;
 }
 
 union Command {

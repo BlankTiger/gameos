@@ -70,6 +70,9 @@ base layer:
       library probably wants to control so we have to figure out a way to switch
       the core configuration in a way that doesn't hinder performance and is
       easy/intuitive to use.
+- [ ] CPU pinning for threads
+- [ ] detach
+- [ ] copy FPU and SSE state when doing a context switch
 
 
 utils:
