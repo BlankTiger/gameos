@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+
 #include "advanced_configuration_and_power_interface.hh"
 #include "application_processor_state.hh"
 #include "assert.hh"
@@ -13,18 +15,17 @@
 #include "local_apic.hh"
 #include "serial_format.hh"
 #include "smp_constants.hh"
+#include "threads.hh"
 #include "time.hh"
 #include "pointer_utils.hh"
 #include "string_builder.hh"
-
-extern "C" auto ap_main(u32 cpu_index) -> void;
 
 namespace ap {
 
 // Stops all future interrupts and goes to sleep.
 force_inline auto freeze_cpu() -> void {
     auto idx = cpu_local::current().cpu_index;
-    cpus_frozen[idx] = true;
+    cpus_frozen[idx].store(true, std::memory_order_release);
     asm volatile("" ::: "memory");
     asm volatile("cli" ::: "memory");
     for (;;) asm volatile("hlt");
@@ -35,15 +36,15 @@ namespace hidden {
     // @SAFETY: No need for an atomic as eventually all the APs will get to read the correct
     //          value and go to sleep.
     //
-    inline volatile bool stop_requested = false;
+    inline std::atomic<bool> stop_requested{false};
 }
 
 force_inline auto is_stop_requested() -> bool {
-    return hidden::stop_requested;
+    return hidden::stop_requested.load(std::memory_order_acquire);
 }
 
 force_inline auto request_stop_of_all_other_aps() -> void {
-    hidden::stop_requested = true;
+    hidden::stop_requested.store(true, std::memory_order_release);
     asm volatile("" ::: "memory");  // Compiler barrier (release semantics).
 
     using namespace lapic;
@@ -223,12 +224,45 @@ auto copy_boot_pml4_to_the_expected_place() -> void {
     *addr_as<volatile psize*>(TRAMPOLINE_PHYSICAL_ADDRESS + SMP_OFFSET_CR3) = boot_pml4_physical_address;
 }
 
+constexpr auto STACK_POINTER_ADDR = TRAMPOLINE_PHYSICAL_ADDRESS + SMP_OFFSET_STACK;
+
+auto ap_main(u32 cpu_index) -> void {
+    serial::println("AP index=% started", cpu_index);
+    ap::cpus_online[cpu_index].store(true, std::memory_order_release);
+
+    // Switch away from the temporary GDT to the kernel GDT.
+    gdt::load_shared();
+
+    // Load kernel IDT (table already built by the BSP).
+    idt::load();
+
+    auto* kernel_top = addr_as<u8*>(ap::STACK_POINTER_ADDR);
+    cpu_local::initialize_application_processor(cpu_index, kernel_top);
+
+    kstd_assert(cpu_local::current().cpu_index == cpu_index);
+
+    lapic::initialize_application_processor();
+    lapic::start_timer_periodic(ktime::TICK_RATE);
+
+    idt::enable_interrupts();
+
+    serial::println("AP online index=% apic_id=%", cpu_index, lapic::local_apic_id());
+
+    for (;;) {
+        if (ap::is_stop_requested()) {
+            ap::freeze_cpu();
+        }
+
+        if (!threads::idle_poll()) {
+            asm volatile("hlt"); // Wait for work.
+        }
+    }
+}
+
 auto set_ap_main_as_offset_entry() -> void {
     auto ap_main_address = ptr_addr(ap_main);
     *addr_as<volatile psize*>(TRAMPOLINE_PHYSICAL_ADDRESS + SMP_OFFSET_ENTRY) = ap_main_address;
 }
-
-constexpr auto STACK_POINTER_ADDR = TRAMPOLINE_PHYSICAL_ADDRESS + SMP_OFFSET_STACK;
 
 auto get_stack_pointer() -> u8* {
     return addr_as<u8*>(STACK_POINTER_ADDR);
@@ -253,10 +287,12 @@ auto copy_pointer_to_core_info(u32 apic_id) -> void {
 }
 
 auto initialize_aps() -> void {
-    cpus_online.fill(false);
-    cpus_frozen.fill(false);
+    for (u32 index = 0; index < acpi::MAX_CPUS; ++index) {
+        cpus_online[index].store(false, std::memory_order_relaxed);
+        cpus_frozen[index].store(false, std::memory_order_relaxed);
+    }
     // Mark BSP as online.
-    cpus_online[0] = true;
+    cpus_online[0].store(true, std::memory_order_release);
 
     kstd_assert(smp_trampoline_size <= 0xF00, "This must fit for real mode to work.");
     kstd_assert(smp_trampoline_size > 0);
@@ -337,7 +373,7 @@ auto initialize_aps() -> void {
         static constexpr auto RETRY_LIMIT = 50'000'000;
         for (u64 retry_counter = 0; retry_counter < RETRY_LIMIT; ++retry_counter) {
             if (retry_counter == RETRY_LIMIT - 1) reached_timeout = true;
-            if (cpus_online[next_cpu_index]) break;
+            if (cpus_online[next_cpu_index].load(std::memory_order_acquire)) break;
 
             asm volatile("pause");
         }
@@ -350,34 +386,4 @@ auto initialize_aps() -> void {
     }
 }
 
-}
-
-extern "C" auto ap_main(u32 cpu_index) -> void {
-    serial::println("AP index=% started", cpu_index);
-    ap::cpus_online[cpu_index] = true;
-
-    // Switch away from the temporary GDT to the kernel GDT.
-    gdt::load_shared();
-
-    // Load kernel IDT (table already built by the BSP).
-    idt::load();
-
-    auto* kernel_top = addr_as<u8*>(ap::STACK_POINTER_ADDR);
-    cpu_local::initialize_application_processor(cpu_index, kernel_top);
-
-    kstd_assert(cpu_local::current().cpu_index == cpu_index);
-
-    lapic::initialize_application_processor();
-    lapic::start_timer_periodic(ktime::TICK_RATE);
-
-    idt::enable_interrupts();
-
-    serial::println("AP online index=% apic_id=%", cpu_index, lapic::local_apic_id());
-
-    for (;;) {
-        if (ap::is_stop_requested()) {
-            ap::freeze_cpu();
-        }
-        asm volatile("hlt"); // Wait for work.
-    }
 }

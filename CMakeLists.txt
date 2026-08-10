@@ -51,6 +51,7 @@ set(GENERATED_SOURCES
     ${GENERATED_DIR}/src/boot.S
     ${GENERATED_DIR}/src/main.cc
     ${GENERATED_DIR}/src/kstd/smp_trampoline.S
+    ${GENERATED_DIR}/src/kstd/context_switch.S
 )
 
 file(GLOB_RECURSE preprocessor_sources CONFIGURE_DEPENDS
