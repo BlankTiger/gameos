@@ -72,7 +72,7 @@ base layer:
       easy/intuitive to use.
 - [x] CPU pinning for threads
 - [x] detach
-- [ ] copy FPU and SSE state when doing a context switch
+- [x] copy FPU and SSE state when doing a context switch
 - [ ] cpu affinity - in Thread_Config there should probably be something like "first chosen" to set the core number dynamically when it first gets sheduled on some core
 - [x] check FPS before multithreaded GPU
 - [ ] paging - map all given memory

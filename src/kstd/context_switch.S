@@ -15,6 +15,8 @@ threads_context_switch:
     movq %r15, CONTEXT_SWITCH_OFFSET_R15(%rdi)
     movq %rsp, CONTEXT_SWITCH_OFFSET_RSP(%rdi)
 
+    fxsave CONTEXT_SWITCH_OFFSET_FPU(%rdi)
+
     leaq .Lresume(%rip), %rax
     movq %rax, CONTEXT_SWITCH_OFFSET_RIP(%rdi)
 
@@ -25,6 +27,8 @@ threads_context_switch:
     movq CONTEXT_SWITCH_OFFSET_R14(%rsi), %r14
     movq CONTEXT_SWITCH_OFFSET_R15(%rsi), %r15
     movq CONTEXT_SWITCH_OFFSET_RSP(%rsi), %rsp
+
+    fxrstor CONTEXT_SWITCH_OFFSET_FPU(%rsi)
 
     jmp *CONTEXT_SWITCH_OFFSET_RIP(%rsi)
 

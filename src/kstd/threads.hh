@@ -27,20 +27,43 @@ constexpr u32 ANY_CPU = static_cast<u32>(-1);
 
 namespace hidden {
 
+struct alignas(16) FPU_State {
+    u16 control_word = 0x037f;
+    u16 status_word{};
+    u8  tag_word{};
+    u8  reserved_0{};
+    u16 opcode{};
+    u32 instruction_pointer{};
+    u16 code_segment{};
+    u16 reserved_1{};
+    u32 data_pointer{};
+    u16 data_segment{};
+    u16 reserved_2{};
+    u32 mxcsr = 0x1f80;
+    u32 mxcsr_mask{};
+    u8  st_registers[128]{};
+    u8  xmm_registers[256]{};
+    u8  reserved_3[96]{};
+};
+
+static_assert(sizeof(FPU_State) == 512);
+
 struct Context {
     u64 rbx, rbp, r12, r13, r14, r15;
     u64 rsp, rip;
+    FPU_State fpu_state{};
 };
 
-static_assert(sizeof(Context) == 64);
-static_assert(offsetof(Context, rbx) == CONTEXT_SWITCH_OFFSET_RBX);
-static_assert(offsetof(Context, rbp) == CONTEXT_SWITCH_OFFSET_RBP);
-static_assert(offsetof(Context, r12) == CONTEXT_SWITCH_OFFSET_R12);
-static_assert(offsetof(Context, r13) == CONTEXT_SWITCH_OFFSET_R13);
-static_assert(offsetof(Context, r14) == CONTEXT_SWITCH_OFFSET_R14);
-static_assert(offsetof(Context, r15) == CONTEXT_SWITCH_OFFSET_R15);
-static_assert(offsetof(Context, rsp) == CONTEXT_SWITCH_OFFSET_RSP);
-static_assert(offsetof(Context, rip) == CONTEXT_SWITCH_OFFSET_RIP);
+static_assert(sizeof(Context) == 576);
+static_assert(offsetof(Context, rbx)       == CONTEXT_SWITCH_OFFSET_RBX);
+static_assert(offsetof(Context, rbp)       == CONTEXT_SWITCH_OFFSET_RBP);
+static_assert(offsetof(Context, r12)       == CONTEXT_SWITCH_OFFSET_R12);
+static_assert(offsetof(Context, r13)       == CONTEXT_SWITCH_OFFSET_R13);
+static_assert(offsetof(Context, r14)       == CONTEXT_SWITCH_OFFSET_R14);
+static_assert(offsetof(Context, r15)       == CONTEXT_SWITCH_OFFSET_R15);
+static_assert(offsetof(Context, rsp)       == CONTEXT_SWITCH_OFFSET_RSP);
+static_assert(offsetof(Context, rip)       == CONTEXT_SWITCH_OFFSET_RIP);
+static_assert(offsetof(Context, fpu_state) == CONTEXT_SWITCH_OFFSET_FPU);
 
 extern "C" auto threads_context_switch(Context* previous, Context* next) -> void;
 
