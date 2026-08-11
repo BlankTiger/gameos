@@ -76,9 +76,10 @@ base layer:
 - [ ] paging - map all given memory
 - [ ] paging - helpers for marking the pages as invalid
 - [ ] profiler
-- [ ] thread_local storage
+- [x] thread_local storage
 - [ ] keyboard handling
 - [ ] mouse handling
+- [ ] remove all the integer postfix conversions and replace them with explicit typing u32{}, u64{}, etc
 
 
 utils:
