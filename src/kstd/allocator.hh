@@ -341,8 +341,10 @@ struct Arena_Allocator final : Allocator {
 };
 
 //
-// Thin leak-checking wrapper. Forwards alloc/free to a backing allocator and
-// asserts in the destructor that every allocation was freed.
+// Thin leak-checking wrapper. Forwards alloc/free to a backing allocator.
+// Currently checks for:
+// - leaked allocations,
+// - double frees.
 //
 struct Debug_Allocator final : Allocator {
     struct Allocation_Record {
@@ -356,7 +358,7 @@ struct Debug_Allocator final : Allocator {
     Allocation_Record* live_head  = nullptr;
     usize              live_count = 0;
 
-    Debug_Allocator() = default;
+    Debug_Allocator() : Debug_Allocator(mem::resolve_allocator()) {}
 
     explicit Debug_Allocator(Allocator* backing_allocator)
         : backing(backing_allocator),
@@ -410,7 +412,7 @@ struct Debug_Allocator final : Allocator {
             link = &record->next;
         }
 
-        unreachable("Debug_Allocator: free of untracked pointer");
+        unreachable("Debug_Allocator: double free");
     }
 };
 
@@ -532,6 +534,20 @@ TEST(Debug_Allocator, detects_leaked_allocations) {
             (void)debug.alloc(32);
         },
         "Debug_Allocator: leaked allocations"
+    );
+}
+
+TEST(Debug_Allocator, detects_double_frees) {
+    EXPECT_DEATH(
+        {
+            mem::Hosted_Allocator hosted{};
+            mem::Debug_Allocator  debug{&hosted};
+            auto size = 32;
+            auto* mem = debug.alloc(size);
+            debug.free(mem, size);
+            debug.free(mem, size);
+        },
+        "Debug_Allocator: double free"
     );
 }
 
