@@ -23,23 +23,47 @@
 namespace threads {
 
 using Thread_Procedure = auto (*)(void*) -> void;
+constexpr u32 ANY_CPU = static_cast<u32>(-1);
 
 namespace hidden {
+
+struct alignas(16) FPU_State {
+    u16 control_word = 0x037f;
+    u16 status_word{};
+    u8  tag_word{};
+    u8  reserved_0{};
+    u16 opcode{};
+    u32 instruction_pointer{};
+    u16 code_segment{};
+    u16 reserved_1{};
+    u32 data_pointer{};
+    u16 data_segment{};
+    u16 reserved_2{};
+    u32 mxcsr = 0x1f80;
+    u32 mxcsr_mask{};
+    u8  st_registers[128]{};
+    u8  xmm_registers[256]{};
+    u8  reserved_3[96]{};
+};
+
+static_assert(sizeof(FPU_State) == 512);
 
 struct Context {
     u64 rbx, rbp, r12, r13, r14, r15;
     u64 rsp, rip;
+    FPU_State fpu_state{};
 };
 
-static_assert(sizeof(Context) == 64);
-static_assert(offsetof(Context, rbx) == CONTEXT_SWITCH_OFFSET_RBX);
-static_assert(offsetof(Context, rbp) == CONTEXT_SWITCH_OFFSET_RBP);
-static_assert(offsetof(Context, r12) == CONTEXT_SWITCH_OFFSET_R12);
-static_assert(offsetof(Context, r13) == CONTEXT_SWITCH_OFFSET_R13);
-static_assert(offsetof(Context, r14) == CONTEXT_SWITCH_OFFSET_R14);
-static_assert(offsetof(Context, r15) == CONTEXT_SWITCH_OFFSET_R15);
-static_assert(offsetof(Context, rsp) == CONTEXT_SWITCH_OFFSET_RSP);
-static_assert(offsetof(Context, rip) == CONTEXT_SWITCH_OFFSET_RIP);
+static_assert(sizeof(Context) == 576);
+static_assert(offsetof(Context, rbx)       == CONTEXT_SWITCH_OFFSET_RBX);
+static_assert(offsetof(Context, rbp)       == CONTEXT_SWITCH_OFFSET_RBP);
+static_assert(offsetof(Context, r12)       == CONTEXT_SWITCH_OFFSET_R12);
+static_assert(offsetof(Context, r13)       == CONTEXT_SWITCH_OFFSET_R13);
+static_assert(offsetof(Context, r14)       == CONTEXT_SWITCH_OFFSET_R14);
+static_assert(offsetof(Context, r15)       == CONTEXT_SWITCH_OFFSET_R15);
+static_assert(offsetof(Context, rsp)       == CONTEXT_SWITCH_OFFSET_RSP);
+static_assert(offsetof(Context, rip)       == CONTEXT_SWITCH_OFFSET_RIP);
+static_assert(offsetof(Context, fpu_state) == CONTEXT_SWITCH_OFFSET_FPU);
 
 extern "C" auto threads_context_switch(Context* previous, Context* next) -> void;
 
@@ -63,7 +87,9 @@ struct Thread {
     void*            typed_control{};
     void*            typed_result{};
     auto (*typed_destroy)(void*) -> void{};
+    u32 cpu_affinity = ANY_CPU;
     std::atomic<State> state{State::FREE};
+    std::atomic<bool>  detached{false};
 
     Thread() = default;
 
@@ -80,7 +106,9 @@ struct Thread {
           typed_control(other.typed_control),
           typed_result(other.typed_result),
           typed_destroy(other.typed_destroy),
-          state(other.state.load(std::memory_order_relaxed)) {}
+          cpu_affinity(other.cpu_affinity),
+          state(other.state.load(std::memory_order_relaxed)),
+          detached(other.detached.load(std::memory_order_relaxed)) {}
 
     auto operator = (const Thread& other) -> Thread& {
         context           = other.context;
@@ -95,12 +123,15 @@ struct Thread {
         typed_control     = other.typed_control;
         typed_result      = other.typed_result;
         typed_destroy     = other.typed_destroy;
+        cpu_affinity      = other.cpu_affinity;
         state.store(other.state.load(std::memory_order_relaxed), std::memory_order_relaxed);
+        detached.store(other.detached.load(std::memory_order_relaxed), std::memory_order_relaxed);
         return *this;
     }
 };
 
 static_assert(std::atomic<State>::is_always_lock_free);
+static_assert(std::atomic<bool>::is_always_lock_free);
 
 }
 
@@ -133,14 +164,25 @@ namespace hidden {
 auto finish_current() -> void {
     const auto cpu = cpu_local::current().cpu_index;
     auto* thread = current_threads[cpu];
-    kstd_assert(thread != nullptr, "No current thread even tho there should be one");
+    kstd_assert(thread != nullptr, "No current thread even though there should be one");
 
-    thread->state.store(State::DONE, std::memory_order_release);
-    current_threads[cpu] = nullptr;
+    {
+        auto guard = ready_lock.scoped_irq_lock();
+        thread->state.store(State::DONE, std::memory_order_relaxed);
+        current_threads[cpu] = nullptr;
+    }
 
     threads_context_switch(&thread->context, &idle_contexts[cpu]);
 
     unreachable("Finished thread resumed");
+}
+
+auto reclaim(Thread& thread) -> void {
+    if (thread.typed_control != nullptr)
+        thread.typed_destroy(thread.typed_control);
+
+    thread.allocator->free(thread.storage, thread.storage_size, thread.storage_alignment);
+    thread = {};
 }
 
 auto thread_start() -> void {
@@ -170,7 +212,8 @@ auto create_thread(
     void*            storage,
     u64              storage_size,
     u64              storage_alignment,
-    psize            entry
+    psize            entry,
+    u32              cpu_affinity = ANY_CPU
 ) -> Thread_Handle<T> {
     u32 handle = THREAD_MAX_COUNT;
     {
@@ -197,6 +240,7 @@ auto create_thread(
     thread.storage           = storage;
     thread.storage_size      = storage_size;
     thread.storage_alignment = storage_alignment;
+    thread.cpu_affinity      = cpu_affinity;
 
     auto stack_top = ptr_addr(thread.stack) + stack_size;
     stack_top &= ~u64{AP_STACK_ALIGNMENT - 1}; // Make sure it's really aligned correctly.
@@ -213,7 +257,12 @@ auto create_thread(
 
 }
 
-[[nodiscard]] auto spawn(Thread_Procedure procedure, void* data, u64 stack_size = THREAD_STACK_SIZE) -> Thread_Handle<void> {
+[[nodiscard]] auto spawn(
+    Thread_Procedure procedure,
+    void*            data,
+    u64              stack_size   = THREAD_STACK_SIZE,
+    u32              cpu_affinity = ANY_CPU
+) -> Thread_Handle<void> {
     using namespace hidden;
     auto* allocator = mem::resolve_allocator();
     auto* stack = allocator->alloc(stack_size, AP_STACK_ALIGNMENT);
@@ -228,7 +277,8 @@ auto create_thread(
         stack,
         stack_size,
         AP_STACK_ALIGNMENT,
-        ptr_addr(thread_start)
+        ptr_addr(thread_start),
+        cpu_affinity
     );
     enqueue_thread(handle);
 
@@ -268,7 +318,20 @@ auto idle_poll() -> bool {
         auto guard = ready_lock.scoped_irq_lock();
 
         if (ready_queue.empty()) return false;
-        handle = ready_queue.pop_front();
+
+        bool found = false;
+        const auto queued = ready_queue.size;
+        for (usize index = 0; index < queued; ++index) {
+            auto candidate = ready_queue.pop_front();
+            auto& candidate_thread = threads[candidate];
+            if (!found && (candidate_thread.cpu_affinity == ANY_CPU || candidate_thread.cpu_affinity == cpu)) {
+                handle = candidate;
+                found = true;
+            } else {
+                ready_queue.push_back(candidate);
+            }
+        }
+        if (!found) return false;
     }
 
     auto& thread = threads[handle];
@@ -279,6 +342,12 @@ auto idle_poll() -> bool {
 
     threads_context_switch(&idle_contexts[cpu], &thread.context);
     current_threads[cpu] = nullptr;
+
+    if (thread.state.load(std::memory_order_acquire) == State::DONE && thread.detached.load(std::memory_order_acquire)) {
+        auto guard = ready_lock.scoped_irq_lock();
+        if (thread.state.load(std::memory_order_relaxed) == State::DONE && thread.detached.load(std::memory_order_relaxed))
+            reclaim(thread);
+    }
 
     return true;
 }
@@ -398,6 +467,21 @@ auto spawn(Procedure procedure, Arguments&&... args) -> Thread_Handle<hidden::Pr
 }
 
 template <typename Result_Type>
+auto detach(Thread_Handle<Result_Type> handle) -> void {
+    using namespace hidden;
+    kstd_assert(handle.index < THREAD_MAX_COUNT, "Invalid thread handle");
+
+    auto guard = ready_lock.scoped_irq_lock();
+    auto& thread = threads[handle.index];
+    auto state = thread.state.load(std::memory_order_relaxed);
+    kstd_assert(state != State::FREE, "Thread is already free");
+    kstd_assert(state != State::DONE, "Cannot detach completed thread");
+    kstd_assert(!thread.detached.load(std::memory_order_relaxed), "Thread is already detached");
+
+    thread.detached.store(true, std::memory_order_release);
+}
+
+template <typename Result_Type>
 auto join(Thread_Handle<Result_Type> handle) -> Result_Type {
     using namespace hidden;
     kstd_assert(handle.index < THREAD_MAX_COUNT, "Invalid typed thread handle");
@@ -419,11 +503,12 @@ auto join(Thread_Handle<Result_Type> handle) -> Result_Type {
     auto guard = ready_lock.scoped_irq_lock();
     auto& thread = threads[handle.index];
     kstd_assert(thread.state.load(std::memory_order_acquire) == State::DONE, "Thread is not done");
+    kstd_assert(!thread.detached.load(std::memory_order_relaxed), "Cannot join detached thread");
 
     if constexpr (std::is_void_v<Result_Type>) {
         kstd_assert(thread.typed_control == nullptr, "Void handle belongs to typed thread");
-        thread.allocator->free(thread.storage, thread.storage_size, thread.storage_alignment);
-        thread = {};
+
+        reclaim(thread);
         return;
     } else {
         kstd_assert(thread.typed_control != nullptr, "Result handle belongs to untyped thread");
@@ -433,9 +518,7 @@ auto join(Thread_Handle<Result_Type> handle) -> Result_Type {
         auto* result = static_cast<Result_Type*>(thread.typed_result);
         Result_Type value = std::move(*result);
 
-        thread.typed_destroy(thread.typed_control);
-        thread.allocator->free(thread.storage, thread.storage_size, thread.storage_alignment);
-        thread = {};
+        reclaim(thread);
 
         return value;
     }

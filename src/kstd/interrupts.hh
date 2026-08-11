@@ -318,13 +318,28 @@ auto isr_handle_double_fault(u64 error) -> void {
     halt::forever(error_message);
 }
 
+auto isr_handle_page_fault(const Interrupt_Frame& frame) -> void {
+    u64 fault_address;
+    asm volatile("mov %%cr2, %0" : "=r"(fault_address));
+
+    auto error_message = csprint(
+        &hidden::emergency_error_message_allocator,
+        "Page fault: address=% rip=% rsp=% error=%",
+        fault_address,
+        frame.rip,
+        frame.rsp,
+        frame.error_code
+    );
+    halt::forever(error_message);
+}
+
 auto isr_handle_programmable_interval_timer() -> void {
     ktime::on_tick();
 }
 
 auto isr_handle_local_apic_timer() -> void {
     cpu_local::current().lapic_ticks += 1;
-    if (cpu_local::current().cpu_index == 0)
+    if (ktime::owns_tick_cpu(cpu_local::current().cpu_index))
         ktime::on_tick();
 }
 
@@ -352,6 +367,7 @@ extern "C" auto isr_dispatch(Interrupt_Frame* frame) -> void {
         case DIVIDE_ERROR:             isr_handle_divide_error();                break;
         case NON_MASKABLE_INTERRUPT:   isr_handle_non_maskable_interrupt();      break;
         case DOUBLE_FAULT:             isr_handle_double_fault(error);           break;
+        case PAGE_FAULT:               isr_handle_page_fault(*frame);            break;
         case PS2_KEYBOARD:             ps2::isr_handle_ps2_keyboard();           break;
         case PS2_MOUSE:                ps2::isr_handle_ps2_mouse();              break;
         case PIT_TIMER:                isr_handle_programmable_interval_timer(); break;
