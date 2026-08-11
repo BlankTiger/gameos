@@ -21,6 +21,8 @@ struct Allocator {
 };
 
 force_inline auto resolve_allocator(Allocator* allocator = nullptr) -> Allocator*;
+force_inline auto alloc(usize size, usize alignment = alignof(std::max_align_t), Allocator* allocator = nullptr) -> void*;
+force_inline auto free(void* pointer, usize size, usize alignment = alignof(std::max_align_t), Allocator* allocator = nullptr) -> void;
 
 template <typename T>
 force_inline auto align_up(T value, T alignment) -> T {
@@ -341,8 +343,10 @@ struct Arena_Allocator final : Allocator {
 };
 
 //
-// Thin leak-checking wrapper. Forwards alloc/free to a backing allocator and
-// asserts in the destructor that every allocation was freed.
+// Thin leak-checking wrapper. Forwards alloc/free to a backing allocator.
+// Currently checks for:
+// - leaked allocations,
+// - double frees.
 //
 struct Debug_Allocator final : Allocator {
     struct Allocation_Record {
@@ -356,7 +360,7 @@ struct Debug_Allocator final : Allocator {
     Allocation_Record* live_head  = nullptr;
     usize              live_count = 0;
 
-    Debug_Allocator() = default;
+    Debug_Allocator() : Debug_Allocator(mem::resolve_allocator()) {}
 
     explicit Debug_Allocator(Allocator* backing_allocator)
         : backing(backing_allocator),
@@ -410,7 +414,7 @@ struct Debug_Allocator final : Allocator {
             link = &record->next;
         }
 
-        unreachable("Debug_Allocator: free of untracked pointer");
+        unreachable("Debug_Allocator: double free");
     }
 };
 
@@ -493,6 +497,16 @@ force_inline auto resolve_allocator(Allocator* allocator) -> Allocator* {
     return allocator != nullptr ? allocator : hidden::current_global_allocator;
 }
 
+force_inline auto alloc(usize size, usize alignment, Allocator* allocator) -> void* {
+    auto* resolved_allocator = resolve_allocator(allocator);
+    return resolved_allocator->alloc(size, alignment);
+}
+
+force_inline auto free(void* pointer, usize size, usize alignment, Allocator* allocator) -> void {
+    auto* resolved_allocator = resolve_allocator(allocator);
+    resolved_allocator->free(pointer, size, alignment);
+}
+
 struct Push_Allocator {
     Allocator* previous_allocator;
 
@@ -524,6 +538,25 @@ TEST(Debug_Allocator, allows_destruction_when_all_freed) {
     debug.free(b, 64);
 }
 
+TEST(Allocator, convenience_alloc_and_free_use_current_allocator) {
+    mem::Hosted_Allocator hosted{};
+    mem::Push_Allocator push{&hosted};
+
+    void* pointer = mem::alloc(16, alignof(u64));
+
+    ASSERT_NE(pointer, nullptr);
+    mem::free(pointer, 16, alignof(u64));
+}
+
+TEST(Allocator, convenience_alloc_and_free_accept_explicit_allocator) {
+    mem::Hosted_Allocator hosted{};
+
+    void* pointer = mem::alloc(16, alignof(u64), &hosted);
+
+    ASSERT_NE(pointer, nullptr);
+    mem::free(pointer, 16, alignof(u64), &hosted);
+}
+
 TEST(Debug_Allocator, detects_leaked_allocations) {
     EXPECT_DEATH(
         {
@@ -532,6 +565,20 @@ TEST(Debug_Allocator, detects_leaked_allocations) {
             (void)debug.alloc(32);
         },
         "Debug_Allocator: leaked allocations"
+    );
+}
+
+TEST(Debug_Allocator, detects_double_frees) {
+    EXPECT_DEATH(
+        {
+            mem::Hosted_Allocator hosted{};
+            mem::Debug_Allocator  debug{&hosted};
+            auto size = 32;
+            auto* mem = debug.alloc(size);
+            debug.free(mem, size);
+            debug.free(mem, size);
+        },
+        "Debug_Allocator: double free"
     );
 }
 

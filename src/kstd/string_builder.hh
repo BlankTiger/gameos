@@ -127,8 +127,7 @@ struct String_Builder {
             return string{};
         }
 
-        auto* destination = mem::resolve_allocator(destination_allocator);
-        auto* out = static_cast<char*>(destination->alloc(count, alignof(char)));
+        auto* out = static_cast<char*>(mem::alloc(count, alignof(char), destination_allocator));
         kstd_assert(out != nullptr, "String_Builder::to_string allocation failed");
 
         char* cursor = out;
@@ -149,8 +148,7 @@ struct String_Builder {
     auto to_c_string(mem::Allocator* destination_allocator = nullptr, bool do_reset = true) -> const char* {
         usize count = length();
 
-        auto* destination = mem::resolve_allocator(destination_allocator);
-        auto* out = static_cast<char*>(destination->alloc(count + 1, alignof(char)));
+        auto* out = static_cast<char*>(mem::alloc(count + 1, alignof(char), destination_allocator));
         kstd_assert(out != nullptr, "String_Builder::to_c_string allocation failed");
 
         char* cursor = out;

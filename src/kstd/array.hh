@@ -120,6 +120,11 @@ struct Static_Array {
     auto elements()       -> T*       { return data; }
     auto elements() const -> const T* { return data; }
 
+    auto pop_back() -> T {
+        kstd_assert(N > 0, "pop_back on empty Static_Array");
+        return std::move(data[N - 1]);
+    }
+
     force_inline auto slice(usize index, usize count) -> Array_View<T> {
         return Array_View<T, N>{data}.slice(index, count);
     }
@@ -152,6 +157,14 @@ TEST(Static_Array, elements_returns_data_pointer) {
 
     EXPECT_EQ(ptr[0], 10);
     EXPECT_EQ(ptr[1], 20);
+}
+
+TEST(Static_Array, pop_back_returns_last_element) {
+    Static_Array<int, 3> arr{{1, 2, 3}};
+
+    EXPECT_EQ(arr.pop_back(), 3);
+    EXPECT_EQ(arr[0], 1);
+    EXPECT_EQ(arr[1], 2);
 }
 
 TEST(Static_Array, out_of_bounds_asserts) {
@@ -299,6 +312,14 @@ struct Bounded_Array {
         ++size;
     }
 
+    auto pop_back() -> T {
+        kstd_assert(size > 0, "pop_back on empty Bounded_Array");
+        auto element = std::move(*slot(size - 1));
+        slot(size - 1)->~T();
+        --size;
+        return element;
+    }
+
     auto elements()       -> T*       { return slot(0); }
     auto elements() const -> const T* { return slot(0); }
 
@@ -349,6 +370,19 @@ TEST(Bounded_Array, push_back_past_max_size_asserts) {
     arr.push_back(2);
 
     EXPECT_DEATH(arr.push_back(3), "push_back on full Bounded_Array");
+}
+
+TEST(Bounded_Array, pop_back_returns_last_element_and_shrinks_size) {
+    Bounded_Array<int, 3> arr;
+
+    arr.push_back(1);
+    arr.push_back(2);
+    arr.push_back(3);
+
+    EXPECT_EQ(arr.pop_back(), 3);
+    EXPECT_EQ(arr.size, 2);
+    EXPECT_EQ(arr[0], 1);
+    EXPECT_EQ(arr[1], 2);
 }
 
 TEST(Bounded_Array, converts_to_array_view) {
@@ -541,15 +575,25 @@ struct Array {
         ++size;
     }
 
+    auto pop_back() -> T {
+        kstd_assert(size > 0, "pop_back on empty Array");
+        auto element = std::move(data[size - 1]);
+        data[size - 1].~T();
+        --size;
+        return element;
+    }
+
     // Move all elements back by one in O(n) time.
-    auto pop_front() -> void {
+    auto pop_front() -> T {
         kstd_assert(size > 0, "pop_front on empty Array");
+        auto element = std::move(data[0]);
         data[0].~T();
         for (usize i = 1; i < size; ++i) {
             ::new (data + i - 1) T(std::move(data[i]));
             data[i].~T();
         }
         --size;
+        return element;
     }
 
     auto clear() {
@@ -678,6 +722,19 @@ TEST(Array, push_back_increases_capacity_when_full) {
     EXPECT_EQ(arr.capacity, 4);
 }
 
+TEST(Array, pop_back_returns_last_element_and_shrinks_size) {
+    Array<int> arr;
+
+    arr.push_back(1);
+    arr.push_back(2);
+    arr.push_back(3);
+
+    EXPECT_EQ(arr.pop_back(), 3);
+    EXPECT_EQ(arr.size, 2);
+    EXPECT_EQ(arr[0], 1);
+    EXPECT_EQ(arr[1], 2);
+}
+
 TEST(Array, reserve_increases_capacity) {
     Array<int> arr;
 
@@ -696,7 +753,7 @@ TEST(Array, pop_front_removes_first_element) {
     arr.push_back(2);
     arr.push_back(3);
 
-    arr.pop_front();
+    EXPECT_EQ(arr.pop_front(), 1);
 
     EXPECT_EQ(arr.size, 2);
     EXPECT_EQ(arr[0], 2);

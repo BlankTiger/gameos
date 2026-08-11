@@ -29,8 +29,6 @@ base layer:
 - [x] interrupts
 - [x] PIC
 - [x] APIC instead of PIC if available later on
-- [ ] keyboard handling
-- [ ] mouse handling
 - [x] multicore
 - [x] serial
 - [x] fix early asserts (term must be initialized for asserts to output anything currently and we have asserts that are before the term::initialize)
@@ -78,6 +76,10 @@ base layer:
 - [ ] paging - map all given memory
 - [ ] paging - helpers for marking the pages as invalid
 - [ ] profiler
+- [x] thread_local storage
+- [ ] keyboard handling
+- [ ] mouse handling
+- [ ] remove all the integer postfix conversions and replace them with explicit typing u32{}, u64{}, etc
 
 
 utils:

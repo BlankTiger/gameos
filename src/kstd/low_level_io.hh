@@ -25,6 +25,10 @@ force_inline auto outb(u16 port, u8 value) -> void {
     asm volatile("outb %0, %1" : : "a"(value), "Nd"(port));
 }
 
+force_inline auto outw(u16 port, u16 value) -> void {
+    asm volatile("outw %0, %1" : : "a"(value), "Nd"(port));
+}
+
 force_inline auto inb(u16 port) -> u8 {
     u8 value;
     asm volatile("inb %1, %0" : "=a"(value) : "Nd"(port));

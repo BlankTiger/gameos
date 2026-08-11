@@ -19,6 +19,7 @@
 #include "smp_constants.hh"
 #include "synchronization.hh"
 #include "string_builder.hh"
+#include "thread_local_storage.hh"
 
 namespace threads {
 
@@ -87,6 +88,7 @@ struct Thread {
     void*            typed_control{};
     void*            typed_result{};
     auto (*typed_destroy)(void*) -> void{};
+    tls::Block*      tls_block{};
     u32 cpu_affinity = ANY_CPU;
     std::atomic<State> state{State::FREE};
     std::atomic<bool>  detached{false};
@@ -106,6 +108,7 @@ struct Thread {
           typed_control(other.typed_control),
           typed_result(other.typed_result),
           typed_destroy(other.typed_destroy),
+          tls_block(other.tls_block),
           cpu_affinity(other.cpu_affinity),
           state(other.state.load(std::memory_order_relaxed)),
           detached(other.detached.load(std::memory_order_relaxed)) {}
@@ -123,6 +126,7 @@ struct Thread {
         typed_control     = other.typed_control;
         typed_result      = other.typed_result;
         typed_destroy     = other.typed_destroy;
+        tls_block         = other.tls_block;
         cpu_affinity      = other.cpu_affinity;
         state.store(other.state.load(std::memory_order_relaxed), std::memory_order_relaxed);
         detached.store(other.detached.load(std::memory_order_relaxed), std::memory_order_relaxed);
@@ -172,6 +176,7 @@ auto finish_current() -> void {
         current_threads[cpu] = nullptr;
     }
 
+    tls::activate(tls::idle(cpu));
     threads_context_switch(&thread->context, &idle_contexts[cpu]);
 
     unreachable("Finished thread resumed");
@@ -181,6 +186,7 @@ auto reclaim(Thread& thread) -> void {
     if (thread.typed_control != nullptr)
         thread.typed_destroy(thread.typed_control);
 
+    tls::destroy(thread.tls_block);
     thread.allocator->free(thread.storage, thread.storage_size, thread.storage_alignment);
     thread = {};
 }
@@ -213,6 +219,7 @@ auto create_thread(
     u64              storage_size,
     u64              storage_alignment,
     psize            entry,
+    tls::Block*      tls_block,
     u32              cpu_affinity = ANY_CPU
 ) -> Thread_Handle<T> {
     u32 handle = THREAD_MAX_COUNT;
@@ -241,6 +248,7 @@ auto create_thread(
     thread.storage_size      = storage_size;
     thread.storage_alignment = storage_alignment;
     thread.cpu_affinity      = cpu_affinity;
+    thread.tls_block         = tls_block;
 
     auto stack_top = ptr_addr(thread.stack) + stack_size;
     stack_top &= ~u64{AP_STACK_ALIGNMENT - 1}; // Make sure it's really aligned correctly.
@@ -267,6 +275,7 @@ auto create_thread(
     auto* allocator = mem::resolve_allocator();
     auto* stack = allocator->alloc(stack_size, AP_STACK_ALIGNMENT);
     kstd_assert(stack != nullptr, "Thread stack allocation failed");
+    auto* tls_block = tls::create();
 
     auto handle = create_thread<void>(
         procedure,
@@ -278,6 +287,7 @@ auto create_thread(
         stack_size,
         AP_STACK_ALIGNMENT,
         ptr_addr(thread_start),
+        tls_block,
         cpu_affinity
     );
     enqueue_thread(handle);
@@ -306,6 +316,7 @@ auto yield() -> void {
         current_threads[cpu] = nullptr;
     }
 
+    tls::activate(tls::idle(cpu));
     threads_context_switch(&current->context, &idle_contexts[cpu]);
 }
 
@@ -339,10 +350,16 @@ auto idle_poll() -> bool {
 
     thread.state.store(State::RUNNING, std::memory_order_relaxed);
     current_threads[cpu] = &thread;
+    tls::activate(thread.tls_block);
 
     threads_context_switch(&idle_contexts[cpu], &thread.context);
     current_threads[cpu] = nullptr;
+    tls::activate(tls::idle(cpu));
 
+    //
+    // We don't take the lock unconditionally if there is no reason to do so.
+    // That would unnecessarily serialize all the cores that might want to use it.
+    //
     if (thread.state.load(std::memory_order_acquire) == State::DONE && thread.detached.load(std::memory_order_acquire)) {
         auto guard = ready_lock.scoped_irq_lock();
         if (thread.state.load(std::memory_order_relaxed) == State::DONE && thread.detached.load(std::memory_order_relaxed))
@@ -454,7 +471,8 @@ auto spawn(Procedure procedure, Arguments&&... args) -> Thread_Handle<hidden::Pr
         storage,
         storage_size,
         control_alignment,
-        ptr_addr(typed_thread_start<Procedure, Result_Type, Arguments...>)
+        ptr_addr(typed_thread_start<Procedure, Result_Type, Arguments...>),
+        tls::create()
     );
 
     auto& thread = threads[handle.index];
@@ -526,9 +544,26 @@ auto join(Thread_Handle<Result_Type> handle) -> Result_Type {
     unreachable();
 }
 
+namespace smoke_tests {
+
+inline thread_local u32 tls_value;
+inline std::atomic<u32> tls_destructors;
+
+struct Smoke_Tls_Object {
+    u32 value = 7;
+
+    ~Smoke_Tls_Object() {
+        tls_destructors.fetch_add(1, std::memory_order_relaxed);
+    }
+};
+
+inline thread_local Smoke_Tls_Object tls_object;
+
+}
+
 auto smoke_test() -> void {
     // Will assert if we leaked anything in this smoke test.
-    mem::Debug_Allocator dbg_allocator{mem::resolve_allocator()};
+    mem::Debug_Allocator dbg_allocator{};
     PUSH_ALLOCATOR(&dbg_allocator);
 
     const auto smoke_proc = [](void* data) -> void {
@@ -566,6 +601,34 @@ auto smoke_test() -> void {
 
         join(thread_a);
         join(thread_b);
+    }
+
+    // Verify C++ thread_local storage is isolated and survives a yield.
+    {
+        struct Tls_Test_Data {
+            u32 value;
+            u32 result;
+        } data_a{41, 0}, data_b{82, 0};
+
+        const auto tls_test_proc = [](void* raw_data) -> void {
+            auto* data = static_cast<Tls_Test_Data*>(raw_data);
+            kstd_assert(smoke_tests::tls_value == 0);
+            kstd_assert(smoke_tests::tls_object.value == 7);
+            smoke_tests::tls_value = data->value;
+            smoke_tests::tls_object.value = data->value;
+            yield();
+            kstd_assert(smoke_tests::tls_value == data->value);
+            kstd_assert(smoke_tests::tls_object.value == data->value);
+            data->result = smoke_tests::tls_value;
+        };
+
+        auto thread_a = spawn(tls_test_proc, &data_a);
+        auto thread_b = spawn(tls_test_proc, &data_b);
+        join(thread_a);
+        join(thread_b);
+        kstd_assert(data_a.result == 41 && data_b.result == 82);
+        kstd_assert(data_a.result != data_b.result);
+        kstd_assert(smoke_tests::tls_destructors.load(std::memory_order_relaxed) == 2);
     }
 
     // Verify handle reuse (thread is correctly freed after the work is done in join).

@@ -51,6 +51,19 @@ SECTIONS
 		__ctors_end = .;
 	}
 
+	.tdata BLOCK(4K) : ALIGN(16)
+	{
+		__tls_start = .;
+		*(.tdata .tdata.* .gnu.linkonce.td.*)
+		__tdata_end = .;
+	}
+
+	.tbss BLOCK(4K) (NOLOAD) : ALIGN(16)
+	{
+		*(.tbss .tbss.* .gnu.linkonce.tb.*)
+		__tls_end = .;
+	}
+
 	/* Read-write data (initialized) */
 	.data BLOCK(4K) : ALIGN(4K)
 	{
