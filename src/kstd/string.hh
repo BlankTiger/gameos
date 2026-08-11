@@ -91,22 +91,20 @@ struct string {
 // allocator null -> current global allocator at free time (must match alloc heap).
 inline auto free_string(string s, mem::Allocator* allocator = nullptr) -> void {
     if (s.data == nullptr || s.size == 0) return;
-    mem::resolve_allocator(allocator)->free(s.data, s.size, alignof(char));
+    mem::free(s.data, s.size, alignof(char), allocator);
 }
 
 // Free heap bytes from String_Builder::to_c_string / csprint.
 // allocator null -> current global allocator at free time (must match alloc heap).
 inline auto free_c_string(const char* s, mem::Allocator* allocator = nullptr) -> void {
     if (s == nullptr) return;
-    mem::resolve_allocator(allocator)->free(
-        const_cast<char*>(s), kstd_strlen(s) + 1, alignof(char));
+    mem::free(const_cast<char*>(s), kstd_strlen(s) + 1, alignof(char), allocator);
 }
 
 inline auto copy_string(string s, mem::Allocator* allocator = nullptr) -> string {
     if (s.size == 0) return string{};
 
-    auto* destination_allocator = mem::resolve_allocator(allocator);
-    auto* data = static_cast<char*>(destination_allocator->alloc(s.size, alignof(char)));
+    auto* data = static_cast<char*>(mem::alloc(s.size, alignof(char), allocator));
     kstd_assert(data != nullptr, "copy_string allocation failed");
     kstd_memcpy(data, s.data, s.size);
     return string(data, s.size);

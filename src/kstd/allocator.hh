@@ -21,6 +21,8 @@ struct Allocator {
 };
 
 force_inline auto resolve_allocator(Allocator* allocator = nullptr) -> Allocator*;
+force_inline auto alloc(usize size, usize alignment = alignof(std::max_align_t), Allocator* allocator = nullptr) -> void*;
+force_inline auto free(void* pointer, usize size, usize alignment = alignof(std::max_align_t), Allocator* allocator = nullptr) -> void;
 
 template <typename T>
 force_inline auto align_up(T value, T alignment) -> T {
@@ -495,6 +497,16 @@ force_inline auto resolve_allocator(Allocator* allocator) -> Allocator* {
     return allocator != nullptr ? allocator : hidden::current_global_allocator;
 }
 
+force_inline auto alloc(usize size, usize alignment, Allocator* allocator) -> void* {
+    auto* resolved_allocator = resolve_allocator(allocator);
+    return resolved_allocator->alloc(size, alignment);
+}
+
+force_inline auto free(void* pointer, usize size, usize alignment, Allocator* allocator) -> void {
+    auto* resolved_allocator = resolve_allocator(allocator);
+    resolved_allocator->free(pointer, size, alignment);
+}
+
 struct Push_Allocator {
     Allocator* previous_allocator;
 
@@ -524,6 +536,25 @@ TEST(Debug_Allocator, allows_destruction_when_all_freed) {
 
     debug.free(a, 16);
     debug.free(b, 64);
+}
+
+TEST(Allocator, convenience_alloc_and_free_use_current_allocator) {
+    mem::Hosted_Allocator hosted{};
+    mem::Push_Allocator push{&hosted};
+
+    void* pointer = mem::alloc(16, alignof(u64));
+
+    ASSERT_NE(pointer, nullptr);
+    mem::free(pointer, 16, alignof(u64));
+}
+
+TEST(Allocator, convenience_alloc_and_free_accept_explicit_allocator) {
+    mem::Hosted_Allocator hosted{};
+
+    void* pointer = mem::alloc(16, alignof(u64), &hosted);
+
+    ASSERT_NE(pointer, nullptr);
+    mem::free(pointer, 16, alignof(u64), &hosted);
 }
 
 TEST(Debug_Allocator, detects_leaked_allocations) {

@@ -577,7 +577,7 @@ struct Owned_Format {
     auto format() const -> string {
         constexpr usize n = 5;
         // Can't include string_builder.hh here..
-        auto* data = static_cast<char*>(mem::resolve_allocator(nullptr)->alloc(n, alignof(char)));
+        auto* data = static_cast<char*>(mem::alloc(n, alignof(char)));
         data[0] = 'o';
         data[1] = 'w';
         data[2] = 'n';
