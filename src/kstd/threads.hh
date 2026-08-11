@@ -358,8 +358,7 @@ auto idle_poll() -> bool {
 
     //
     // We don't take the lock unconditionally if there is no reason to do so.
-    // That would unnecessarily serialize all the cores that might want to use
-    // it.
+    // That would unnecessarily serialize all the cores that might want to use it.
     //
     if (thread.state.load(std::memory_order_acquire) == State::DONE && thread.detached.load(std::memory_order_acquire)) {
         auto guard = ready_lock.scoped_irq_lock();
