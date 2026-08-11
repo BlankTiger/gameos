@@ -141,6 +141,7 @@ target_compile_options(gameos PRIVATE
     $<$<COMPILE_LANGUAGE:C,CXX>:-mno-red-zone>
     $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions>
     $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
+    $<$<COMPILE_LANGUAGE:CXX>:-ftls-model=local-exec>
 )
 
 target_link_options(gameos PRIVATE

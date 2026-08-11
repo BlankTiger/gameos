@@ -17,6 +17,7 @@
 #include "smp_constants.hh"
 #include "threads.hh"
 #include "time.hh"
+#include "thread_local_storage.hh"
 #include "pointer_utils.hh"
 #include "string_builder.hh"
 
@@ -227,7 +228,6 @@ auto copy_boot_pml4_to_the_expected_place() -> void {
 constexpr auto STACK_POINTER_ADDR = TRAMPOLINE_PHYSICAL_ADDRESS + SMP_OFFSET_STACK;
 
 auto ap_main(u32 cpu_index) -> void {
-    serial::println("AP index=% started", cpu_index);
     ap::cpus_online[cpu_index].store(true, std::memory_order_release);
 
     // Switch away from the temporary GDT to the kernel GDT.
@@ -235,6 +235,9 @@ auto ap_main(u32 cpu_index) -> void {
 
     // Load kernel IDT (table already built by the BSP).
     idt::load();
+
+    tls::initialize_application_processor(cpu_index);
+    serial::println("AP index=% started", cpu_index);
 
     auto* kernel_top = addr_as<u8*>(ap::STACK_POINTER_ADDR);
     cpu_local::initialize_application_processor(cpu_index, kernel_top);

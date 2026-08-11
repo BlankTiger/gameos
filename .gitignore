@@ -1,3 +1,7 @@
 build/
 .envrc
 .direnv
+
+*.md
+!README.md
+!TODO.md

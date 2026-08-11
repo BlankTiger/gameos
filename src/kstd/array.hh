@@ -299,6 +299,14 @@ struct Bounded_Array {
         ++size;
     }
 
+    auto pop_back() -> T {
+        kstd_assert(size > 0, "pop_back on empty Bounded_Array");
+        auto element = std::move(*slot(size - 1));
+        slot(size - 1)->~T();
+        --size;
+        return element;
+    }
+
     auto elements()       -> T*       { return slot(0); }
     auto elements() const -> const T* { return slot(0); }
 
@@ -349,6 +357,19 @@ TEST(Bounded_Array, push_back_past_max_size_asserts) {
     arr.push_back(2);
 
     EXPECT_DEATH(arr.push_back(3), "push_back on full Bounded_Array");
+}
+
+TEST(Bounded_Array, pop_back_returns_last_element_and_shrinks_size) {
+    Bounded_Array<int, 3> arr;
+
+    arr.push_back(1);
+    arr.push_back(2);
+    arr.push_back(3);
+
+    EXPECT_EQ(arr.pop_back(), 3);
+    EXPECT_EQ(arr.size, 2);
+    EXPECT_EQ(arr[0], 1);
+    EXPECT_EQ(arr[1], 2);
 }
 
 TEST(Bounded_Array, converts_to_array_view) {
