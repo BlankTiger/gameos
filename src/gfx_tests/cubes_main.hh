@@ -2,6 +2,7 @@
 #include "kstd/time.hh"
 #include "kstd/gfx.hh"
 #include "kstd/random.hh"
+#include "kstd/string_builder.hh"
 
 auto cubes_main() -> void {
     using namespace ktime;
@@ -9,7 +10,8 @@ auto cubes_main() -> void {
 
     gfx::Camera3D camera;
 
-    constexpr auto TARGET_TICKS = ticks_per_frame(60);
+    constexpr auto FPS_MAX      = 280;
+    constexpr auto TARGET_TICKS = ticks_per_frame(FPS_MAX);
     constexpr f32  RAD_PER_SEC  = 1.2f; // full spin ~5s
     constexpr Vector3<f32> SPIN_AXIS{0.6f, 1.f, 0.3f}; // tumble: all 6 faces show
 
@@ -38,6 +40,8 @@ auto cubes_main() -> void {
         const u64 frame_start = get_ticks();
         const u64 elapsed     = frame_start - last_tick;
         last_tick = frame_start;
+        const f64 dt  = static_cast<f64>(elapsed) / TICK_RATE;
+        const f64 fps = dt > 0.0 ? 1.0 / dt : 0.0;
 
         const f32 angle = RAD_PER_SEC * static_cast<f32>(elapsed) / static_cast<f32>(TICK_RATE);
 
@@ -46,6 +50,7 @@ auto cubes_main() -> void {
         wireframe_cube.rotate(SPIN_AXIS, angle);
 
         gfx::clear(gfx::BLACK);
+        gfx::draw_text(8, 8, tprint("FPS: %", fps));
         gfx::draw_mesh(cube, camera);
         gfx::draw_mesh(cool_cube, camera);
         gfx::draw_wireframe(wireframe_cube, camera);
