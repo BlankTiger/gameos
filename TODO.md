@@ -15,6 +15,7 @@ graphics:
 - [x] draw_text_immediate for asserts and term::print
 - [x] think of a better way of storing b,g,r channels, so we can both load rgb and use bgr elsewhere
 - [ ] draw tetris
+- [ ] separate core for graphics
 
 fonts:
 - [ ] embedding ttfs
