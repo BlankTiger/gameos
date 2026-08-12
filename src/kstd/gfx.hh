@@ -75,6 +75,7 @@ struct Pixel {
     operator u32() const { return raw; }
 
     force_inline auto blend_with(Color fg, const Framebuffer_Format& fmt = framebuffer_fmt) -> void {
+        if (fg.a == 0) return;
         if (fg.a == 255) {
             raw = (static_cast<u32>(fg.r) << fmt.red_pos)   |
                   (static_cast<u32>(fg.g) << fmt.green_pos) |
@@ -264,24 +265,23 @@ struct Framebuffer {
     usize stride;
 };
 
-constexpr unsigned int FRAME_OVERLAP = 2;
-constexpr usize GFX_ARENA_SIZE = 16 * 1024;
-
 namespace hidden {
+    constexpr usize GFX_ARENA_SIZE = 16 * 1024;
+    constexpr u8 FRAME_OVERLAP = 2;
+
     struct Frame_Data {
         Static_Array<Pixel, GFX_PIXEL_COUNT> back_buffer;
         Static_Array<Depth, GFX_PIXEL_COUNT> depth_buffer;
-        Static_Array<u8, GFX_ARENA_SIZE> arena_storage;
-        mem::Arena_Allocator<> arena{arena_storage};
+        mem::Arena_Allocator<> arena{GFX_ARENA_SIZE};
         Array<Draw_Command_2D> draw_commands_ui{256};
         Array<Draw_Command_2D> draw_commands_world_2d{256};
         Array<Draw_Command_3D> draw_commands_world_3d{256};
     };
 
-    inline Frame_Data frames[FRAME_OVERLAP];
-    inline unsigned int frame_number = 0;
+    inline Static_Array<Frame_Data, FRAME_OVERLAP> frames;
+    inline u8 frame_number = 0;
 
-    [[nodiscard]] force_inline auto current_slot() -> unsigned int {
+    [[nodiscard]] force_inline auto current_slot() -> u8 {
         return frame_number % FRAME_OVERLAP;
     }
 }
@@ -460,16 +460,14 @@ auto inner_draw_text(u32 x, u32 y, string text, Color fg = WHITE, Color bg = TRA
 
 auto draw_text(u32 x, u32 y, const string text, Color fg = WHITE, Color bg = TRANSPARENT, u8 z = 1, Render_Pass pass = Render_Pass::UI, Depth depth = DEPTH_FAR) -> void {
     auto& arena = current_frame().arena;
-    auto* copied = static_cast<char*>(arena.alloc(text.size, alignof(char)));
-    if (copied == nullptr) return;
-    kstd_memcpy(copied, text.data, text.size);
+    auto copied = copy_string(text, &arena);
     auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui;
     queue.push_back(
         Draw_Command_2D{
             .type  = Draw_Command_2D_Type::DRAW_TEXT,
             .z     = z,
             .depth = depth,
-            .text  = Text_Command{x, y, string(copied, text.size), fg, bg},
+            .text  = Text_Command{x, y, copied, fg, bg},
         }
     );
 }
@@ -519,7 +517,7 @@ auto inner_draw_circle(u32 x, u32 y, u32 r, Color color, Depth depth = DEPTH_FAR
             }
             else {
                 if (AA_RES <= 1) continue;
-                int in_circle = 0;
+                u32 in_circle = 0;
                 for (u32 off_x = 0; off_x < AA_RES; ++off_x) {
                     for (u32 off_y = 0; off_y < AA_RES; ++off_y) {
                         u32 sx = px * AA_RES1 * 2 + off_x * 2 + 2;
