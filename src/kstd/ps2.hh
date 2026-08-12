@@ -401,9 +401,7 @@ auto submit_mouse_button(Mouse_Flags flags, Mouse_Flags button_flag, input::Mous
     }
 }
 
-auto isr_handle_ps2_mouse() -> void {
-    const u8 value = inb(PS2_DATA_PORT);
-
+auto process_mouse_byte(u8 value) -> void {
     if (mouse_packet.index == 0 && !has_flag(static_cast<Mouse_Flags>(value), Mouse_Flags::ALWAYS_ONE)) return;
 
     mouse_packet.bytes[mouse_packet.index] = value;
@@ -426,6 +424,15 @@ auto isr_handle_ps2_mouse() -> void {
         .type = input::Event_Type::MOUSE_MOTION,
         .mouse_motion = { .xrel = xrel, .yrel = yrel },
     });
+}
+
+auto isr_handle_ps2_mouse() -> void {
+    constexpr u8 OUTPUT_BUFFER_FULL = 1 << 0;
+    constexpr u8 AUX_DATA          = 1 << 5;
+
+    while (has_flag(static_cast<Mouse_Flags>(inb(PS2_STATUS_PORT)), static_cast<Mouse_Flags>(OUTPUT_BUFFER_FULL | AUX_DATA))) {
+        process_mouse_byte(inb(PS2_DATA_PORT));
+    }
 }
 
 }

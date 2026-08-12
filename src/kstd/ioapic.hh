@@ -108,11 +108,13 @@ force_inline auto ioapic_info() -> acpi::IOAPIC_Desc {
 
 namespace hidden {
     volatile u32* mmio;
-    inline bool bsp_owns_device_irqs = false;
+    // false: legacy 8259 still owns ISA IRQs (PIT calibrate path).
+    // true:  IOAPIC -> LAPIC owns them (BSP or AP destination).
+    inline bool device_irqs_use_ioapic = false;
 }
 
-force_inline auto get_bsp_owns_device_irqs() -> bool {
-    return hidden::bsp_owns_device_irqs;
+force_inline auto device_irqs_via_ioapic() -> bool {
+    return hidden::device_irqs_use_ioapic;
 }
 
 auto write_redirection_entry(u32 pin, Redirection_Entry entry) -> void {
@@ -162,7 +164,7 @@ auto mask_all_pins(u32 max_redirection_entry) -> void {
 using pic::ISA_Irq;
 using idt::Interrupt_Vector_Type;
 
-auto route_industry_standard_architecture_irq_to_bootstrap_processor(ISA_Irq isa_irq, Interrupt_Vector_Type vector) -> void {
+auto route_industry_standard_architecture_irq(ISA_Irq isa_irq, Interrupt_Vector_Type vector, u32 destination_apic_id) -> void {
     const auto& madt = acpi::madt();
     const auto info = ioapic_info();
 
@@ -180,7 +182,7 @@ auto route_industry_standard_architecture_irq_to_bootstrap_processor(ISA_Irq isa
     const auto pin = gsi - info.gsi_base;
     auto entry = read_redirection_entry(pin);
 
-    entry.high.destination_apic_id = lapic::bootstrap_processor_apic_id();
+    entry.high.destination_apic_id = destination_apic_id;
 
     entry.low.vector           = static_cast<u32>(vector);
     entry.low.masked           = 0;
@@ -228,10 +230,22 @@ auto initialize() -> void {
 
     mask_all_pins(version.max_redirection_entry);
 
-    hidden::bsp_owns_device_irqs = true;
+    hidden::device_irqs_use_ioapic = true;
 
-    route_industry_standard_architecture_irq_to_bootstrap_processor(ISA_Irq::PS2_KEYBOARD, Interrupt_Vector_Type::PS2_KEYBOARD);
-    route_industry_standard_architecture_irq_to_bootstrap_processor(ISA_Irq::PS2_MOUSE,    Interrupt_Vector_Type::PS2_MOUSE);
+    route_industry_standard_architecture_irq(ISA_Irq::PS2_KEYBOARD, Interrupt_Vector_Type::PS2_KEYBOARD, lapic::bootstrap_processor_apic_id());
+    route_industry_standard_architecture_irq(ISA_Irq::PS2_MOUSE,    Interrupt_Vector_Type::PS2_MOUSE,    lapic::bootstrap_processor_apic_id());
+}
+
+auto route_device_irqs_to_application_processor() -> void {
+    for (u32 cpu_index = 1; cpu_index < acpi::MAX_CPUS; ++cpu_index) {
+        if (!ap::cpus_online[cpu_index].load(std::memory_order_acquire)) continue;
+
+        const u32 destination_apic_id = cpu_local::core_infos[cpu_index].lapic_id;
+        route_industry_standard_architecture_irq(ISA_Irq::PS2_KEYBOARD, Interrupt_Vector_Type::PS2_KEYBOARD, destination_apic_id);
+        route_industry_standard_architecture_irq(ISA_Irq::PS2_MOUSE,    Interrupt_Vector_Type::PS2_MOUSE,    destination_apic_id);
+        serial::println("Routing device IRQs to AP index=%, apic_id=%", cpu_index, destination_apic_id);
+        return;
+    }
 }
 
 }

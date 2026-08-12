@@ -12,6 +12,7 @@
 #include "kstd/serial_format.hh"
 #include "kstd/string_builder.hh"
 #include "kstd/random.hh"
+#include "kstd/power.hh"
 
 
 using namespace ktime;
@@ -379,4 +380,6 @@ auto tetris_main() -> void {
             sleep_ticks(TARGET_TICKS - frame_ticks);
         }
     }
+
+    power::off();
 }
