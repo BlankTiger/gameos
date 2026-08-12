@@ -5,6 +5,7 @@
 #include "config.hh"
 
 #include "kstd/array.hh"
+#include "kstd/allocator.hh"
 #include "kstd/font8x16.hh"
 #include "kstd/math.hh"
 #include "kstd/matrix.hh"
@@ -15,7 +16,7 @@
 namespace gfx {
 
 // -------------------------------------------------------------------
-//  Common -- color, framebuffer, double-buffering, pixel I/O
+//  Common -- Color, Pixel, depth
 // -------------------------------------------------------------------
 
 struct Color {
@@ -97,142 +98,14 @@ struct Pixel {
     }
 };
 
-struct Framebuffer {
-    Array_View<Pixel, GFX_PIXEL_COUNT> pixels;
-    u32 pitch;
-    u32 width;
-    u32 height;
-    u8 bits_per_pixel;
-    u8 type;
-    usize stride;
-};
-
 using Depth = u32;
 constexpr Depth DEPTH_FAR = static_cast<Depth>(-1);
 
-namespace hidden {
-    inline Framebuffer front_buffer;
-    inline Static_Array<Pixel, GFX_PIXEL_COUNT> ram_back_buffers[2];
-    inline Array_View<Pixel, GFX_PIXEL_COUNT> back_buffers[2];
-    inline Static_Array<Depth, GFX_PIXEL_COUNT> depth_buffers[2];
-    inline u8 active_frame_slot = 0;
-    inline bool framebuffer_initialized;
-}
-
-force_inline auto swap_buffers() -> void {
-    using namespace hidden;
-
-    kstd_debug_assert(front_buffer.pixels.data != nullptr);
-    kstd_memcpy(front_buffer.pixels.data, back_buffers[active_frame_slot].data, front_buffer.pixels.size_in_bytes);
-    active_frame_slot ^= 1;
-}
-
-[[nodiscard]] auto initialize(const boot::Multiboot2_Info* mbi) -> bool {
-    using namespace hidden;
-
-    if (framebuffer_initialized) return true;
-
-    const auto* framebuffer_tag = boot::find_multiboot2_tag<boot::Multiboot2_Framebuffer_Tag>(mbi);
-    if (framebuffer_tag == nullptr || framebuffer_tag->framebuffer_addr == 0) return false;
-
-    auto* frontbuffer_pixels = reinterpret_cast<Pixel*>(framebuffer_tag->framebuffer_addr);
-    front_buffer = {
-        .pixels         = Array_View<Pixel, GFX_PIXEL_COUNT>{frontbuffer_pixels},
-        .pitch          = framebuffer_tag->framebuffer_pitch,
-        .width          = framebuffer_tag->framebuffer_width,
-        .height         = framebuffer_tag->framebuffer_height,
-        .bits_per_pixel = framebuffer_tag->framebuffer_bpp,
-        .type           = framebuffer_tag->framebuffer_type,
-        .stride         = framebuffer_tag->framebuffer_pitch / sizeof(u32),
-    };
-    kstd_assert(front_buffer.bits_per_pixel == 32, "Only 32BPP supported.");
-    kstd_assert(GFX_PIXEL_COUNT == front_buffer.width * front_buffer.height);
-
-    framebuffer_fmt.init(*framebuffer_tag);
-    kstd_assert(
-        !(framebuffer_fmt.red_pos == 0 && framebuffer_fmt.green_pos == 0 && framebuffer_fmt.blue_pos == 0),
-        "Framebuffer_Format was not initialized"
-    );
-
-    static_assert(sizeof(Pixel) == sizeof(u32));
-    for (u8 slot = 0; slot < 2; ++slot)
-        back_buffers[slot] = Array_View<Pixel, GFX_PIXEL_COUNT>{ram_back_buffers[slot].data};
-
-    for (auto& back_buffer : back_buffers)
-        kstd_memset32(back_buffer.data, 0, back_buffer.size_in_bytes / sizeof(Pixel));
-    kstd_memcpy(front_buffer.pixels.data, back_buffers[0].data, front_buffer.pixels.size_in_bytes);
-
-    static_assert(sizeof(Depth) == sizeof(u32));
-    for (auto& depth_buffer : depth_buffers)
-        kstd_memset32(depth_buffer.data, DEPTH_FAR, depth_buffer.size_in_bytes / sizeof(Depth));
-
-    framebuffer_initialized = true;
-    return true;
-}
-
-force_inline auto is_initialized() -> bool {
-    return hidden::framebuffer_initialized;
-}
-
-force_inline auto width() -> u32 {
-    return hidden::front_buffer.width;
-}
-
-force_inline auto height() -> u32 {
-    return hidden::front_buffer.height;
-}
-
-template <bool IMMEDIATE>
-static force_inline auto set_pixel(u32 x, u32 y, Color color) -> void {
-    kstd_assert(x < width());
-    kstd_assert(y < height());
-
-    using namespace hidden;
-
-    auto index = y * front_buffer.stride + x;
-    if constexpr(IMMEDIATE) {
-        front_buffer.pixels[index].blend_with(color);
-        back_buffers[active_frame_slot][index].blend_with(color);
-    } else {
-        back_buffers[active_frame_slot][index].blend_with(color);
-    }
-}
-
-static force_inline auto set_pixel(u32 x, u32 y, Color color, Depth depth = DEPTH_FAR) -> void {
-    kstd_assert(x < width());
-    kstd_assert(y < height());
-
-    using namespace hidden;
-
-    auto index = y * front_buffer.stride + x;
-    if (depth != DEPTH_FAR && depth >= depth_buffers[active_frame_slot][index]) return;
-
-    back_buffers[active_frame_slot][index].blend_with(color);
-    if (depth != DEPTH_FAR) depth_buffers[active_frame_slot][index] = depth;
-}
-
-auto clear(Color color) -> void {
-    for (u32 y = 0; y < height(); ++y) {
-        for (u32 x = 0; x < width(); ++x) {
-            set_pixel(x, y, color);
-        }
-    }
-
-    static_assert(sizeof(Depth) == sizeof(u32));
-    kstd_memset32(hidden::depth_buffers[hidden::active_frame_slot].data, DEPTH_FAR, hidden::depth_buffers[hidden::active_frame_slot].size_in_bytes / sizeof(Depth));
-}
-
-enum struct Render_Pass : u8 {
-    WORLD_2D,
-    WORLD_3D,
-    UI,
-};
-
-// -------------------------------------------------------------------
-//  2D -- primitives, commands, raster UI, command-queue execution
-// -------------------------------------------------------------------
-
 using namespace math;
+
+// -------------------------------------------------------------------
+//  Common -- 2D command types
+// -------------------------------------------------------------------
 
 enum struct Draw_Command_2D_Type: u8 {
     DRAW_CHAR,
@@ -298,8 +171,225 @@ struct Draw_Command_2D {
     };
 };
 
-inline Array<Draw_Command_2D> draw_commands_ui[2]{Array<Draw_Command_2D>(256), Array<Draw_Command_2D>(256)};
-inline Array<Draw_Command_2D> draw_commands_world_2D[2]{Array<Draw_Command_2D>(256), Array<Draw_Command_2D>(256)};
+// -------------------------------------------------------------------
+//  Common -- 3D command types
+// -------------------------------------------------------------------
+
+struct Vertex {
+    Vector3<f32> position;
+    Color        color;
+    Vector2<f32> uv;
+};
+
+using Index = Vector3<u32>;
+
+struct Mesh {
+    Array_View<Vertex> vertices;
+    Array_View<Index>  indices;
+};
+
+struct Mesh_Instance {
+    Mesh model;
+    Resource_View texture{};
+    Vector3<f32> translation;
+    Quaternion<f32> rotation;
+    Vector3<f32> scale;
+    Matrix4<f32> transform;
+
+    auto recompute_matrix() -> void {
+        transform = make_translation_matrix4(translation) * make_rotation_matrix<Matrix4<f32>>(rotation) * make_scale_matrix4(scale);
+    }
+
+    Mesh_Instance(Mesh model) : model(model), scale{1.f, 1.f, 1.f}, transform(Matrix4<f32>::identity()) {}
+    Mesh_Instance(Mesh model, Vector3<f32> translation = {}, Quaternion<f32> rotation = {}, Vector3<f32> scale = {1.f, 1.f, 1.f})
+        : model(model), translation(translation), rotation(rotation), scale(scale)
+        { recompute_matrix(); }
+    Mesh_Instance(Mesh model, Resource_View texture, Vector3<f32> translation = {}, Quaternion<f32> rotation = {}, Vector3<f32> scale = {1.f, 1.f, 1.f})
+        : model(model), texture(texture), translation(translation), rotation(rotation), scale(scale) { recompute_matrix(); }
+
+    auto rotate(Vector3<f32> spin_axis, f32 angle) {
+        rotation = Quaternion<f32>::from_axis_angle(spin_axis, angle) * rotation;
+        recompute_matrix();
+    }
+};
+
+struct Camera3D {
+    Vector3<f32> position;
+    Quaternion<f32> rotation;
+    Matrix4<f32> M_camera;
+
+    auto recompute_matrix() -> void {
+        InverseResult M_camera_rotation_inv = inverse(make_rotation_matrix<Matrix4<f32>>(rotation));
+        InverseResult M_camera_translation_inv = inverse(make_translation_matrix4(position));
+        M_camera = M_camera_rotation_inv.result * M_camera_translation_inv.result;
+    }
+
+    constexpr Camera3D() : position(), rotation() { recompute_matrix(); }
+};
+
+enum struct Draw_Command_3D_Type: u8 {
+    DRAW_WIREFRAME,
+    DRAW_MESH,
+};
+
+struct Mesh_Command {
+    Mesh_Instance instance;
+};
+
+struct Wireframe_Command {
+    Mesh_Instance instance;
+};
+
+struct Draw_Command_3D {
+    Draw_Command_3D_Type type;
+    Camera3D camera;
+
+    union {
+        Mesh_Command mesh;
+        Wireframe_Command wireframe;
+    };
+};
+
+// -------------------------------------------------------------------
+//  Common -- Framebuffer, double buffering, set_pixel, clear
+// -------------------------------------------------------------------
+
+struct Framebuffer {
+    Array_View<Pixel, GFX_PIXEL_COUNT> pixels;
+    u32 pitch;
+    u32 width;
+    u32 height;
+    u8 bits_per_pixel;
+    u8 type;
+    usize stride;
+};
+
+constexpr unsigned int FRAME_OVERLAP = 2;
+constexpr usize GFX_ARENA_SIZE = 16 * 1024;
+
+namespace hidden {
+    struct Frame_Data {
+        Static_Array<Pixel, GFX_PIXEL_COUNT> back_buffer;
+        Static_Array<Depth, GFX_PIXEL_COUNT> depth_buffer;
+        Static_Array<u8, GFX_ARENA_SIZE> arena_storage;
+        mem::Arena_Allocator<> arena{arena_storage};
+        Array<Draw_Command_2D> draw_commands_ui{256};
+        Array<Draw_Command_2D> draw_commands_world_2d{256};
+        Array<Draw_Command_3D> draw_commands_world_3d{256};
+    };
+
+    inline Frame_Data frames[FRAME_OVERLAP];
+    inline unsigned int frame_number = 0;
+
+    [[nodiscard]] force_inline auto current_slot() -> unsigned int {
+        return frame_number % FRAME_OVERLAP;
+    }
+}
+
+[[nodiscard]] force_inline auto current_frame() -> hidden::Frame_Data& {
+    return hidden::frames[hidden::current_slot()];
+}
+
+namespace hidden {
+    inline Framebuffer front_buffer;
+    inline bool framebuffer_initialized;
+}
+
+force_inline auto is_initialized() -> bool {
+    return hidden::framebuffer_initialized;
+}
+
+force_inline auto width() -> u32 {
+    return hidden::front_buffer.width;
+}
+
+force_inline auto height() -> u32 {
+    return hidden::front_buffer.height;
+}
+
+force_inline auto swap_buffers() -> void {
+    using namespace hidden;
+    kstd_debug_assert(front_buffer.pixels.data != nullptr);
+    auto& current = current_frame();
+    kstd_memcpy(front_buffer.pixels.data, current.back_buffer.data, front_buffer.pixels.size_in_bytes);
+    ++frame_number;
+    auto& next = current_frame();
+    kstd_memset32(next.back_buffer.data, 0, next.back_buffer.size_in_bytes / sizeof(Pixel));
+    kstd_memset32(next.depth_buffer.data, DEPTH_FAR, next.depth_buffer.size_in_bytes / sizeof(Depth));
+}
+
+[[nodiscard]] auto initialize(const boot::Multiboot2_Info* mbi) -> bool {
+    using namespace hidden;
+    if (framebuffer_initialized) return true;
+
+    const auto* framebuffer_tag = boot::find_multiboot2_tag<boot::Multiboot2_Framebuffer_Tag>(mbi);
+    if (framebuffer_tag == nullptr || framebuffer_tag->framebuffer_addr == 0) return false;
+
+    auto* frontbuffer_pixels = reinterpret_cast<Pixel*>(framebuffer_tag->framebuffer_addr);
+    front_buffer = {
+        .pixels = Array_View<Pixel, GFX_PIXEL_COUNT>{frontbuffer_pixels},
+        .pitch = framebuffer_tag->framebuffer_pitch,
+        .width = framebuffer_tag->framebuffer_width,
+        .height = framebuffer_tag->framebuffer_height,
+        .bits_per_pixel = framebuffer_tag->framebuffer_bpp,
+        .type = framebuffer_tag->framebuffer_type,
+        .stride = framebuffer_tag->framebuffer_pitch / sizeof(u32),
+    };
+    kstd_assert(front_buffer.bits_per_pixel == 32, "Only 32BPP supported.");
+    kstd_assert(GFX_PIXEL_COUNT == front_buffer.width * front_buffer.height);
+    framebuffer_fmt.init(*framebuffer_tag);
+    kstd_assert(!(framebuffer_fmt.red_pos == 0 && framebuffer_fmt.green_pos == 0 && framebuffer_fmt.blue_pos == 0),
+                "Framebuffer_Format was not initialized");
+
+    static_assert(sizeof(Pixel) == sizeof(u32));
+    static_assert(sizeof(Depth) == sizeof(u32));
+    for (auto& frame : frames) {
+        kstd_memset32(frame.back_buffer.data, 0, frame.back_buffer.size_in_bytes / sizeof(Pixel));
+        kstd_memset32(frame.depth_buffer.data, DEPTH_FAR, frame.depth_buffer.size_in_bytes / sizeof(Depth));
+        frame.arena.reset();
+    }
+    kstd_memcpy(front_buffer.pixels.data, frames[0].back_buffer.data, front_buffer.pixels.size_in_bytes);
+    framebuffer_initialized = true;
+    return true;
+}
+
+template <bool IMMEDIATE>
+static force_inline auto set_pixel(u32 x, u32 y, Color color) -> void {
+    kstd_assert(x < width());
+    kstd_assert(y < height());
+    auto index = y * hidden::front_buffer.stride + x;
+    auto& frame = current_frame();
+    if constexpr (IMMEDIATE) hidden::front_buffer.pixels[index].blend_with(color);
+    frame.back_buffer[index].blend_with(color);
+}
+
+static force_inline auto set_pixel(u32 x, u32 y, Color color, Depth depth) -> void {
+    kstd_assert(x < width());
+    kstd_assert(y < height());
+    auto index = y * hidden::front_buffer.stride + x;
+    auto& frame = current_frame();
+    if (depth != DEPTH_FAR && depth >= frame.depth_buffer[index]) return;
+    frame.back_buffer[index].blend_with(color);
+    if (depth != DEPTH_FAR) frame.depth_buffer[index] = depth;
+}
+
+auto clear(Color color) -> void {
+    for (u32 y = 0; y < height(); ++y)
+        for (u32 x = 0; x < width(); ++x)
+            set_pixel(x, y, color, DEPTH_FAR);
+    auto& depth_buffer = current_frame().depth_buffer;
+    kstd_memset32(depth_buffer.data, DEPTH_FAR, depth_buffer.size_in_bytes / sizeof(Depth));
+}
+
+enum struct Render_Pass : u8 {
+    WORLD_2D,
+    WORLD_3D,
+    UI,
+};
+
+// -------------------------------------------------------------------
+//  2D -- primitives, raster UI, command-queue execution
+// -------------------------------------------------------------------
 
 template <bool IMMEDIATE>
 auto inner_draw_char(u32 x, u32 y, char c, Color fg, Color bg, Depth depth = DEPTH_FAR) -> void {
@@ -327,7 +417,7 @@ auto inner_draw_char(u32 x, u32 y, char c, Color fg, Color bg, Depth depth = DEP
 
 auto draw_char(u32 x, u32 y, char c, Color fg, Color bg, u8 z = 1, Render_Pass pass = Render_Pass::UI, Depth depth = DEPTH_FAR) -> void {
     if (x >= width() || y >= height()) return;
-    auto& queue = (pass == Render_Pass::WORLD_2D) ? draw_commands_world_2D[hidden::active_frame_slot] : draw_commands_ui[hidden::active_frame_slot];
+    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui;
     queue.push_back(
         Draw_Command_2D{
             .type      = Draw_Command_2D_Type::DRAW_CHAR,
@@ -369,13 +459,17 @@ auto inner_draw_text(u32 x, u32 y, string text, Color fg = WHITE, Color bg = TRA
 }
 
 auto draw_text(u32 x, u32 y, const string text, Color fg = WHITE, Color bg = TRANSPARENT, u8 z = 1, Render_Pass pass = Render_Pass::UI, Depth depth = DEPTH_FAR) -> void {
-    auto& queue = (pass == Render_Pass::WORLD_2D) ? draw_commands_world_2D[hidden::active_frame_slot] : draw_commands_ui[hidden::active_frame_slot];
+    auto& arena = current_frame().arena;
+    auto* copied = static_cast<char*>(arena.alloc(text.size, alignof(char)));
+    if (copied == nullptr) return;
+    kstd_memcpy(copied, text.data, text.size);
+    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui;
     queue.push_back(
         Draw_Command_2D{
             .type  = Draw_Command_2D_Type::DRAW_TEXT,
             .z     = z,
             .depth = depth,
-            .text  = Text_Command{x, y, text, fg, bg},
+            .text  = Text_Command{x, y, string(copied, text.size), fg, bg},
         }
     );
 }
@@ -446,7 +540,7 @@ auto inner_draw_circle(u32 x, u32 y, u32 r, Color color, Depth depth = DEPTH_FAR
 
 auto draw_circle(u32 x, u32 y, u32 r, Color color, u8 z = 1, Render_Pass pass = Render_Pass::UI, Depth depth = DEPTH_FAR) -> void {
     if (x >= width() || y >= height()) return;
-    auto& queue = (pass == Render_Pass::WORLD_2D) ? draw_commands_world_2D[hidden::active_frame_slot] : draw_commands_ui[hidden::active_frame_slot];
+    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui;
     queue.push_back(
         Draw_Command_2D{
             .type   = Draw_Command_2D_Type::DRAW_CIRCLE,
@@ -548,7 +642,7 @@ auto draw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color, u8 z = 1, Render_Pas
     x2 = std::min(x2, max_x);
     y2 = std::min(y2, max_y);
 
-    auto& queue = (pass == Render_Pass::WORLD_2D) ? draw_commands_world_2D[hidden::active_frame_slot] : draw_commands_ui[hidden::active_frame_slot];
+    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui;
     queue.push_back(
         Draw_Command_2D{
             .type  = Draw_Command_2D_Type::DRAW_LINE,
@@ -603,7 +697,7 @@ auto draw_raw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color, u8 z = 1, Render
     x2 = std::min(x2, max_x);
     y2 = std::min(y2, max_y);
 
-    auto& queue = (pass == Render_Pass::WORLD_2D) ? draw_commands_world_2D[hidden::active_frame_slot] : draw_commands_ui[hidden::active_frame_slot];
+    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui;
     queue.push_back(
         Draw_Command_2D{
             .type  = Draw_Command_2D_Type::DRAW_RAW_LINE,
@@ -626,7 +720,7 @@ auto inner_draw_rect(u32 x, u32 y, u32 w, u32 h, Color color, Depth depth = DEPT
 
 auto draw_rect(u32 x, u32 y, u32 w, u32 h, Color color, u8 z = 1, Render_Pass pass = Render_Pass::UI, Depth depth = DEPTH_FAR) -> void {
     if (x >= width() || y >= height()) return;
-    auto& queue = (pass == Render_Pass::WORLD_2D) ? draw_commands_world_2D[hidden::active_frame_slot] : draw_commands_ui[hidden::active_frame_slot];
+    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui;
     queue.push_back(
         Draw_Command_2D{
             .type      = Draw_Command_2D_Type::DRAW_RECT,
@@ -651,7 +745,7 @@ auto inner_draw_sprite(const Resource_View res, u32 x, u32 y, Depth depth = DEPT
 auto draw_sprite(const Resource_View res, u32 x, u32 y, u8 z = 1, Render_Pass pass = Render_Pass::UI, Depth depth = DEPTH_FAR) -> void {
     if (res.width == 0 || res.height == 0) return;
     if (x >= width() || y >= height()) return;
-    auto& queue = (pass == Render_Pass::WORLD_2D) ? draw_commands_world_2D[hidden::active_frame_slot] : draw_commands_ui[hidden::active_frame_slot];
+    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui;
     queue.push_back(
         Draw_Command_2D{
             .type   = Draw_Command_2D_Type::DRAW_SPRITE,
@@ -734,7 +828,7 @@ auto draw_triangle(Vector4<f32> v1, Vector4<f32> v2, Vector4<f32> v3, Color colo
         std::swap(v2, v3);
         det = -det;
     }
-    draw_commands_world_2D[hidden::active_frame_slot].push_back(
+    current_frame().draw_commands_world_2d.push_back(
         Draw_Command_2D{
             .type = Draw_Command_2D_Type::DRAW_TRIANGLE,
             .z = z,
@@ -746,14 +840,14 @@ auto draw_triangle(Vector4<f32> v1, Vector4<f32> v2, Vector4<f32> v3, Color colo
 template <bool z_sort = true>
 force_inline auto draw_ui() -> void {
     if (z_sort) {
-        std::stable_sort(draw_commands_ui[hidden::active_frame_slot].begin(), draw_commands_ui[hidden::active_frame_slot].end(),
+        std::stable_sort(current_frame().draw_commands_ui.begin(), current_frame().draw_commands_ui.end(),
             [](const Draw_Command_2D& a, const Draw_Command_2D& b) {
                 return a.z < b.z;
             }
         );
     }
 
-    for (const auto& command : draw_commands_ui[hidden::active_frame_slot]) {
+    for (const auto& command : current_frame().draw_commands_ui) {
         using enum Draw_Command_2D_Type;
         switch (command.type) {
             case DRAW_CHAR: {
@@ -791,11 +885,11 @@ force_inline auto draw_ui() -> void {
         }
     }
 
-    draw_commands_ui[hidden::active_frame_slot].clear();
+    current_frame().draw_commands_ui.clear();
 }
 
 force_inline auto draw_world_2D() -> void {
-    for (const auto& command : draw_commands_world_2D[hidden::active_frame_slot]) {
+    for (const auto& command : current_frame().draw_commands_world_2d) {
         using enum Draw_Command_2D_Type;
         switch (command.type) {
             case DRAW_CHAR: {
@@ -833,25 +927,12 @@ force_inline auto draw_world_2D() -> void {
         }
     }
 
-    draw_commands_world_2D[hidden::active_frame_slot].clear();
+    current_frame().draw_commands_world_2d.clear();
 }
 
 // -------------------------------------------------------------------
 //  3D -- camera, projection, meshes, texturing, raster and commands
 // -------------------------------------------------------------------
-
-struct Vertex {
-    Vector3<f32> position;
-    Color        color;
-    Vector2<f32> uv;
-};
-
-using Index = Vector3<u32>;
-
-struct Mesh {
-    Array_View<Vertex> vertices;
-    Array_View<Index>  indices;
-};
 
 static Static_Array<Vertex, 24> unit_cube_vertices{{
     {{ 1,  1,  1}, BLUE,    {1.f, 0.f}}, {{-1,  1,  1}, RED,     {0.f, 0.f}}, {{-1, -1,  1}, BLUE,    {0.f, 1.f}}, {{ 1, -1,  1}, RED,     {1.f, 1.f}},
@@ -871,46 +952,6 @@ static Static_Array<Index, 12> unit_cube_indices{{
     {20, 21, 22}, {20, 22, 23},
 }};
 const inline Mesh UNIT_CUBE{unit_cube_vertices, unit_cube_indices};
-
-struct Mesh_Instance {
-    Mesh model;
-    Resource_View texture{};
-    Vector3<f32> translation;
-    Quaternion<f32> rotation;
-    Vector3<f32> scale;
-    Matrix4<f32> transform;
-
-    auto recompute_matrix() -> void {
-        transform = make_translation_matrix4(translation) * make_rotation_matrix<Matrix4<f32>>(rotation) * make_scale_matrix4(scale);
-    }
-
-    Mesh_Instance(Mesh model) : model(model), scale{1.f, 1.f, 1.f}, transform(Matrix4<f32>::identity()) {}
-    Mesh_Instance(Mesh model, Vector3<f32> translation = {}, Quaternion<f32> rotation = {}, Vector3<f32> scale = {1.f, 1.f, 1.f})
-        : model(model), translation(translation), rotation(rotation), scale(scale)
-        { recompute_matrix(); }
-    Mesh_Instance(Mesh model, Resource_View texture, Vector3<f32> translation = {}, Quaternion<f32> rotation = {}, Vector3<f32> scale = {1.f, 1.f, 1.f})
-        : model(model), texture(texture), translation(translation), rotation(rotation), scale(scale) { recompute_matrix(); }
-
-    auto rotate(Vector3<f32> spin_axis, f32 angle) {
-        rotation = Quaternion<f32>::from_axis_angle(spin_axis, angle) * rotation;
-        recompute_matrix();
-    }
-};
-
-
-struct Camera3D {
-    Vector3<f32> position;
-    Quaternion<f32> rotation;
-    Matrix4<f32> M_camera;
-
-    auto recompute_matrix() -> void {
-        InverseResult M_camera_rotation_inv = inverse(make_rotation_matrix<Matrix4<f32>>(rotation));
-        InverseResult M_camera_translation_inv = inverse(make_translation_matrix4(position));
-        M_camera = M_camera_rotation_inv.result * M_camera_translation_inv.result;
-    }
-
-    constexpr Camera3D() : position(), rotation() { recompute_matrix(); }
-};
 
 force_inline auto update_camera(Camera3D& camera, Vector3<f32> new_position = {}, Quaternion<f32> new_rotation = {}) -> void {
     bool needs_update = false;
@@ -951,31 +992,6 @@ struct Projection_Settings {
 namespace hidden {
     inline Projection_Settings projection;
 }
-
-enum struct Draw_Command_3D_Type: u8 {
-    DRAW_WIREFRAME,
-    DRAW_MESH,
-};
-
-struct Mesh_Command {
-    Mesh_Instance instance;
-};
-
-struct Wireframe_Command {
-    Mesh_Instance instance;
-};
-
-struct Draw_Command_3D {
-    Draw_Command_3D_Type type;
-    Camera3D camera;
-
-    union {
-        Mesh_Command mesh;
-        Wireframe_Command wireframe;
-    };
-};
-
-inline Array<Draw_Command_3D> draw_commands_world_3D[2]{Array<Draw_Command_3D>(256), Array<Draw_Command_3D>(256)};
 
 force_inline auto sample_texture(const Resource_View& res, f32 u, f32 v) -> Color {
     u = std::clamp(u, f32(0), f32(1));
@@ -1198,7 +1214,7 @@ auto inner_draw_mesh(Mesh_Instance instance, Camera3D camera) -> void {
 }
 
 auto draw_mesh(Mesh_Instance instance, Camera3D camera) -> void {
-    draw_commands_world_3D[hidden::active_frame_slot].push_back(
+    current_frame().draw_commands_world_3d.push_back(
         Draw_Command_3D{
             .type = Draw_Command_3D_Type::DRAW_MESH,
             .camera = camera,
@@ -1276,7 +1292,7 @@ auto inner_draw_wireframe(Mesh_Instance instance, Camera3D camera) -> void {
 }
 
 auto draw_wireframe(Mesh_Instance instance, Camera3D camera) -> void {
-    draw_commands_world_3D[hidden::active_frame_slot].push_back(
+    current_frame().draw_commands_world_3d.push_back(
         Draw_Command_3D{
             .type = Draw_Command_3D_Type::DRAW_WIREFRAME,
             .camera = camera,
@@ -1287,7 +1303,7 @@ auto draw_wireframe(Mesh_Instance instance, Camera3D camera) -> void {
 
 
 force_inline auto draw_world_3D() -> void {
-    for (const auto& command : draw_commands_world_3D[hidden::active_frame_slot]) {
+    for (const auto& command : current_frame().draw_commands_world_3d) {
         using enum Draw_Command_3D_Type;
         switch (command.type) {
             case DRAW_MESH: {
@@ -1300,7 +1316,7 @@ force_inline auto draw_world_3D() -> void {
             } break;
         }
     }
-    draw_commands_world_3D[hidden::active_frame_slot].clear();
+    current_frame().draw_commands_world_3d.clear();
 }
 
 // -------------------------------------------------------------------
@@ -1312,6 +1328,7 @@ auto draw_frame() -> void {
     draw_world_2D();
     draw_ui();
     swap_buffers();
+    current_frame().arena.reset();
 }
 
 }  // namespace gfx
