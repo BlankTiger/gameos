@@ -7,7 +7,7 @@
 #include "kstd/numbers.hh"
 #include "kstd/time.hh"
 #include "kstd/gfx.hh"
-#include "kstd/ps2.hh"
+#include "kstd/input.hh"
 #include "kstd/math.hh"
 #include "kstd/serial_format.hh"
 #include "kstd/string_builder.hh"
@@ -16,6 +16,7 @@
 
 using namespace ktime;
 using namespace math;
+using Key = input::Key;
 
 constexpr u64 FPS_MAX                                 = 144;
 constexpr u64 ARBITRARY_FALLING_BODY_BLOCK_SIZE_LIMIT = 10;
@@ -352,7 +353,10 @@ auto tetris_main() -> void {
     constexpr auto TARGET_TICKS = ticks_per_frame(FPS_MAX);
 
     const auto* temporary_allocator_mark = mem::temporary_allocator.mark();
-    while (true || !ps2::is_pressed(ps2::Scancode::ESCAPE)) {
+    while (true) {
+        input::begin_frame();
+        if (input::key_pressed(Key::ESCAPE)) break;
+
         const u64 frame_start = get_ticks();
         const u64 elapsed     = frame_start - last_tick;
         last_tick = frame_start;

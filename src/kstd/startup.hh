@@ -9,6 +9,7 @@
 #include "kstd/global_constructor_handling.hh"
 #include "kstd/global_descriptors.hh"
 #include "kstd/interrupts.hh"
+#include "kstd/input.hh"
 #include "kstd/ioapic.hh"
 #include "kstd/local_apic.hh"
 #include "kstd/memory.hh"

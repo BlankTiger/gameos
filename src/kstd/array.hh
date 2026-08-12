@@ -32,6 +32,7 @@ struct Array_View {
 
     auto elements()       -> T*       { return data; }
     auto elements() const -> const T* { return data; }
+    constexpr auto empty() const -> bool { return size == 0; }
 
     force_inline auto slice(usize index, usize count) -> Array_View<T> {
         return Array_View<T>{N, data}.slice(index, count);
@@ -69,6 +70,7 @@ struct Array_View<T, DYNAMIC_EXTENT> {
 
     auto elements()       -> T*       { return data; }
     auto elements() const -> const T* { return data; }
+    auto empty() const -> bool { return size == 0; }
 
     force_inline auto slice(usize index, usize count) -> Array_View<T> {
         if (index >= size)
@@ -119,6 +121,7 @@ struct Static_Array {
 
     auto elements()       -> T*       { return data; }
     auto elements() const -> const T* { return data; }
+    constexpr auto empty() const -> bool { return size == 0; }
 
     auto pop_back() -> T {
         kstd_assert(N > 0, "pop_back on empty Static_Array");
@@ -322,6 +325,7 @@ struct Bounded_Array {
 
     auto elements()       -> T*       { return slot(0); }
     auto elements() const -> const T* { return slot(0); }
+    auto empty() const -> bool { return size == 0; }
 
     force_inline auto slice(usize index, usize count) -> Array_View<T> {
         return Array_View<T>{size, slot(0)}.slice(index, count);
@@ -603,6 +607,7 @@ struct Array {
 
     auto elements()       ->       T* { return data; }
     auto elements() const -> const T* { return data; }
+    auto empty() const -> bool { return size == 0; }
 
     force_inline auto slice(usize index, usize count) -> Array_View<T> {
         return Array_View<T>{size, data}.slice(index, count);

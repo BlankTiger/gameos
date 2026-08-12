@@ -1,8 +1,8 @@
 #pragma once
 
-#include "enum_array.hh"
+#include "enum_flags.hh"
+#include "input.hh"
 #include "low_level_io.hh"
-#include "serial_format.hh"
 
 // PS/2 controller (Intel 8042) initialization.
 // Must be called after pic::initialize() and before idt::enable_interrupts().
@@ -218,6 +218,8 @@ enum struct Scancode : u16 {
     F12             = 0x58,
 
     // Extended (0xE0 prefix) scancodes. Stored at base + KEY_EXTENDED_OFFSET.
+    RIGHT_CONTROL   = 0x1D + KEY_EXTENDED_OFFSET,
+    RIGHT_ALT       = 0x38 + KEY_EXTENDED_OFFSET,
     RIGHT_ARROW     = 0x4D + KEY_EXTENDED_OFFSET,
     LEFT_ARROW      = 0x4B + KEY_EXTENDED_OFFSET,
     UP_ARROW        = 0x48 + KEY_EXTENDED_OFFSET,
@@ -227,11 +229,105 @@ enum struct Scancode : u16 {
 };
 @enum_to_string(Scancode);
 
-inline Enum_Array<Scancode, bool> keys;
 inline bool extended_pending = false;
 
-force_inline auto is_pressed(Scancode code) -> bool {
-    return keys[code];
+auto to_input_key(Scancode scancode) -> input::Key {
+    switch (scancode) {
+        case Scancode::ESCAPE:          return input::Key::ESCAPE;
+        case Scancode::DIGIT_1:         return input::Key::DIGIT_1;
+        case Scancode::DIGIT_2:         return input::Key::DIGIT_2;
+        case Scancode::DIGIT_3:         return input::Key::DIGIT_3;
+        case Scancode::DIGIT_4:         return input::Key::DIGIT_4;
+        case Scancode::DIGIT_5:         return input::Key::DIGIT_5;
+        case Scancode::DIGIT_6:         return input::Key::DIGIT_6;
+        case Scancode::DIGIT_7:         return input::Key::DIGIT_7;
+        case Scancode::DIGIT_8:         return input::Key::DIGIT_8;
+        case Scancode::DIGIT_9:         return input::Key::DIGIT_9;
+        case Scancode::DIGIT_0:         return input::Key::DIGIT_0;
+        case Scancode::MINUS:           return input::Key::MINUS;
+        case Scancode::EQUALS:          return input::Key::EQUALS;
+        case Scancode::BACKSPACE:       return input::Key::BACKSPACE;
+        case Scancode::TAB:             return input::Key::TAB;
+        case Scancode::Q:               return input::Key::Q;
+        case Scancode::W:               return input::Key::W;
+        case Scancode::E:               return input::Key::E;
+        case Scancode::R:               return input::Key::R;
+        case Scancode::T:               return input::Key::T;
+        case Scancode::Y:               return input::Key::Y;
+        case Scancode::U:               return input::Key::U;
+        case Scancode::I:               return input::Key::I;
+        case Scancode::O:               return input::Key::O;
+        case Scancode::P:               return input::Key::P;
+        case Scancode::LEFT_BRACKET:    return input::Key::LEFT_BRACKET;
+        case Scancode::RIGHT_BRACKET:   return input::Key::RIGHT_BRACKET;
+        case Scancode::ENTER:           return input::Key::ENTER;
+        case Scancode::LEFT_CONTROL:    return input::Key::LEFT_CONTROL;
+        case Scancode::A:               return input::Key::A;
+        case Scancode::S:               return input::Key::S;
+        case Scancode::D:               return input::Key::D;
+        case Scancode::F:               return input::Key::F;
+        case Scancode::G:               return input::Key::G;
+        case Scancode::H:               return input::Key::H;
+        case Scancode::J:               return input::Key::J;
+        case Scancode::K:               return input::Key::K;
+        case Scancode::L:               return input::Key::L;
+        case Scancode::SEMICOLON:       return input::Key::SEMICOLON;
+        case Scancode::APOSTROPHE:      return input::Key::APOSTROPHE;
+        case Scancode::GRAVE:           return input::Key::GRAVE;
+        case Scancode::LEFT_SHIFT:      return input::Key::LEFT_SHIFT;
+        case Scancode::BACKSLASH:       return input::Key::BACKSLASH;
+        case Scancode::Z:               return input::Key::Z;
+        case Scancode::X:               return input::Key::X;
+        case Scancode::C:               return input::Key::C;
+        case Scancode::V:               return input::Key::V;
+        case Scancode::B:               return input::Key::B;
+        case Scancode::N:               return input::Key::N;
+        case Scancode::M:               return input::Key::M;
+        case Scancode::COMMA:           return input::Key::COMMA;
+        case Scancode::PERIOD:          return input::Key::PERIOD;
+        case Scancode::SLASH:           return input::Key::SLASH;
+        case Scancode::RIGHT_SHIFT:     return input::Key::RIGHT_SHIFT;
+        case Scancode::KEYPAD_MULTIPLY: return input::Key::KEYPAD_MULTIPLY;
+        case Scancode::LEFT_ALT:        return input::Key::LEFT_ALT;
+        case Scancode::SPACE:           return input::Key::SPACE;
+        case Scancode::CAPS_LOCK:       return input::Key::CAPS_LOCK;
+        case Scancode::F1:              return input::Key::F1;
+        case Scancode::F2:              return input::Key::F2;
+        case Scancode::F3:              return input::Key::F3;
+        case Scancode::F4:              return input::Key::F4;
+        case Scancode::F5:              return input::Key::F5;
+        case Scancode::F6:              return input::Key::F6;
+        case Scancode::F7:              return input::Key::F7;
+        case Scancode::F8:              return input::Key::F8;
+        case Scancode::F9:              return input::Key::F9;
+        case Scancode::F10:             return input::Key::F10;
+        case Scancode::NUM_LOCK:        return input::Key::NUM_LOCK;
+        case Scancode::SCROLL_LOCK:     return input::Key::SCROLL_LOCK;
+        case Scancode::KEYPAD_7:        return input::Key::KEYPAD_7;
+        case Scancode::KEYPAD_8:        return input::Key::KEYPAD_8;
+        case Scancode::KEYPAD_9:        return input::Key::KEYPAD_9;
+        case Scancode::KEYPAD_MINUS:    return input::Key::KEYPAD_MINUS;
+        case Scancode::KEYPAD_4:        return input::Key::KEYPAD_4;
+        case Scancode::KEYPAD_5:        return input::Key::KEYPAD_5;
+        case Scancode::KEYPAD_6:        return input::Key::KEYPAD_6;
+        case Scancode::KEYPAD_PLUS:     return input::Key::KEYPAD_PLUS;
+        case Scancode::KEYPAD_1:        return input::Key::KEYPAD_1;
+        case Scancode::KEYPAD_2:        return input::Key::KEYPAD_2;
+        case Scancode::KEYPAD_3:        return input::Key::KEYPAD_3;
+        case Scancode::KEYPAD_0:        return input::Key::KEYPAD_0;
+        case Scancode::KEYPAD_PERIOD:   return input::Key::KEYPAD_PERIOD;
+        case Scancode::F11:             return input::Key::F11;
+        case Scancode::F12:             return input::Key::F12;
+        case Scancode::RIGHT_CONTROL:   return input::Key::RIGHT_CONTROL;
+        case Scancode::RIGHT_ALT:       return input::Key::RIGHT_ALT;
+        case Scancode::RIGHT_ARROW:     return input::Key::RIGHT_ARROW;
+        case Scancode::LEFT_ARROW:      return input::Key::LEFT_ARROW;
+        case Scancode::UP_ARROW:        return input::Key::UP_ARROW;
+        case Scancode::DOWN_ARROW:      return input::Key::DOWN_ARROW;
+        case Scancode::COUNT:           return input::Key::UNKNOWN;
+    }
+
+    return input::Key::UNKNOWN;
 }
 
 auto isr_handle_ps2_keyboard() -> void {
@@ -252,15 +348,84 @@ auto isr_handle_ps2_keyboard() -> void {
         extended_pending  = false;
     }
 
-    Scancode scancode = static_cast<Scancode>(key_value);
-    keys[scancode] = !key_up;
+    const auto key = to_input_key(static_cast<Scancode>(key_value));
+    if (key == input::Key::UNKNOWN) return;
+    const bool repeat = !key_up && input::key_held(key);
+    if (key_up) {
+        input::submit_event({
+            .type   = input::Event_Type::KEY_UP,
+            .key_up = { .key = key, .repeat = false },
+        });
+    } else {
+        input::submit_event({
+            .type     = input::Event_Type::KEY_DOWN,
+            .key_down = { .key = key, .repeat = repeat },
+        });
+    }
+}
 
-    serial::println("KEYBOARD: %", scancode);
+constexpr usize MOUSE_PACKET_SIZE = 3;
+
+enum struct Mouse_Flags : u8 {
+    LEFT_BUTTON   = 1 << 0,
+    RIGHT_BUTTON  = 1 << 1,
+    MIDDLE_BUTTON = 1 << 2,
+    ALWAYS_ONE    = 1 << 3,
+    X_SIGN        = 1 << 4,
+    Y_SIGN        = 1 << 5,
+    X_OVERFLOW    = 1 << 6,
+    Y_OVERFLOW    = 1 << 7,
+};
+
+struct Mouse_Packet_State {
+    Static_Array<u8, MOUSE_PACKET_SIZE> bytes;
+    u8                                  index = 0;
+};
+
+inline Mouse_Packet_State mouse_packet;
+
+auto submit_mouse_button(Mouse_Flags flags, Mouse_Flags button_flag, input::Mouse_Button button) -> void {
+    const bool is_down = has_flag(flags, button_flag);
+    if (input::mouse_button_held(button) == is_down) return;
+
+    if (is_down) {
+        input::submit_event({
+            .type = input::Event_Type::MOUSE_BUTTON_DOWN,
+            .mouse_button_down = { .button = button },
+        });
+    } else {
+        input::submit_event({
+            .type = input::Event_Type::MOUSE_BUTTON_UP,
+            .mouse_button_up = { .button = button },
+        });
+    }
 }
 
 auto isr_handle_ps2_mouse() -> void {
-    u8 scancode = inb(PS2_DATA_PORT);
-    serial::println("Mouse interrupt, scancode: %", scancode);
+    const u8 value = inb(PS2_DATA_PORT);
+
+    if (mouse_packet.index == 0 && !has_flag(static_cast<Mouse_Flags>(value), Mouse_Flags::ALWAYS_ONE)) return;
+
+    mouse_packet.bytes[mouse_packet.index] = value;
+    ++mouse_packet.index;
+    if (mouse_packet.index < MOUSE_PACKET_SIZE) return;
+    mouse_packet.index = 0;
+
+    const auto flags = static_cast<Mouse_Flags>(mouse_packet.bytes[0]);
+    submit_mouse_button(flags, Mouse_Flags::LEFT_BUTTON, input::Mouse_Button::LEFT);
+    submit_mouse_button(flags, Mouse_Flags::RIGHT_BUTTON, input::Mouse_Button::RIGHT);
+    submit_mouse_button(flags, Mouse_Flags::MIDDLE_BUTTON, input::Mouse_Button::MIDDLE);
+
+    if (has_flag(flags, Mouse_Flags::X_OVERFLOW) || has_flag(flags, Mouse_Flags::Y_OVERFLOW)) return;
+
+    const auto xrel = static_cast<s32>(static_cast<s8>(mouse_packet.bytes[1]));
+    const auto yrel = -static_cast<s32>(static_cast<s8>(mouse_packet.bytes[2]));
+    if (xrel == 0 && yrel == 0) return;
+
+    input::submit_event({
+        .type = input::Event_Type::MOUSE_MOTION,
+        .mouse_motion = { .xrel = xrel, .yrel = yrel },
+    });
 }
 
 }

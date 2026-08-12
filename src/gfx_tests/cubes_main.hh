@@ -1,8 +1,10 @@
-#include "kstd/ps2.hh"
+#include "kstd/input.hh"
 #include "kstd/time.hh"
 #include "kstd/gfx.hh"
 #include "kstd/random.hh"
 #include "kstd/string_builder.hh"
+
+using Key = input::Key;
 
 auto cubes_main() -> void {
     using namespace ktime;
@@ -36,7 +38,10 @@ auto cubes_main() -> void {
 
     u64 last_tick = get_ticks();
     const auto* temporary_allocator_mark = mem::temporary_allocator.mark();
-    while (!ps2::is_pressed(ps2::Scancode::ESCAPE)) {
+    while (true) {
+        input::begin_frame();
+        if (input::key_pressed(Key::ESCAPE)) break;
+
         const u64 frame_start = get_ticks();
         const u64 elapsed     = frame_start - last_tick;
         last_tick = frame_start;
