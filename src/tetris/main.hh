@@ -72,6 +72,7 @@ constexpr u32 TETRIS_BOARD_CELL_COLS = 10;
 constexpr u32 TETRIS_BOARD_CELL_COUNT = TETRIS_BOARD_CELL_ROWS * TETRIS_BOARD_CELL_COLS;
 constexpr u32 TETRIS_BOARD_VERTEX_COUNT = TETRIS_BOARD_CELL_COUNT * 4;
 constexpr u32 TETRIS_BOARD_INDEX_COUNT = TETRIS_BOARD_CELL_COUNT * 2;
+constexpr u64 TETRIS_FAST_FALL_TIME_MS = 50;
 
 struct Game {
     Grid3<Block_Type> grid;
@@ -288,6 +289,11 @@ auto draw(const Game& game, gfx::Camera3D& camera) -> void {
     gfx::clear(TETRIS_BACKGROUND_COLOR);
 
     gfx::draw_text(8, 8, tprint("FPS: %", game.fps));
+    gfx::draw_text(
+        8,
+        32,
+        "WASD - rotate block\nArrow keys - move block\nSpace - drop\nShift - speed up falling\nESC - quit"
+    );
     if (game.game_over) {
         constexpr u32 GAME_OVER_TEXT_WIDTH = 12 * font::GLYPH_WIDTH;
         const u32 game_over_x = (gfx::width() - GAME_OVER_TEXT_WIDTH) / 2;
@@ -296,21 +302,6 @@ auto draw(const Game& game, gfx::Camera3D& camera) -> void {
     }
 
     draw_tetris_board(game, camera);
-
-    const u32 shadow_offset = tetris_shadow_layer_offset(game);
-    for (const auto& [row, col, layer] : game.falling_body.blocks) {
-        gfx::draw_mesh(
-            gfx::Mesh_Instance{
-                gfx::UNIT_CUBE,
-                {},
-                tetris_position(game, row, col, layer + shadow_offset),
-                {},
-                {TETRIS_BLOCK_SCALE, TETRIS_BLOCK_SCALE, TETRIS_BLOCK_SCALE},
-                TETRIS_SHADOW_COLOR,
-            },
-            camera
-        );
-    }
 
     for (u32 row = 0; row < game.grid.rows; ++row) {
         for (u32 col = 0; col < game.grid.cols; ++col) {
@@ -331,6 +322,21 @@ auto draw(const Game& game, gfx::Camera3D& camera) -> void {
                 }, camera);
             }
         }
+    }
+
+    const u32 shadow_offset = tetris_shadow_layer_offset(game);
+    for (const auto& [row, col, layer] : game.falling_body.blocks) {
+        gfx::draw_mesh(
+            gfx::Mesh_Instance{
+                gfx::UNIT_CUBE,
+                {},
+                tetris_position(game, row, col, layer + shadow_offset),
+                {},
+                {TETRIS_BLOCK_SCALE, TETRIS_BLOCK_SCALE, TETRIS_BLOCK_SCALE},
+                TETRIS_SHADOW_COLOR,
+            },
+            camera
+        );
     }
 
     gfx::draw_frame();
@@ -620,14 +626,16 @@ auto update(Game& game, f32 camera_orbit_angle) -> void {
             try_moving_falling_body(game, delta.x, delta.y);
         }
 
-        bool timer_elapsed = get_ticks() >= game.current_move_started_at_tick + ms_to_ticks(game.time_till_next_move_ms);
-        bool fast_forward_key_pressed = input::key_pressed(Key::SPACE);
+        const bool fast_fall_key_held = input::key_held(Key::LEFT_SHIFT) || input::key_held(Key::RIGHT_SHIFT);
+        const bool instant_drop_key_pressed = input::key_pressed(Key::SPACE);
+        const u64 move_interval_ms = fast_fall_key_held ? TETRIS_FAST_FALL_TIME_MS : game.time_till_next_move_ms;
+        const bool timer_elapsed = get_ticks() >= game.current_move_started_at_tick + ms_to_ticks(move_interval_ms);
 
         // If timer elapsed or a button has been pushed then move down, or if it's
         // not possible solidify into the stationary layers at the bottom.
-        if (timer_elapsed || fast_forward_key_pressed) {
+        if (timer_elapsed || instant_drop_key_pressed) {
             bool solidify = false;
-            if (fast_forward_key_pressed) {
+            if (instant_drop_key_pressed) {
                 while (falling_body_can_go_lower(game)) move_falling_body_lower(game);
                 solidify = true;
             }
