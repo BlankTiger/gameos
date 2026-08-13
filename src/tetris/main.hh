@@ -20,7 +20,7 @@ using namespace ktime;
 using namespace math;
 using Key = input::Key;
 
-constexpr u64 FPS_MAX                                 = 144;
+constexpr u64 FPS_MAX                                 = 280;
 constexpr u64 ARBITRARY_FALLING_BODY_BLOCK_SIZE_LIMIT = 10;
 
 using Block_Coords = Vector3<u32>;
@@ -62,7 +62,9 @@ enum struct Block_Type {
 
 struct Game {
     Grid3<Block_Type> grid;
+    Grid3<u8> body_indices;
     Falling_Body falling_body;
+    usize falling_body_index = 0;
 
     Array<u32> layers_to_destroy;
 
@@ -76,8 +78,117 @@ struct Game {
     f64 time_scale = 1.0;
     f64 fps        = 0.0;
 
-    Game(u32 rows = 3, u32 cols = 3, u32 layers = 7) : grid(Grid3<Block_Type>(rows, cols, layers)) {}
+    Game(u32 rows = 10, u32 cols = 10, u32 layers = 20)
+        : grid(Grid3<Block_Type>(rows, cols, layers)),
+          body_indices(Grid3<u8>(rows, cols, layers)) {}
 };
+
+constexpr f32 TETRIS_BLOCK_SCALE = 0.5f;
+constexpr f32 TETRIS_BLOCK_SPACING = 1.f;
+constexpr f32 TETRIS_ORIGIN_Z = 0.0f;
+constexpr f32 TETRIS_CAMERA_OFFSET_Z = -5.0f;
+constexpr f32 TETRIS_CAMERA_RADIUS = 20.0f;
+constexpr f32 TETRIS_CAMERA_MOUSE_SENSITIVITY = 0.01f;
+constexpr f32 TETRIS_PI = 3.14159265358979323846f;
+
+constexpr Static_Array<gfx::Color, available_bodies.size()> TETRIS_BODY_COLORS{{
+    {80, 200, 255, 255},  {255, 180, 60, 255}, {80, 255, 140, 255},  {255, 90, 120, 255},
+    {180, 100, 255, 255}, {255, 230, 70, 255}, {80, 160, 255, 255},  {255, 110, 220, 255},
+    {100, 240, 240, 255}, {255, 140, 80, 255}, {150, 255, 100, 255}, {220, 120, 255, 255},
+}};
+constexpr auto make_tetris_dimmed_body_colors() {
+    constexpr f32 TETRIS_SOLID_COLOR_DIM = 0.5f;
+    Static_Array<gfx::Color, available_bodies.size()> colors{{}};
+    for (usize i = 0; i < colors.size; ++i) {
+        colors[i] = TETRIS_BODY_COLORS[i].dim(TETRIS_SOLID_COLOR_DIM);
+    }
+    return colors;
+}
+constexpr auto TETRIS_DIMMED_BODY_COLORS = make_tetris_dimmed_body_colors();
+
+inline Static_Array<Static_Array<gfx::Vertex, 24>, available_bodies.size()> tetris_solid_vertices;
+inline Static_Array<gfx::Mesh, available_bodies.size()> tetris_solid_meshes;
+
+auto initialize_tetris_meshes() -> void {
+    for (usize body_index = 0; body_index < tetris_solid_meshes.size; ++body_index) {
+        for (usize vertex_index = 0; vertex_index < gfx::UNIT_CUBE.vertices.size; ++vertex_index) {
+            tetris_solid_vertices[body_index][vertex_index] = gfx::UNIT_CUBE.vertices[vertex_index];
+            tetris_solid_vertices[body_index][vertex_index].color = TETRIS_DIMMED_BODY_COLORS[body_index];
+        }
+        tetris_solid_meshes[body_index] = gfx::Mesh{
+            tetris_solid_vertices[body_index],
+            gfx::UNIT_CUBE.indices
+        };
+    }
+}
+
+auto update_tetris_camera(gfx::Camera3D& camera, f32 orbit_angle) -> void {
+    const f32 distance = sqrt(camera.position.x * camera.position.x + camera.position.y * camera.position.y);
+    camera.position.x = sin(orbit_angle) * distance;
+    camera.position.y = -cos(orbit_angle) * distance;
+    camera.position.z = TETRIS_ORIGIN_Z + TETRIS_CAMERA_OFFSET_Z;
+    camera.rotation = Quaternion<f32>::from_axis_angle({0.f, 0.f, 1.f}, orbit_angle) *
+                      Quaternion<f32>::from_axis_angle({1.f, 0.f, 0.f}, TETRIS_PI / 2.f);
+    camera.recompute_matrix();
+}
+
+auto camera_relative_move_delta(f32 orbit_angle, s32 screen_x, s32 screen_y) -> Vector2<s32> {
+    f32 quarter_turns = orbit_angle / (TETRIS_PI * 0.5f);
+    s32 sector = static_cast<s32>(quarter_turns >= 0.f ? quarter_turns + 0.5f : quarter_turns - 0.5f);
+    sector = ((sector % 4) + 4) % 4;
+
+    constexpr Static_Array<Vector2<s32>, 4> screen_right_deltas{{
+        {1, 0}, {0, 1}, {-1, 0}, {0, -1},
+    }};
+    constexpr Static_Array<Vector2<s32>, 4> screen_up_deltas{{
+        {0, -1}, {1, 0}, {0, 1}, {-1, 0},
+    }};
+
+    const auto right = screen_right_deltas[sector];
+    const auto up = screen_up_deltas[sector];
+    return {
+        screen_x * right.x + screen_y * up.x,
+        screen_x * right.y + screen_y * up.y,
+    };
+}
+
+auto tetris_position(const Game& game, u32 row, u32 col, u32 layer) -> Vector3<f32> {
+    return {
+        (static_cast<f32>(row) - static_cast<f32>(game.grid.rows - 1) / 2.f) * TETRIS_BLOCK_SPACING,
+        (static_cast<f32>(col) - static_cast<f32>(game.grid.cols - 1) / 2.f) * TETRIS_BLOCK_SPACING,
+        TETRIS_ORIGIN_Z - static_cast<f32>(layer) * TETRIS_BLOCK_SPACING,
+    };
+}
+
+
+auto draw(const Game& game, gfx::Camera3D& camera) -> void {
+    gfx::clear(gfx::BLACK);
+
+    gfx::draw_text(8, 8, tprint("FPS: %", game.fps));
+
+    for (u32 row = 0; row < game.grid.rows; ++row) {
+        for (u32 col = 0; col < game.grid.cols; ++col) {
+            for (u32 layer = 0; layer < game.grid.layers; ++layer) {
+                const auto type = game.grid.at(row, col, layer);
+                if (type == Block_Type::EMPTY || layer == game.grid.layers - 1) continue;
+                const auto body_index = game.body_indices.at(row, col, layer);
+                const auto mesh     = type == Block_Type::FALLING ? gfx::UNIT_CUBE : tetris_solid_meshes[body_index];
+                const auto modulate = type == Block_Type::FALLING ? TETRIS_BODY_COLORS[body_index] : gfx::WHITE;
+                gfx::draw_mesh(
+                gfx::Mesh_Instance{
+                    mesh,
+                    @embed("tetris_block.png"),
+                    tetris_position(game, row, col, layer),
+                    {},
+                    {TETRIS_BLOCK_SCALE, TETRIS_BLOCK_SCALE, TETRIS_BLOCK_SCALE},
+                    modulate
+                }, camera);
+            }
+        }
+    }
+
+    gfx::draw_frame();
+}
 
 auto create_new_falling_body(Body blocks) -> Falling_Body {
     Falling_Body body;
@@ -104,9 +215,11 @@ auto produce_new_falling_body(Game& game) -> bool {
 
     for (const auto& [row, col, layer] : falling_body.blocks) {
         game.grid.set(row, col, layer, Block_Type::FALLING);
+        game.body_indices.set(row, col, layer, static_cast<u8>(body_index));
     }
 
     game.falling_body = falling_body;
+    game.falling_body_index = body_index;
     return true;
 }
 
@@ -142,21 +255,21 @@ auto rotate_90(Block_Coords block, Block_Coords center_of_rotation, Rotation_Axi
     using enum Rotation_Axis;
     switch (axis) {
         case X: {
-            new_position.x = -diff_position.y;
-            new_position.y =  diff_position.x;
-            new_position.z =  diff_position.z;
-        } break;
-
-        case Y: {
             new_position.x =  diff_position.x;
             new_position.y = -diff_position.z;
             new_position.z =  diff_position.y;
         } break;
 
-        case Z: {
+        case Y: {
             new_position.x =  diff_position.z;
-            new_position.y = -diff_position.y;
-            new_position.z =  diff_position.y;
+            new_position.y =  diff_position.y;
+            new_position.z = -diff_position.x;
+        } break;
+
+        case Z: {
+            new_position.x = -diff_position.y;
+            new_position.y =  diff_position.x;
+            new_position.z =  diff_position.z;
         } break;
     }
 
@@ -186,19 +299,51 @@ auto calculate_center_of_body(const Falling_Body& body) -> Block_Coords {
     );
 }
 
+auto rotate_90_doubled(Block_Coords block, Vector3<s32> center_twice, Rotation_Axis axis) -> Vector3<s32> {
+    const Vector3<s32> position_twice = Vector3<s32>(block) * 2;
+    const Vector3<s32> difference = position_twice - center_twice;
+    Vector3<s32> rotated{};
+
+    using enum Rotation_Axis;
+    switch (axis) {
+        case X: rotated = {difference.x, -difference.z, difference.y}; break;
+        case Y: rotated = {difference.z, difference.y, -difference.x}; break;
+        case Z: rotated = {-difference.y, difference.x, difference.z}; break;
+    }
+
+    return center_twice + rotated;
+}
+
 auto try_rotating_falling_body(Game& game, Rotation_Axis axis) -> bool {
-    auto center_of_rotation = calculate_center_of_body(game.falling_body);
+    u32 min_row = U32_MAX, max_row = 0;
+    u32 min_col = U32_MAX, max_col = 0;
+    u32 min_layer = U32_MAX, max_layer = 0;
+    for (const auto& [row, col, layer] : game.falling_body.blocks) {
+        min_row = std::min(min_row, row);
+        max_row = std::max(max_row, row);
+        min_col = std::min(min_col, col);
+        max_col = std::max(max_col, col);
+        min_layer = std::min(min_layer, layer);
+        max_layer = std::max(max_layer, layer);
+    }
+    const Vector3<s32> center_twice{
+        static_cast<s32>(min_row + max_row),
+        static_cast<s32>(min_col + max_col),
+        static_cast<s32>(min_layer + max_layer),
+    };
 
     Blocks rotated;
     for (const auto& block : game.falling_body.blocks) {
-        auto new_coords = rotate_90(block, center_of_rotation, axis);
+        const auto rotated_twice = rotate_90_doubled(block, center_twice, axis);
+        // If any of the rotated_twice values are not even - something went wrong
+        if ((rotated_twice.x & 1) != 0 || (rotated_twice.y & 1) != 0 || (rotated_twice.z & 1) != 0) return false;
 
-        // u32 so no need to check if negative.
-        if (new_coords.x >= game.grid.rows ||
-            new_coords.y >= game.grid.cols ||
-            new_coords.z >= game.grid.layers) {
+        const Vector3<s32> rotated_position = rotated_twice / 2;
+        if (rotated_position.x < 0 || rotated_position.y < 0 || rotated_position.z < 0) return false;
+
+        const Block_Coords new_coords(rotated_position);
+        if (new_coords.x >= game.grid.rows || new_coords.y >= game.grid.cols || new_coords.z >= game.grid.layers)
             return false;
-        }
 
         if (game.grid.at(new_coords.x, new_coords.y, new_coords.z) != Block_Type::EMPTY) {
             bool is_self = false;
@@ -208,7 +353,6 @@ auto try_rotating_falling_body(Game& game, Rotation_Axis axis) -> bool {
                     break;
                 }
             }
-
             if (!is_self) return false;
         }
 
@@ -224,12 +368,58 @@ auto try_rotating_falling_body(Game& game, Rotation_Axis axis) -> bool {
 
     for (const auto& [x, y, z] : game.falling_body.blocks) {
         game.grid.set(x, y, z, Block_Type::FALLING);
+        game.body_indices.set(x, y, z, static_cast<u8>(game.falling_body_index));
     }
 
     return true;
 }
 
-auto update(Game& game) -> void {
+auto move_falling_body_lower(Game& game) -> void {
+    game.falling_body.layer_sort();
+    for (auto& [row, col, layer] : game.falling_body.blocks) {
+        game.grid.clear(row, col, layer);
+        layer += 1;
+        game.grid.set(row, col, layer, Block_Type::FALLING);
+        game.body_indices.set(row, col, layer, static_cast<u8>(game.falling_body_index));
+    }
+}
+
+auto try_moving_falling_body(Game& game, s32 row_delta, s32 col_delta) -> bool {
+    Blocks moved;
+    for (const auto& [row, col, layer] : game.falling_body.blocks) {
+        const s32 new_row = static_cast<s32>(row) + row_delta;
+        const s32 new_col = static_cast<s32>(col) + col_delta;
+        if (new_row < 0 || new_col < 0 || new_row >= static_cast<s32>(game.grid.rows) || new_col >= static_cast<s32>(game.grid.cols))
+            return false;
+
+        const Block_Coords new_coords{
+            static_cast<u32>(new_row),
+            static_cast<u32>(new_col),
+            layer,
+        };
+        if (game.grid.at(new_coords.x, new_coords.y, new_coords.z) != Block_Type::EMPTY) {
+            bool is_self = false;
+            for (const auto& other : game.falling_body.blocks) {
+                if (other == new_coords) {
+                    is_self = true;
+                    break;
+                }
+            }
+            if (!is_self) return false;
+        }
+        moved.push_back(new_coords);
+    }
+
+    for (const auto& [row, col, layer] : game.falling_body.blocks) game.grid.clear(row, col, layer);
+    game.falling_body.blocks = moved;
+    for (const auto& [row, col, layer] : game.falling_body.blocks) {
+        game.grid.set(row, col, layer, Block_Type::FALLING);
+        game.body_indices.set(row, col, layer, static_cast<u8>(game.falling_body_index));
+    }
+    return true;
+}
+
+auto update(Game& game, f32 camera_orbit_angle) -> void {
     // Handle layer destruction.
     {
         if (game.layers_to_destroy.size > 0) {
@@ -251,6 +441,7 @@ auto update(Game& game) -> void {
                 if (!layer_destroyed[read_layer]) {
                     if (read_layer != write_layer) {
                         game.grid.copy_layer(static_cast<u32>(read_layer), static_cast<u32>(write_layer), skip_if_is_falling);
+                        game.body_indices.copy_layer(static_cast<u32>(read_layer), static_cast<u32>(write_layer), skip_if_is_falling);
                     }
                     --write_layer;
                 }
@@ -258,6 +449,7 @@ auto update(Game& game) -> void {
 
             for (s64 layer = write_layer; layer >= 0; --layer) {
                 game.grid.clear_layer(static_cast<u32>(layer), skip_if_is_falling);
+                game.body_indices.clear_layer(static_cast<u32>(layer), skip_if_is_falling);
             }
 
             game.layers_to_destroy.clear();
@@ -266,10 +458,8 @@ auto update(Game& game) -> void {
 
     // Handle rotations.
     {
-        // @TODO: implement.
-        bool rotate_x_key_pressed = false;
-        bool rotate_y_key_pressed = false;
-        bool rotate_z_key_pressed = false;
+        const bool rotate_x_key_pressed = input::key_pressed(Key::W) || input::key_pressed(Key::S);
+        const bool rotate_y_key_pressed = input::key_pressed(Key::A) || input::key_pressed(Key::D);
 
         if (rotate_x_key_pressed) {
             try_rotating_falling_body(game, Rotation_Axis::X);
@@ -277,31 +467,46 @@ auto update(Game& game) -> void {
         else if (rotate_y_key_pressed) {
             try_rotating_falling_body(game, Rotation_Axis::Y);
         }
-        else if (rotate_z_key_pressed) {
-            try_rotating_falling_body(game, Rotation_Axis::Z);
-        }
     }
 
     // Handle movement.
     {
+        if (input::key_pressed(Key::LEFT_ARROW)) {
+            const auto delta = camera_relative_move_delta(camera_orbit_angle, -1, 0);
+            try_moving_falling_body(game, delta.x, delta.y);
+        }
+        if (input::key_pressed(Key::RIGHT_ARROW)) {
+            const auto delta = camera_relative_move_delta(camera_orbit_angle, 1, 0);
+            try_moving_falling_body(game, delta.x, delta.y);
+        }
+        if (input::key_pressed(Key::UP_ARROW)) {
+            const auto delta = camera_relative_move_delta(camera_orbit_angle, 0, -1);
+            try_moving_falling_body(game, delta.x, delta.y);
+        }
+        if (input::key_pressed(Key::DOWN_ARROW)) {
+            const auto delta = camera_relative_move_delta(camera_orbit_angle, 0, 1);
+            try_moving_falling_body(game, delta.x, delta.y);
+        }
+
         bool timer_elapsed = get_ticks() >= game.current_move_started_at_tick + ms_to_ticks(game.time_till_next_move_ms);
-        bool fast_forward_key_pressed = false; // @TODO: implement.
+        bool fast_forward_key_pressed = input::key_pressed(Key::SPACE);
 
         // If timer elapsed or a button has been pushed then move down, or if it's
         // not possible solidify into the stationary layers at the bottom.
         if (timer_elapsed || fast_forward_key_pressed) {
-            if (falling_body_can_go_lower(game)) {
-                // This has to go in layer sorted order (bottom-most to top-most layer).
-                // falling body should have already been sorted, but it doesn't cost us much to make sure:
-                game.falling_body.layer_sort();
-
-                for (auto& [row, col, layer] : game.falling_body.blocks) {
-                    game.grid.clear(row, col, layer);
-                    layer += 1;
-                    game.grid.set(row, col, layer, Block_Type::FALLING);
-                }
+            bool solidify = false;
+            if (fast_forward_key_pressed) {
+                while (falling_body_can_go_lower(game)) move_falling_body_lower(game);
+                solidify = true;
+            }
+            else if (falling_body_can_go_lower(game)) {
+                move_falling_body_lower(game);
             }
             else {
+                solidify = true;
+            }
+
+            if (solidify) {
                 // Solidify into bottom-most layers (FALLING -> SOLID).
                 // Get and set the next falling_body.
                 for (const auto& [row, col, layer] : game.falling_body.blocks) {
@@ -324,20 +529,15 @@ auto update(Game& game) -> void {
     }
 }
 
-auto draw(const Game& game) -> void {
-    gfx::clear(gfx::BLACK);
-
-    gfx::draw_text(8, 8, tprint("FPS: %", game.fps));
-    gfx::draw_text(gfx::width() / 3, gfx::height() / 8, tprint("%", game.grid));
-
-    gfx::draw_frame();
-}
-
 auto tetris_main() -> void {
     mem::Debug_Allocator dbg_allocator{};
     mem::set_global_allocator(&dbg_allocator);
 
-    gfx::Camera3D camera; // TODO: implement moving/rotating camera
+    gfx::Camera3D camera;
+    f32 camera_orbit_angle = 0.f;
+    camera.position = {0.f, -TETRIS_CAMERA_RADIUS, TETRIS_ORIGIN_Z + TETRIS_CAMERA_OFFSET_Z};
+    update_tetris_camera(camera, camera_orbit_angle);
+    initialize_tetris_meshes();
     Game game;
     for (u32 row = 0; row < game.grid.rows; ++row) {
         for (u32 col = 0; col < game.grid.cols; ++col) {
@@ -363,14 +563,20 @@ auto tetris_main() -> void {
         const u64 elapsed     = frame_start - last_tick;
         last_tick = frame_start;
 
+        const auto mouse_delta = input::mouse_motion();
+        if (input::mouse_button_held(input::Mouse_Button::LEFT)) {
+            camera_orbit_angle += TETRIS_CAMERA_MOUSE_SENSITIVITY * static_cast<f32>(mouse_delta.x);
+        }
+        update_tetris_camera(camera, camera_orbit_angle);
+
         {
             game.dt_real  = elapsed;
             game.dt       = static_cast<f64>(game.dt_real) / TICK_RATE * game.time_scale;
             game.time_ms += ticks_to_ms(game.dt_real);
             game.fps      = 1 / game.dt;
 
-            update(game);
-            draw(game);
+            update(game, camera_orbit_angle);
+            draw(game, camera);
 
             // serial::println("% MB", static_cast<f32>(mem::temporary_allocator.bytes_used()) / 1000000);
             mem::temporary_allocator.rewind(temporary_allocator_mark);
