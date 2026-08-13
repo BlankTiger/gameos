@@ -60,11 +60,18 @@ enum struct Block_Type {
     FALLING,
 };
 
+constexpr u32 TETRIS_BOARD_CELL_ROWS = 10;
+constexpr u32 TETRIS_BOARD_CELL_COLS = 10;
+constexpr u32 TETRIS_BOARD_CELL_COUNT = TETRIS_BOARD_CELL_ROWS * TETRIS_BOARD_CELL_COLS;
+constexpr u32 TETRIS_BOARD_VERTEX_COUNT = TETRIS_BOARD_CELL_COUNT * 4;
+constexpr u32 TETRIS_BOARD_INDEX_COUNT = TETRIS_BOARD_CELL_COUNT * 2;
+
 struct Game {
     Grid3<Block_Type> grid;
     Grid3<u8> body_indices;
     Falling_Body falling_body;
     usize falling_body_index = 0;
+    bool game_over = false;
 
     Array<u32> layers_to_destroy;
 
@@ -78,18 +85,31 @@ struct Game {
     f64 time_scale = 1.0;
     f64 fps        = 0.0;
 
-    Game(u32 rows = 10, u32 cols = 10, u32 layers = 20)
+    Game(u32 rows = TETRIS_BOARD_CELL_ROWS, u32 cols = TETRIS_BOARD_CELL_COLS, u32 layers = 20)
         : grid(Grid3<Block_Type>(rows, cols, layers)),
           body_indices(Grid3<u8>(rows, cols, layers)) {}
 };
 
 constexpr f32 TETRIS_BLOCK_SCALE = 0.5f;
 constexpr f32 TETRIS_BLOCK_SPACING = 1.f;
+
 constexpr f32 TETRIS_ORIGIN_Z = 0.0f;
-constexpr f32 TETRIS_CAMERA_OFFSET_Z = -5.0f;
+constexpr f32 TETRIS_CAMERA_OFFSET_Z = -8.0f;
 constexpr f32 TETRIS_CAMERA_RADIUS = 20.0f;
 constexpr f32 TETRIS_CAMERA_MOUSE_SENSITIVITY = 0.01f;
+
 constexpr f32 TETRIS_PI = 3.14159265358979323846f;
+
+constexpr f32 TETRIS_BOARD_WALL_GAP = 0.05f;
+constexpr f32 TETRIS_BOARD_WALL_HEIGHT = 20.f;
+constexpr gfx::Color TETRIS_WALL_COLOR{34, 44, 64, 160};
+
+constexpr gfx::Color TETRIS_BACKGROUND_COLOR{12, 16, 28, 255};
+
+constexpr f32 TETRIS_BOARD_GROUND_SIZE = 14.f;
+constexpr gfx::Color TETRIS_GROUND_COLOR{24, 30, 44, 255};
+constexpr gfx::Color TETRIS_CHECKER_COLOR_A{42, 52, 72, 255};
+constexpr gfx::Color TETRIS_CHECKER_COLOR_B{30, 38, 56, 255};
 
 constexpr Static_Array<gfx::Color, available_bodies.size()> TETRIS_BODY_COLORS{{
     {80, 200, 255, 255},  {255, 180, 60, 255}, {80, 255, 140, 255},  {255, 90, 120, 255},
@@ -108,6 +128,9 @@ constexpr auto TETRIS_DIMMED_BODY_COLORS = make_tetris_dimmed_body_colors();
 
 inline Static_Array<Static_Array<gfx::Vertex, 24>, available_bodies.size()> tetris_solid_vertices;
 inline Static_Array<gfx::Mesh, available_bodies.size()> tetris_solid_meshes;
+inline Static_Array<gfx::Vertex, TETRIS_BOARD_VERTEX_COUNT> tetris_checkerboard_vertices;
+inline Static_Array<gfx::Index, TETRIS_BOARD_INDEX_COUNT> tetris_checkerboard_indices;
+inline gfx::Mesh tetris_checkerboard_mesh;
 
 auto initialize_tetris_meshes() -> void {
     for (usize body_index = 0; body_index < tetris_solid_meshes.size; ++body_index) {
@@ -120,6 +143,31 @@ auto initialize_tetris_meshes() -> void {
             gfx::UNIT_CUBE.indices
         };
     }
+}
+
+auto initialize_tetris_board_mesh() -> void {
+    for (u32 row = 0; row < TETRIS_BOARD_CELL_ROWS; ++row) {
+        for (u32 col = 0; col < TETRIS_BOARD_CELL_COLS; ++col) {
+            const u32 cell_index = row * TETRIS_BOARD_CELL_COLS + col;
+            const u32 vertex_index = cell_index * 4;
+            const u32 index_index = cell_index * 2;
+            const f32 x1 = static_cast<f32>(row) - TETRIS_BOARD_CELL_ROWS / 2.f;
+            const f32 x2 = x1 + 1.f;
+            const f32 y1 = static_cast<f32>(col) - TETRIS_BOARD_CELL_COLS / 2.f;
+            const f32 y2 = y1 + 1.f;
+            const gfx::Color color = ((row + col) & 1) == 0 ? TETRIS_CHECKER_COLOR_A : TETRIS_CHECKER_COLOR_B;
+
+            tetris_checkerboard_vertices[vertex_index + 0] = {{x1, y1, 0.f}, color, {0.f, 0.f}};
+            tetris_checkerboard_vertices[vertex_index + 1] = {{x2, y1, 0.f}, color, {1.f, 0.f}};
+            tetris_checkerboard_vertices[vertex_index + 2] = {{x2, y2, 0.f}, color, {1.f, 1.f}};
+            tetris_checkerboard_vertices[vertex_index + 3] = {{x1, y2, 0.f}, color, {0.f, 1.f}};
+
+            tetris_checkerboard_indices[index_index + 0] = {vertex_index + 0, vertex_index + 1, vertex_index + 2};
+            tetris_checkerboard_indices[index_index + 1] = {vertex_index + 0, vertex_index + 2, vertex_index + 3};
+        }
+    }
+
+    tetris_checkerboard_mesh = gfx::Mesh{tetris_checkerboard_vertices, tetris_checkerboard_indices};
 }
 
 auto update_tetris_camera(gfx::Camera3D& camera, f32 orbit_angle) -> void {
@@ -160,17 +208,74 @@ auto tetris_position(const Game& game, u32 row, u32 col, u32 layer) -> Vector3<f
     };
 }
 
+auto tetris_board_z(const Game& game) -> f32 {
+    return tetris_position(game, 0, 0, game.grid.layers - 1).z - TETRIS_BLOCK_SCALE;
+}
+
+auto draw_tetris_back_walls(const Game& game, gfx::Camera3D& camera) -> void {
+    const bool negative_x_wall = camera.position.x >= 0.f;
+    const bool positive_y_wall = camera.position.y <= 0.f;
+    const f32 x_edge = static_cast<f32>(game.grid.rows) / 2.f + TETRIS_BOARD_WALL_GAP;
+    const f32 y_edge = static_cast<f32>(game.grid.cols) / 2.f + TETRIS_BOARD_WALL_GAP;
+    const f32 board_z = tetris_board_z(game);
+    const f32 wall_z = board_z + TETRIS_BOARD_WALL_HEIGHT / 2.f;
+
+    gfx::draw_plane(
+        {negative_x_wall ? -x_edge : x_edge, 0.f, wall_z},
+        {TETRIS_BOARD_WALL_HEIGHT, static_cast<f32>(game.grid.cols) + 2.f * TETRIS_BOARD_WALL_GAP},
+        TETRIS_WALL_COLOR,
+        camera,
+        Quaternion<f32>::from_axis_angle({0.f, 1.f, 0.f}, TETRIS_PI / 2.f)
+    );
+    gfx::draw_plane(
+        {0.f, positive_y_wall ? y_edge : -y_edge, wall_z},
+        {static_cast<f32>(game.grid.rows) + 2.f * TETRIS_BOARD_WALL_GAP, TETRIS_BOARD_WALL_HEIGHT},
+        TETRIS_WALL_COLOR,
+        camera,
+        Quaternion<f32>::from_axis_angle({1.f, 0.f, 0.f}, TETRIS_PI / 2.f)
+    );
+}
+
+auto draw_tetris_board(const Game& game, gfx::Camera3D& camera) -> void {
+    const f32 board_z = tetris_board_z(game);
+    gfx::draw_plane(
+        {0.f, 0.f, board_z - 0.02f},
+        {TETRIS_BOARD_GROUND_SIZE, TETRIS_BOARD_GROUND_SIZE},
+        TETRIS_GROUND_COLOR,
+        camera
+    );
+    gfx::draw_mesh(
+        gfx::Mesh_Instance{
+            tetris_checkerboard_mesh,
+            {},
+            {0.f, 0.f, board_z},
+            {},
+            {1.f, 1.f, 1.f},
+            gfx::WHITE,
+        },
+        camera
+    );
+    draw_tetris_back_walls(game, camera);
+}
 
 auto draw(const Game& game, gfx::Camera3D& camera) -> void {
-    gfx::clear(gfx::BLACK);
+    gfx::clear(TETRIS_BACKGROUND_COLOR);
 
     gfx::draw_text(8, 8, tprint("FPS: %", game.fps));
+    if (game.game_over) {
+        constexpr u32 GAME_OVER_TEXT_WIDTH = 12 * font::GLYPH_WIDTH;
+        const u32 game_over_x = (gfx::width() - GAME_OVER_TEXT_WIDTH) / 2;
+        const u32 game_over_y = (gfx::height() - font::GLYPH_HEIGHT) / 2;
+        gfx::draw_text(game_over_x, game_over_y, "GAME OVER :(", gfx::WHITE, gfx::TRANSPARENT, 2);
+    }
+
+    draw_tetris_board(game, camera);
 
     for (u32 row = 0; row < game.grid.rows; ++row) {
         for (u32 col = 0; col < game.grid.cols; ++col) {
             for (u32 layer = 0; layer < game.grid.layers; ++layer) {
                 const auto type = game.grid.at(row, col, layer);
-                if (type == Block_Type::EMPTY || layer == game.grid.layers - 1) continue;
+                if (type == Block_Type::EMPTY) continue;
                 const auto body_index = game.body_indices.at(row, col, layer);
                 const auto mesh     = type == Block_Type::FALLING ? gfx::UNIT_CUBE : tetris_solid_meshes[body_index];
                 const auto modulate = type == Block_Type::FALLING ? TETRIS_BODY_COLORS[body_index] : gfx::WHITE;
@@ -520,8 +625,7 @@ auto update(Game& game, f32 camera_orbit_angle) -> void {
                     }
                 }
 
-                auto ok = produce_new_falling_body(game);
-                (void)ok; // @TODO: Discarding for now, will use later for determining if the game is over.
+                game.game_over = !produce_new_falling_body(game);
             }
 
             game.current_move_started_at_tick = get_ticks();
@@ -538,14 +642,8 @@ auto tetris_main() -> void {
     camera.position = {0.f, -TETRIS_CAMERA_RADIUS, TETRIS_ORIGIN_Z + TETRIS_CAMERA_OFFSET_Z};
     update_tetris_camera(camera, camera_orbit_angle);
     initialize_tetris_meshes();
+    initialize_tetris_board_mesh();
     Game game;
-    for (u32 row = 0; row < game.grid.rows; ++row) {
-        for (u32 col = 0; col < game.grid.cols; ++col) {
-            game.grid.set(row, col, game.grid.layers - 1, Block_Type::SOLID);
-        }
-    }
-    game.grid.clear(0, 0, game.grid.layers - 1);
-
     auto ok = produce_new_falling_body(game);
     kstd_assert(ok);
 
@@ -577,6 +675,22 @@ auto tetris_main() -> void {
 
             update(game, camera_orbit_angle);
             draw(game, camera);
+
+            if (game.game_over) {
+                while (true) {
+                    input::begin_frame();
+                    if (input::key_pressed(Key::ESCAPE)) break;
+
+                    const auto mouse_delta = input::mouse_motion();
+                    if (input::mouse_button_held(input::Mouse_Button::LEFT)) {
+                        camera_orbit_angle += TETRIS_CAMERA_MOUSE_SENSITIVITY * static_cast<f32>(mouse_delta.x);
+                    }
+                    update_tetris_camera(camera, camera_orbit_angle);
+                    draw(game, camera);
+                    sleep_ticks(TARGET_TICKS);
+                }
+                break;
+            }
 
             // serial::println("% MB", static_cast<f32>(mem::temporary_allocator.bytes_used()) / 1000000);
             mem::temporary_allocator.rewind(temporary_allocator_mark);

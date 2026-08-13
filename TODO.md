@@ -14,7 +14,8 @@ graphics:
 - [x] move draw\_char draw\_text to other location
 - [x] draw_text_immediate for asserts and term::print
 - [x] think of a better way of storing b,g,r channels, so we can both load rgb and use bgr elsewhere
-- [ ] draw tetris
+- [x] draw tetris
+- [ ] fix ugly mesh_instance constructors
 - [ ] separate core for graphics
 
 fonts:
@@ -24,6 +25,12 @@ fonts:
 sound:
 - [ ] figure out what to actually do here
 - [ ] 8-bit slowly drifting
+
+tetris:
+- [ ] make blocks transparent if they occlude falling block
+- [ ] add scoring
+- [ ] add preview of next block
+- [ ] add UI
 
 base layer:
 - [x] timers
