@@ -9,6 +9,7 @@
 #include "kstd/global_constructor_handling.hh"
 #include "kstd/global_descriptors.hh"
 #include "kstd/interrupts.hh"
+#include "kstd/input.hh"
 #include "kstd/ioapic.hh"
 #include "kstd/local_apic.hh"
 #include "kstd/memory.hh"
@@ -82,6 +83,7 @@ inline auto kernel_startup(u32 magic, const boot::Multiboot2_Info* mbi) -> void 
 
     threads::initialize();
     ap::initialize_aps();
+    ioapic::route_device_irqs_to_application_processor();
     // Keep ticks on the BSP. kernel_main runs there and sleep_ticks() depends
     // on its local timer to wake the graphics loop.
     ktime::set_tick_cpu(0);

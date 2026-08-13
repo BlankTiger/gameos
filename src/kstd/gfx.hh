@@ -149,6 +149,7 @@ struct Rect_Command {
 struct Sprite_Command {
     Resource_View res;
     u32 x, y;
+    u32 width, height;
 };
 
 struct Triangle_Command {
@@ -729,13 +730,15 @@ auto draw_rect(u32 x, u32 y, u32 w, u32 h, Color color, u8 z = 1, Render_Pass pa
     );
 }
 
-auto inner_draw_sprite(const Resource_View res, u32 x, u32 y, Depth depth = DEPTH_FAR) -> void {
+auto inner_draw_sprite(const Resource_View res, u32 x, u32 y, u32 width, u32 height, Depth depth = DEPTH_FAR) -> void {
     const Color* colors = reinterpret_cast<const Color*>(res.data.data);
-    u32 clipped_width  = (x + res.width  >= width())  ? (width() - x)  : res.width;
-    u32 clipped_height = (y + res.height >= height()) ? (height() - y) : res.height;
+    u32 clipped_width  = (x + width  >= gfx::width())  ? (gfx::width() - x)  : width;
+    u32 clipped_height = (y + height >= gfx::height()) ? (gfx::height() - y) : height;
     for (u32 py = 0; py < clipped_height; ++py) {
         for (u32 px = 0; px < clipped_width; ++px) {
-            set_pixel(x + px, y + py, colors[py * res.width + px], depth);
+            const u32 source_x = px * res.width / width;
+            const u32 source_y = py * res.height / height;
+            set_pixel(x + px, y + py, colors[source_y * res.width + source_x], depth);
         }
     }
 }
@@ -749,7 +752,31 @@ auto draw_sprite(const Resource_View res, u32 x, u32 y, u8 z = 1, Render_Pass pa
             .type   = Draw_Command_2D_Type::DRAW_SPRITE,
             .z      = z,
             .depth  = depth,
-            .sprite = Sprite_Command{res, x, y},
+            .sprite = Sprite_Command{res, x, y, res.width, res.height},
+        }
+    );
+}
+
+auto draw_sprite_scaled(
+    const Resource_View res,
+    u32 x,
+    u32 y,
+    u32 scaled_width,
+    u32 scaled_height,
+    u8          z     = 1,
+    Render_Pass pass  = Render_Pass::UI,
+    Depth       depth = DEPTH_FAR
+) -> void {
+    if (res.width == 0 || res.height == 0 || scaled_width == 0 || scaled_height == 0) return;
+    if (x >= width() || y >= height()) return;
+
+    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui;
+    queue.push_back(
+        Draw_Command_2D{
+            .type   = Draw_Command_2D_Type::DRAW_SPRITE,
+            .z      = z,
+            .depth  = depth,
+            .sprite = Sprite_Command{res, x, y, scaled_width, scaled_height},
         }
     );
 }
@@ -874,7 +901,7 @@ force_inline auto draw_ui() -> void {
             } break;
             case DRAW_SPRITE: {
                 const Sprite_Command& cmd = command.sprite;
-                inner_draw_sprite(cmd.res, cmd.x, cmd.y);
+                inner_draw_sprite(cmd.res, cmd.x, cmd.y, cmd.width, cmd.height);
             } break;
             case DRAW_TRIANGLE: {
                 const Triangle_Command& cmd = command.triangle;
@@ -916,7 +943,7 @@ force_inline auto draw_world_2D() -> void {
             } break;
             case DRAW_SPRITE: {
                 const Sprite_Command& cmd = command.sprite;
-                inner_draw_sprite(cmd.res, cmd.x, cmd.y, command.depth);
+                inner_draw_sprite(cmd.res, cmd.x, cmd.y, cmd.width, cmd.height, command.depth);
             } break;
             case DRAW_TRIANGLE: {
                 const Triangle_Command& cmd = command.triangle;

@@ -11,7 +11,6 @@
 namespace mem {
 
 static constexpr int MULTIBOOT_MMAP_USABLE = 1u;
-static constexpr int PAGE_SIZE             = 4096;
 static constexpr int MAX_MEMORY_REGIONS    = 128;
 
 struct Memory_Region {
@@ -31,8 +30,8 @@ auto add_usable_region(Memory_Regions& regions, u64 base, u64 length) -> void {
 auto reserve_range(Memory_Regions& regions, u64 start, u64 end) -> void {
     if (start >= end) return;
 
-    start = align_down(start, static_cast<u64>(PAGE_SIZE));
-    end   = align_up(end,     static_cast<u64>(PAGE_SIZE));
+    start = align_down(start, static_cast<u64>(mem::PAGE_SIZE));
+    end   = align_up(end,     static_cast<u64>(mem::PAGE_SIZE));
 
     for (usize i = 0; i < regions.size;) {
         const u64 region_start = regions[i].base;

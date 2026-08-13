@@ -32,3 +32,9 @@ struct Enum_Array {
     Iterator begin() { return Iterator{ this, 0 }; }
     Iterator end()   { return Iterator{ this, COUNT }; }
 };
+
+template <typename Enum, typename Value>
+auto clear_enum_array(Enum_Array<Enum, Value>& array, Value value) -> void {
+    for (usize index = 0; index < Enum_Array<Enum, Value>::COUNT; ++index)
+        array.backing_array[index] = value;
+}

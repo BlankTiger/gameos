@@ -121,7 +121,6 @@ struct Buddy_Allocator final : Allocator {
 
     static constexpr usize MIN_ORDER = 12;  // 4 KiB pages.
     static constexpr usize MAX_ORDER = 63;
-    static constexpr usize PAGE_SIZE = 1ull << MIN_ORDER;
 
     Free_Block* free_lists[MAX_ORDER + 1]{};
     // It's the main global allocator, so it has to have a lock on `alloc` and `free`.
@@ -144,7 +143,7 @@ struct Buddy_Allocator final : Allocator {
 
     static auto order_for_block_size(u64 block_size) -> usize {
         usize order   = MIN_ORDER;
-        u64   current = PAGE_SIZE;
+        u64   current = mem::PAGE_SIZE;
         while (current < block_size && order < MAX_ORDER) {
             current <<= 1;
             order++;
@@ -153,7 +152,7 @@ struct Buddy_Allocator final : Allocator {
     }
 
     static auto next_block_size(u64 required_size) -> u64 {
-        u64 block_size = PAGE_SIZE;
+        u64 block_size = mem::PAGE_SIZE;
         while (block_size < required_size && block_size < (1ull << MAX_ORDER)) {
             block_size <<= 1;
         }
@@ -183,18 +182,18 @@ struct Buddy_Allocator final : Allocator {
     }
 
     auto add_region(u64 base, u64 size) -> void {
-        const u64 start = align_up(base, static_cast<u64>(PAGE_SIZE));
-        const u64 end   = align_down(base + size, static_cast<u64>(PAGE_SIZE));
+        const u64 start = align_up(base, static_cast<u64>(mem::PAGE_SIZE));
+        const u64 end   = align_down(base + size, static_cast<u64>(mem::PAGE_SIZE));
         if (start >= end) return;
 
         u64 current = start;
         while (current < end) {
             u64 block_size = floor_pow2(end - current);
-            while (block_size > PAGE_SIZE && (current & (block_size - 1)) != 0) {
+            while (block_size > mem::PAGE_SIZE && (current & (block_size - 1)) != 0) {
                 block_size >>= 1;
             }
 
-            if (block_size < PAGE_SIZE) block_size = PAGE_SIZE;
+            if (block_size < mem::PAGE_SIZE) block_size = mem::PAGE_SIZE;
 
             const usize order = order_for_block_size(block_size);
             push_free_block(current, order);
@@ -212,7 +211,7 @@ struct Buddy_Allocator final : Allocator {
         auto scoped_lock = lock.scoped_irq_lock();
 
         const u64 target_block_size = next_block_size(required_size);
-        if (target_block_size < PAGE_SIZE) return nullptr;
+        if (target_block_size < mem::PAGE_SIZE) return nullptr;
 
         const usize target_order = order_for_block_size(target_block_size);
 
@@ -269,7 +268,6 @@ struct Buddy_Allocator final : Allocator {
 };
 
 constexpr usize DEFAULT_ARENA_RESERVE_SIZE = 1 * 1024 * 1024;
-constexpr usize DEFAULT_ARENA_PAGE_SIZE    = 4096;
 
 template <bool DEBUG = false>
 struct Arena_Allocator final : Allocator {
@@ -283,7 +281,7 @@ struct Arena_Allocator final : Allocator {
 
     Arena_Allocator(usize reserve = DEFAULT_ARENA_RESERVE_SIZE, Allocator* backing_allocator = nullptr)
         : backing_allocator(mem::resolve_allocator(backing_allocator)),
-          allocated(align_up(reserve, DEFAULT_ARENA_PAGE_SIZE)),
+          allocated(align_up(reserve, mem::PAGE_SIZE)),
           memory_base(static_cast<u8*>(this->backing_allocator->alloc(allocated))),
           current_point(memory_base),
           address_limit(memory_base + allocated) {

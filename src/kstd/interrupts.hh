@@ -22,7 +22,7 @@
 
 // Forward declaration.
 namespace ioapic {
-    auto get_bsp_owns_device_irqs() -> bool;
+    auto device_irqs_via_ioapic() -> bool;
 }
 
 // Forward declaration.
@@ -380,12 +380,13 @@ extern "C" auto isr_dispatch(Interrupt_Frame* frame) -> void {
     }
 
     const u8 vector = static_cast<u8>(type);
-    bool is_io_vector = vector >= 32 && vector < 48;
+    const bool is_io_vector = vector >= 32 && vector < 48;
     if (is_io_vector) {
-        if (ioapic::get_bsp_owns_device_irqs()) {
+        // Early boot: 8259 still drives ISA IRQs (PIT calibrate).
+        // After ioapic::initialize: IOAPIC -> LAPIC (any destination APIC ID).
+        if (ioapic::device_irqs_via_ioapic()) {
             lapic::signal_end_of_interrupt();
         } else {
-            // 8259-sourced lines (remapped IRQs).
             pic::send_end_of_interrupt(vector);
         }
     } else if (type == LOCAL_APIC_TIMER || type == LOCAL_APIC_TLB_SHOOTDOWN) {

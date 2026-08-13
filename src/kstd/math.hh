@@ -140,6 +140,58 @@ force_inline auto sqrt(f32 xx) -> f32 {
     return ldexp_f32(y, e);
 }
 
+// Base-2 logarithm, ported from the Cephes single-precision math library
+// (log2f.c, Stephen L. Moshier, public domain, netlib.org/cephes). Range
+// reduces with frexp, then evaluates the log(1+x) minimax polynomial.
+force_inline auto log2(f32 xx) -> f32 {
+    constexpr f32 LOG2EA = 0.44269504088896340736f;
+    constexpr f32 SQRTH  = 0.70710678118654752440f;
+
+    if (xx <= 0.0f) return -149.0f;
+
+    auto [x, e] = frexp_f32(xx);
+
+    if (x < SQRTH) {
+        e -= 1;
+        x = 2.0f * x - 1.0f;
+    } else {
+        x = x - 1.0f;
+    }
+
+    constexpr Static_Array<f32, 9> P{{
+         7.0376836292E-2f,
+        -1.1514610310E-1f,
+         1.1676998740E-1f,
+        -1.2420140846E-1f,
+         1.4249322787E-1f,
+        -1.6668057665E-1f,
+         2.0000714765E-1f,
+        -2.4999993993E-1f,
+         3.3333331174E-1f,
+    }};
+
+    f32 z = x * x;
+    f32 y = x * (z * ((((((((P[0] * x + P[1]) * x + P[2]) * x + P[3]) * x + P[4]) * x
+                         + P[5]) * x + P[6]) * x + P[7]) * x + P[8]));
+    y = y - 0.5f * z;
+
+    z = y * LOG2EA;
+    z += x * LOG2EA;
+    z += y;
+    z += x;
+    z += static_cast<f32>(e);
+    return z;
+}
+
+template <std::integral T>
+requires (!std::same_as<std::remove_cv_t<T>, bool>)
+force_inline constexpr auto log2(T value) -> s32 {
+    if (value <= 0) return -1;
+
+    using Unsigned_T = std::make_unsigned_t<T>;
+    return static_cast<s32>(std::bit_width(static_cast<Unsigned_T>(value))) - 1;
+}
+
 // Tangent, ported from the Cephes single-precision math library (tanf.c's
 // tancotf with cotflg=0, i.e. cotf support dropped, Stephen L. Moshier, public
 // domain, netlib.org/cephes). Range-reduces modulo pi/4 via Cody-Waite
@@ -1129,6 +1181,27 @@ TEST(Math, sqrt) {
     EXPECT_NEAR(sqrt(0.5f), 0.70710678f, 1e-6f);
     EXPECT_NEAR(sqrt(100.0f), 10.0f, 1e-4f);
     EXPECT_NEAR(sqrt(1.0e10f), 1.0e5f, 1.0f);
+}
+
+TEST(Math, log2) {
+    EXPECT_EQ(log2(0.0f), -149.0f);
+    EXPECT_EQ(log2(-1.0f), -149.0f);
+    EXPECT_NEAR(log2(0.5f), -1.0f, 1e-6f);
+    EXPECT_NEAR(log2(1.0f), 0.0f, 1e-6f);
+    EXPECT_NEAR(log2(2.0f), 1.0f, 1e-6f);
+    EXPECT_NEAR(log2(4.0f), 2.0f, 1e-6f);
+    EXPECT_NEAR(log2(10.0f), 3.3219281f, 1e-6f);
+}
+
+TEST(Math, log2_integer) {
+    EXPECT_EQ(log2(0u), -1);
+    EXPECT_EQ(log2(-1), -1);
+    EXPECT_EQ(log2(1u), 0);
+    EXPECT_EQ(log2(2u), 1);
+    EXPECT_EQ(log2(3u), 1);
+    EXPECT_EQ(log2(4u), 2);
+    EXPECT_EQ(log2(255u), 7);
+    EXPECT_EQ(log2(256u), 8);
 }
 
 TEST(Math, tan) {

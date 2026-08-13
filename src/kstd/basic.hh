@@ -33,3 +33,8 @@ struct Defer {
 // array.hh since string.hh needs it for a forward declaration
 // before array.hh itself is reachable (see string.hh comment).
 inline constexpr usize DYNAMIC_EXTENT = static_cast<usize>(-1);
+
+namespace mem {
+    inline constexpr usize PAGE_SIZE = 4096;
+}
+
