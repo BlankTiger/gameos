@@ -1,11 +1,12 @@
 #pragma once
 
-#include "advanced_configuration_and_power_interface.hh"
-#include "allocator.hh"
-#include "array.hh"
-#include "basic.hh"
-#include "low_level_io.hh"
-#include "pointer_utils.hh"
+#include "kstd/allocator.hh"
+#include "kstd/array.hh"
+#include "kstd/basic.hh"
+#include "kstd/pointer_utils.hh"
+
+#include "gameos/advanced_configuration_and_power_interface.hh"
+#include "gameos/low_level_io.hh"
 
 namespace tls {
 

@@ -1,8 +1,10 @@
-#include "kstd/input.hh"
-#include "kstd/time.hh"
-#include "kstd/gfx.hh"
-#include "kstd/random.hh"
 #include "kstd/string_builder.hh"
+
+#include "gameos/input.hh"
+#include "gameos/gfx.hh"
+#include "gameos/time.hh"
+#include "gameos/random.hh"
+
 
 using Key = input::Key;
 
@@ -56,6 +58,7 @@ auto cubes_main() -> void {
         cursor_x = std::clamp(cursor_x, 0, static_cast<s32>(gfx::width() - cursor_width));
         cursor_y = std::clamp(cursor_y, 0, static_cast<s32>(gfx::height() - cursor_height));
 
+        // @TODO(blanktiger): See if it's possible to extract any dragging logic to the input subsystem.
         if (input::mouse_button_pressed(input::Mouse_Button::LEFT)) {
             dragged_cube = nullptr;
             f32 dragged_depth = 2.f;

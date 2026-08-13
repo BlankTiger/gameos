@@ -1,7 +1,7 @@
 #pragma once
 
-#include "enum_array.hh"
-#include "ring_buffer.hh"
+#include "kstd/enum_array.hh"
+#include "kstd/ring_buffer.hh"
 #include "synchronization.hh"
 
 namespace input {
@@ -311,7 +311,7 @@ auto reset() -> void {
     clear_state();
 }
 
-#ifdef UNIT_TESTS_KSTD_INPUT
+#ifdef UNIT_TESTS_GAMEOS_INPUT
 
 TEST(Input, repeated_key_down_is_not_pressed_again) {
     reset();

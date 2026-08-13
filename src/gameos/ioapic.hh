@@ -1,11 +1,12 @@
 #pragma once
 
-#include "assert.hh"
-#include "interrupts.hh"
-#include "local_apic.hh"
-#include "advanced_configuration_and_power_interface.hh"
-#include "programmable_interrupt_controller.hh"
-#include "serial_format.hh"
+#include "kstd/assert.hh"
+
+#include "gameos/interrupts.hh"
+#include "gameos/local_apic.hh"
+#include "gameos/advanced_configuration_and_power_interface.hh"
+#include "gameos/programmable_interrupt_controller.hh"
+#include "gameos/serial_format.hh"
 
 //
 // IOAPIC is what redirects the IO interrupts to the chosen logical core.

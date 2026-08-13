@@ -1,12 +1,13 @@
 #pragma once
 
-#include "advanced_configuration_and_power_interface.hh"
-#include "application_processor_state.hh"
-#include "basic.hh"
-#include "cpu_local.hh"
-#include "interrupts_constants.hh"
-#include "local_apic.hh"
-#include "translation_lookaside_buffer_state.hh"
+#include "kstd/basic.hh"
+
+#include "gameos/advanced_configuration_and_power_interface.hh"
+#include "gameos/application_processor_state.hh"
+#include "gameos/cpu_local.hh"
+#include "gameos/interrupts_constants.hh"
+#include "gameos/local_apic.hh"
+#include "gameos/translation_lookaside_buffer_state.hh"
 
 namespace tlb {
 

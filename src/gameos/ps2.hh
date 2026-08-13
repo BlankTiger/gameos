@@ -1,8 +1,9 @@
 #pragma once
 
-#include "enum_flags.hh"
-#include "input.hh"
-#include "low_level_io.hh"
+#include "kstd/enum_flags.hh"
+
+#include "gameos/input.hh"
+#include "gameos/low_level_io.hh"
 
 // PS/2 controller (Intel 8042) initialization.
 // Must be called after pic::initialize() and before idt::enable_interrupts().

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "basic.hh"
-#include "pointer_utils.hh"
+#include "kstd/basic.hh"
+#include "kstd/pointer_utils.hh"
 
 namespace boot {
 

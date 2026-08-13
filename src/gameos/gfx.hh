@@ -2,16 +2,16 @@
 
 #include <algorithm>
 
-#include "config.hh"
-
 #include "kstd/array.hh"
 #include "kstd/allocator.hh"
-#include "kstd/font8x16.hh"
 #include "kstd/math.hh"
 #include "kstd/matrix.hh"
-#include "kstd/multiboot2.hh"
 #include "kstd/resource.hh"
 #include "kstd/string.hh"
+
+#include "gameos/config.hh"
+#include "gameos/font8x16.hh"
+#include "gameos/multiboot2.hh"
 
 namespace gfx {
 

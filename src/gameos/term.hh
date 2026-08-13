@@ -1,9 +1,10 @@
 #pragma once
 
-#include "basic.hh"
-#include "assert.hh"
-#include "format.hh"
-#include "gfx.hh"
+#include "kstd/assert.hh"
+#include "kstd/basic.hh"
+#include "kstd/format.hh"
+
+#include "gameos/gfx.hh"
 
 namespace term {
 

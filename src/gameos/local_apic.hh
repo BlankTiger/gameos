@@ -1,13 +1,14 @@
 #pragma once
 
-#include "assert.hh"
-#include "basic.hh"
-#include "cpuid.hh"
-#include "low_level_io.hh"
-#include "pointer_utils.hh"
-#include "serial_format.hh"
-#include "time.hh"
-#include "interrupts_constants.hh"
+#include "kstd/assert.hh"
+#include "kstd/basic.hh"
+#include "kstd/pointer_utils.hh"
+
+#include "gameos/cpuid.hh"
+#include "gameos/interrupts_constants.hh"
+#include "gameos/low_level_io.hh"
+#include "gameos/serial_format.hh"
+#include "gameos/time.hh"
 
 //
 // Local Advanced Programmable Interrupt Controller in xAPIC memory-mapped mode.

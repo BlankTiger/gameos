@@ -2,9 +2,10 @@
 
 #include <atomic>
 
-#include "basic.hh"
-#include "low_level_io.hh"
-#include "synchronization.hh"
+#include "kstd/basic.hh"
+
+#include "gameos/low_level_io.hh"
+#include "gameos/synchronization.hh"
 
 namespace ktime {
 

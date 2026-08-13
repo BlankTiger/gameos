@@ -2,8 +2,9 @@
 
 #include <atomic>
 
-#include "basic.hh"
-#include "synchronization.hh"
+#include "kstd/basic.hh"
+
+#include "gameos/synchronization.hh"
 
 namespace tlb {
 

@@ -1,7 +1,8 @@
 #pragma once
 
-#include "serial_port.hh"
-#include "format.hh"
+#include "kstd/format.hh"
+
+#include "gameos/serial_port.hh"
 
 namespace serial {
 

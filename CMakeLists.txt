@@ -48,10 +48,10 @@ file(GLOB_RECURSE source_files CONFIGURE_DEPENDS
 )
 
 set(GENERATED_SOURCES
-    ${GENERATED_DIR}/src/boot.S
     ${GENERATED_DIR}/src/main.cc
-    ${GENERATED_DIR}/src/kstd/smp_trampoline.S
-    ${GENERATED_DIR}/src/kstd/context_switch.S
+    ${GENERATED_DIR}/src/gameos/boot.S
+    ${GENERATED_DIR}/src/gameos/smp_trampoline.S
+    ${GENERATED_DIR}/src/gameos/context_switch.S
 )
 
 file(GLOB_RECURSE preprocessor_sources CONFIGURE_DEPENDS
@@ -145,7 +145,7 @@ target_compile_options(gameos PRIVATE
 )
 
 target_link_options(gameos PRIVATE
-    -T ${GENERATED_DIR}/src/linker.ld
+    -T ${GENERATED_DIR}/src/gameos/linker.ld
     -ffreestanding
     -nostdlib
     -z max-page-size=0x1000
