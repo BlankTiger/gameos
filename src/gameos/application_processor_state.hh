@@ -2,9 +2,10 @@
 
 #include <atomic>
 
-#include "advanced_configuration_and_power_interface.hh"
-#include "array.hh"
-#include "cpu_local.hh"
+#include "kstd/array.hh"
+
+#include "gameos/advanced_configuration_and_power_interface.hh"
+#include "gameos/cpu_local.hh"
 
 namespace ap {
 

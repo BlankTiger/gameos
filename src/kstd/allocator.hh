@@ -3,11 +3,15 @@
 #include <cstddef>
 #include <new>
 
-#include "basic.hh"
-#include "assert.hh"
-#include "cstring.hh"
-#include "pointer_utils.hh"
-#include "synchronization.hh"
+#include "kstd/basic.hh"
+#include "kstd/assert.hh"
+#include "kstd/cstring.hh"
+#include "kstd/pointer_utils.hh"
+
+//
+// @TODO(blanktiger): Move Buddy_Allocator to gameos/allocator.hh (or make it extendable). Same thing applies to Temporary_Allocator.
+//
+#include "gameos/synchronization.hh"
 
 template <typename T, usize N>
 struct Static_Array;

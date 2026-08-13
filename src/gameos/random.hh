@@ -2,7 +2,8 @@
 
 #include "kstd/assert.hh"
 #include "kstd/basic.hh"
-#include "kstd/cpuid.hh"
+
+#include "gameos/cpuid.hh"
 
 namespace krand {
 

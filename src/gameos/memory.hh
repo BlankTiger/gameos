@@ -3,10 +3,11 @@
 #include <cstddef>
 #include <new>
 
-#include "assert.hh"
-#include "allocator.hh"
-#include "array.hh"
-#include "multiboot2.hh"
+#include "kstd/assert.hh"
+#include "kstd/allocator.hh"
+#include "kstd/array.hh"
+
+#include "gameos/multiboot2.hh"
 
 namespace mem {
 

@@ -4,15 +4,16 @@
 
 #include "kstd/allocator.hh"
 #include "kstd/array.hh"
-#include "kstd/numbers.hh"
-#include "kstd/time.hh"
-#include "kstd/gfx.hh"
-#include "kstd/input.hh"
 #include "kstd/math.hh"
-#include "kstd/serial_format.hh"
+#include "kstd/numbers.hh"
 #include "kstd/string_builder.hh"
-#include "kstd/random.hh"
-#include "kstd/power.hh"
+
+#include "gameos/time.hh"
+#include "gameos/gfx.hh"
+#include "gameos/input.hh"
+#include "gameos/serial_format.hh"
+#include "gameos/random.hh"
+#include "gameos/power.hh"
 
 
 using namespace ktime;

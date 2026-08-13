@@ -1,10 +1,11 @@
 #pragma once
 
-#include "string.hh"
-#include "array.hh"
-#include "assert.hh"
-#include "halt_format.hh"
-#include "numbers.hh"
+#include "kstd/array.hh"
+#include "kstd/assert.hh"
+#include "kstd/numbers.hh"
+#include "kstd/string.hh"
+
+#include "gameos/halt_format.hh"
 
 namespace stacktrace {
 

@@ -1,13 +1,14 @@
 #pragma once
 
-#include "assert.hh"
-#include "array.hh"
-#include "basic.hh"
-#include "cpuid.hh"
-#include "cstring.hh"
-#include "multiboot2.hh"
-#include "pointer_utils.hh"
-#include "serial_format.hh"
+#include "kstd/assert.hh"
+#include "kstd/array.hh"
+#include "kstd/basic.hh"
+#include "kstd/cstring.hh"
+#include "kstd/pointer_utils.hh"
+
+#include "gameos/cpuid.hh"
+#include "gameos/multiboot2.hh"
+#include "gameos/serial_format.hh"
 
 namespace acpi {
 

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "assert.hh"
-#include "format.hh"
+#include "kstd/assert.hh"
+#include "kstd/format.hh"
 
 #if !HOSTED
 

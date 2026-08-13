@@ -8,18 +8,19 @@
 #include <type_traits>
 #include <utility>
 
-#include "advanced_configuration_and_power_interface.hh"
-#include "allocator.hh"
-#include "application_processor_state.hh"
-#include "array.hh"
-#include "assert.hh"
-#include "basic.hh"
-#include "cpu_local.hh"
-#include "ring_buffer.hh"
-#include "smp_constants.hh"
-#include "synchronization.hh"
-#include "string_builder.hh"
-#include "thread_local_storage.hh"
+#include "kstd/array.hh"
+#include "kstd/assert.hh"
+#include "kstd/allocator.hh"
+#include "kstd/basic.hh"
+#include "kstd/ring_buffer.hh"
+#include "kstd/string_builder.hh"
+
+#include "gameos/advanced_configuration_and_power_interface.hh"
+#include "gameos/application_processor_state.hh"
+#include "gameos/cpu_local.hh"
+#include "gameos/smp_constants.hh"
+#include "gameos/synchronization.hh"
+#include "gameos/thread_local_storage.hh"
 
 namespace threads {
 

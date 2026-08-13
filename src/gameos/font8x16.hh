@@ -2,8 +2,8 @@
 
 #include <climits>
 
-#include "basic.hh"
-#include "array.hh"
+#include "kstd/basic.hh"
+#include "kstd/array.hh"
 
 namespace font {
 

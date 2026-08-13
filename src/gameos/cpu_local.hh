@@ -2,14 +2,15 @@
 
 #include <cstddef>
 
-#include "advanced_configuration_and_power_interface.hh"
-#include "basic.hh"
-#include "assert.hh"
-#include "array.hh"
-#include "local_apic.hh"
-#include "low_level_io.hh"
-#include "serial_format.hh"
-#include "smp_constants.hh"
+#include "kstd/basic.hh"
+#include "kstd/assert.hh"
+#include "kstd/array.hh"
+
+#include "gameos/advanced_configuration_and_power_interface.hh"
+#include "gameos/local_apic.hh"
+#include "gameos/low_level_io.hh"
+#include "gameos/serial_format.hh"
+#include "gameos/smp_constants.hh"
 
 //
 // Stores information specific to a unique hardware CPU core.

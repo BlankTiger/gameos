@@ -37,7 +37,7 @@ constexpr force_inline auto kstd_assert(
 #else
 
 // serial_port only: full serial.hh pulls format.hh -> string.hh -> assert.hh.
-#include "serial_port.hh"
+#include "gameos/serial_port.hh"
 
 namespace halt {
 

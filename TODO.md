@@ -81,6 +81,7 @@ base layer:
 - [x] keyboard handling
 - [x] mouse handling
 - [ ] remove all the integer postfix conversions and replace them with explicit typing u32{}, u64{}, etc
+- [ ] move dragging logic to input.hh
 
 
 utils:

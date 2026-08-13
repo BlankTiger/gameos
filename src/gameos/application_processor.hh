@@ -2,24 +2,25 @@
 
 #include <atomic>
 
-#include "advanced_configuration_and_power_interface.hh"
-#include "application_processor_state.hh"
-#include "assert.hh"
-#include "array.hh"
-#include "basic.hh"
-#include "cpu_local.hh"
-#include "cstring.hh"
-#include "global_descriptors.hh"
-#include "interrupts_constants.hh"
-#include "interrupts.hh"
-#include "local_apic.hh"
-#include "serial_format.hh"
-#include "smp_constants.hh"
-#include "threads.hh"
-#include "time.hh"
-#include "thread_local_storage.hh"
-#include "pointer_utils.hh"
-#include "string_builder.hh"
+#include "kstd/assert.hh"
+#include "kstd/array.hh"
+#include "kstd/basic.hh"
+#include "kstd/cstring.hh"
+#include "kstd/pointer_utils.hh"
+#include "kstd/string_builder.hh"
+
+#include "gameos/advanced_configuration_and_power_interface.hh"
+#include "gameos/application_processor_state.hh"
+#include "gameos/cpu_local.hh"
+#include "gameos/global_descriptors.hh"
+#include "gameos/interrupts_constants.hh"
+#include "gameos/interrupts.hh"
+#include "gameos/local_apic.hh"
+#include "gameos/serial_format.hh"
+#include "gameos/smp_constants.hh"
+#include "gameos/threads.hh"
+#include "gameos/time.hh"
+#include "gameos/thread_local_storage.hh"
 
 namespace ap {
 
@@ -277,7 +278,7 @@ auto set_up_a_new_stack() -> void {
     auto stack_mem = mem::alloc(AP_STACK_SIZE, AP_STACK_ALIGNMENT);
     auto stack_top = ptr_addr(stack_mem) + AP_STACK_SIZE;
     *addr_as<volatile psize*>(STACK_POINTER_ADDR) = stack_top;
-    serial::println("Created a 1 MiB stack");
+    serial::println("Created a % KiB stack", AP_STACK_SIZE / 1024);
 }
 
 auto set_cpu_index(u32 cpu_index) -> void {
