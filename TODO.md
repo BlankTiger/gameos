@@ -28,6 +28,7 @@ sound:
 
 tetris:
 - [ ] make blocks transparent if they occlude falling block
+- [ ] zoom on scroll
 - [ ] add scoring
 - [ ] add preview of next block
 - [ ] add UI

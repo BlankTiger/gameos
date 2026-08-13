@@ -104,6 +104,9 @@ constexpr f32 TETRIS_BLOCK_SPACING = 1.f;
 constexpr f32 TETRIS_ORIGIN_Z = 0.0f;
 constexpr f32 TETRIS_CAMERA_OFFSET_Z = -8.0f;
 constexpr f32 TETRIS_CAMERA_RADIUS = 20.0f;
+constexpr f32 TETRIS_CAMERA_MIN_RADIUS = 5.0f;
+constexpr f32 TETRIS_CAMERA_MAX_RADIUS = 40.0f;
+constexpr f32 TETRIS_CAMERA_ZOOM_STEP = 0.15f;
 constexpr f32 TETRIS_CAMERA_MOUSE_SENSITIVITY = 0.01f;
 
 constexpr f32 TETRIS_PI = 3.14159265358979323846f;
@@ -179,14 +182,30 @@ auto initialize_tetris_board_mesh() -> void {
     tetris_checkerboard_mesh = gfx::Mesh{tetris_checkerboard_vertices, tetris_checkerboard_indices};
 }
 
-auto update_tetris_camera(gfx::Camera3D& camera, f32 orbit_angle) -> void {
-    const f32 distance = sqrt(camera.position.x * camera.position.x + camera.position.y * camera.position.y);
-    camera.position.x = sin(orbit_angle) * distance;
-    camera.position.y = -cos(orbit_angle) * distance;
+auto update_tetris_camera(gfx::Camera3D& camera, f32 orbit_angle, f32 radius) -> void {
+    camera.position.x = sin(orbit_angle) * radius;
+    camera.position.y = -cos(orbit_angle) * radius;
     camera.position.z = TETRIS_ORIGIN_Z + TETRIS_CAMERA_OFFSET_Z;
     camera.rotation = Quaternion<f32>::from_axis_angle({0.f, 0.f, 1.f}, orbit_angle) *
                       Quaternion<f32>::from_axis_angle({1.f, 0.f, 0.f}, TETRIS_PI / 2.f);
     camera.recompute_matrix();
+}
+
+auto update_tetris_camera_controls(gfx::Camera3D& camera, f32& orbit_angle, f32& radius) -> void {
+    const auto mouse_delta = input::mouse_motion();
+    if (input::mouse_button_held(input::Mouse_Button::LEFT)) {
+        orbit_angle += TETRIS_CAMERA_MOUSE_SENSITIVITY * static_cast<f32>(mouse_delta.x);
+    }
+    if (input::key_held(Key::EQUALS)) {
+        radius = std::max(TETRIS_CAMERA_MIN_RADIUS, radius - TETRIS_CAMERA_ZOOM_STEP);
+    }
+    if (input::key_held(Key::MINUS)) {
+        radius = std::min(TETRIS_CAMERA_MAX_RADIUS, radius + TETRIS_CAMERA_ZOOM_STEP);
+    }
+    if (input::key_pressed(Key::DIGIT_0)) {
+        radius = TETRIS_CAMERA_RADIUS;
+    }
+    update_tetris_camera(camera, orbit_angle, radius);
 }
 
 auto camera_relative_move_delta(f32 orbit_angle, s32 screen_x, s32 screen_y) -> Vector2<s32> {
@@ -292,7 +311,7 @@ auto draw(const Game& game, gfx::Camera3D& camera) -> void {
     gfx::draw_text(
         8,
         32,
-        "WASD - rotate block\nArrow keys - move block\nSpace - drop\nShift - speed up falling\nESC - quit"
+        "WASD - rotate block\nArrow keys - move block\nSpace - drop\nShift - speed up falling\n+ - zoom in\n- - zoom out\n0 - reset zoom\nESC - quit"
     );
     if (game.game_over) {
         constexpr u32 GAME_OVER_TEXT_WIDTH = 12 * font::GLYPH_WIDTH;
@@ -674,8 +693,9 @@ auto tetris_main() -> void {
 
     gfx::Camera3D camera;
     f32 camera_orbit_angle = 0.f;
+    f32 camera_radius = TETRIS_CAMERA_RADIUS;
     camera.position = {0.f, -TETRIS_CAMERA_RADIUS, TETRIS_ORIGIN_Z + TETRIS_CAMERA_OFFSET_Z};
-    update_tetris_camera(camera, camera_orbit_angle);
+    update_tetris_camera(camera, camera_orbit_angle, camera_radius);
     initialize_tetris_meshes();
     initialize_tetris_board_mesh();
     Game game;
@@ -696,11 +716,7 @@ auto tetris_main() -> void {
         const u64 elapsed     = frame_start - last_tick;
         last_tick = frame_start;
 
-        const auto mouse_delta = input::mouse_motion();
-        if (input::mouse_button_held(input::Mouse_Button::LEFT)) {
-            camera_orbit_angle += TETRIS_CAMERA_MOUSE_SENSITIVITY * static_cast<f32>(mouse_delta.x);
-        }
-        update_tetris_camera(camera, camera_orbit_angle);
+        update_tetris_camera_controls(camera, camera_orbit_angle, camera_radius);
 
         {
             game.dt_real  = elapsed;
@@ -716,11 +732,7 @@ auto tetris_main() -> void {
                     input::begin_frame();
                     if (input::key_pressed(Key::ESCAPE)) break;
 
-                    const auto mouse_delta = input::mouse_motion();
-                    if (input::mouse_button_held(input::Mouse_Button::LEFT)) {
-                        camera_orbit_angle += TETRIS_CAMERA_MOUSE_SENSITIVITY * static_cast<f32>(mouse_delta.x);
-                    }
-                    update_tetris_camera(camera, camera_orbit_angle);
+                    update_tetris_camera_controls(camera, camera_orbit_angle, camera_radius);
                     draw(game, camera);
                     sleep_ticks(TARGET_TICKS);
                 }
