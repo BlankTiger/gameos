@@ -20,20 +20,20 @@ auto cubes_main() -> void {
     constexpr Vector3<f32> SPIN_AXIS{0.6f, 1.f, 0.3f}; // tumble: all 6 faces show
 
     gfx::Mesh_Instance cube{
-        gfx::UNIT_CUBE,
+        gfx::DEBUG_CUBE,
         {-2.f, 0.f, -5.f},
         Quaternion<f32>::identity(),
     };
 
     gfx::Mesh_Instance cool_cube{
-        gfx::UNIT_CUBE,
+        gfx::DEBUG_CUBE,
         @embed("cool.png"),
         {0.f, 2.f, -5.f},
         Quaternion<f32>::identity(),
     };
 
     gfx::Mesh_Instance wireframe_cube{
-        gfx::UNIT_CUBE,
+        gfx::DEBUG_CUBE,
         {2.f, 0.f, -10.f},
         Quaternion<f32>::identity(),
     };
