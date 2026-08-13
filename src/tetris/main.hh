@@ -308,7 +308,7 @@ auto draw(const Game& game, gfx::Camera3D& camera) -> void {
     gfx::clear(TETRIS_BACKGROUND_COLOR);
 
     gfx::draw_text(8, 8, tprint("FPS: %", game.fps));
-    gfx::draw_text(
+    gfx::draw_static_text(
         8,
         32,
         "WASD - rotate block\nArrow keys - move block\nSpace - drop\nShift - speed up falling\n+ - zoom in\n- - zoom out\n0 - reset zoom\nESC - quit"

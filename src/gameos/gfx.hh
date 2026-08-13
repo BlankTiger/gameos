@@ -507,6 +507,18 @@ auto draw_text(u32 x, u32 y, const string text, Color fg = WHITE, Color bg = TRA
     );
 }
 
+auto draw_static_text(u32 x, u32 y, const string text, Color fg = WHITE, Color bg = TRANSPARENT, u8 z = 1, Render_Pass pass = Render_Pass::UI, Depth depth = DEPTH_FAR) -> void {
+    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui;
+    queue.push_back(
+        Draw_Command_2D{
+            .type  = Draw_Command_2D_Type::DRAW_TEXT,
+            .z     = z,
+            .depth = depth,
+            .text  = Text_Command{x, y, text, fg, bg},
+        }
+    );
+}
+
 #ifndef AA_RES
 #define AA_RES 4
 #endif
