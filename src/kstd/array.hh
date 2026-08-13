@@ -163,6 +163,11 @@ force_inline auto free_array(void* pointer, usize count, Allocator* allocator = 
     free(header->base, header->size, alignof(std::max_align_t), allocator);
 }
 
+template <typename T>
+force_inline auto free_array(Array_View<T> array, Allocator* allocator = nullptr) -> void {
+    free_array<T>(array.data, array.size, allocator);
+}
+
 }  // namespace mem
 
 template <typename T, usize N>
@@ -1028,7 +1033,7 @@ TEST(Array, const_slice_returns_const_view) {
 
 TEST(Allocator, alloc_array_returns_dynamic_array_view) {
     auto array = mem::alloc_array<u64>(3);
-    defer(mem::free_array<u64>(array.data, array.size));
+    defer(mem::free_array(array));
 
     ASSERT_NE(array.data, nullptr);
     ASSERT_EQ(array.size, 3u);
@@ -1039,7 +1044,15 @@ TEST(Allocator, alloc_array_accepts_custom_allocator_without_alignment) {
     mem::Hosted_Allocator hosted{};
 
     auto array = mem::alloc_array<u64>(3, &hosted);
-    defer(mem::free_array<u64>(array.data, array.size, &hosted));
+    defer(mem::free_array(array, &hosted));
+
+    ASSERT_NE(array.data, nullptr);
+    ASSERT_EQ(array.size, 3u);
+}
+
+TEST(Allocator, free_array_accepts_pointer_and_count) {
+    auto array = mem::alloc_array<u64>(3);
+    defer(mem::free_array<u64>(array.data, array.size));
 
     ASSERT_NE(array.data, nullptr);
     ASSERT_EQ(array.size, 3u);
