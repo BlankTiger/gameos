@@ -27,6 +27,17 @@ sound:
 - [ ] 8-bit slowly drifting
 
 tetris:
+- [x] blocks meshes and colors
+- [x] blocks texture
+- [x] handle rotations of blocks correctly
+- [x] camera left/right rotation
+- [x] draw pretty tetris board
+- [x] draw back-walls for game field and rotate them with camera
+- [x] drop
+- [x] fast fall
+- [x] final position shadow
+- [x] camera zoom
+- [x] handle game over
 - [ ] make blocks transparent if they occlude falling block
 - [ ] zoom on scroll
 - [ ] add scoring
