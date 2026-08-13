@@ -37,6 +37,13 @@ struct Falling_Body {
     }
 };
 
+auto falling_body_contains(const Falling_Body& body, Block_Coords coords) -> bool {
+    for (const auto& block : body.blocks) {
+        if (block == coords) return true;
+    }
+    return false;
+}
+
 // Tetracubes below use row/col for the 3x3 footprint and
 // layer as the falling axis.
 constexpr std::initializer_list<Body> available_bodies = {
@@ -110,6 +117,7 @@ constexpr f32 TETRIS_BOARD_GROUND_SIZE = 14.f;
 constexpr gfx::Color TETRIS_GROUND_COLOR{24, 30, 44, 255};
 constexpr gfx::Color TETRIS_CHECKER_COLOR_A{42, 52, 72, 255};
 constexpr gfx::Color TETRIS_CHECKER_COLOR_B{30, 38, 56, 255};
+constexpr gfx::Color TETRIS_SHADOW_COLOR{128, 128, 128, 96};
 
 constexpr Static_Array<gfx::Color, available_bodies.size()> TETRIS_BODY_COLORS{{
     {80, 200, 255, 255},  {255, 180, 60, 255}, {80, 255, 140, 255},  {255, 90, 120, 255},
@@ -212,6 +220,24 @@ auto tetris_board_z(const Game& game) -> f32 {
     return tetris_position(game, 0, 0, game.grid.layers - 1).z - TETRIS_BLOCK_SCALE;
 }
 
+auto tetris_shadow_layer_offset(const Game& game) -> u32 {
+    u32 shadow_offset = game.grid.layers;
+
+    for (const auto& [row, col, layer] : game.falling_body.blocks) {
+        u32 block_offset = game.grid.layers - 1 - layer;
+        for (u32 offset = 1; offset <= block_offset; ++offset) {
+            const u32 next_layer = layer + offset;
+            if (game.grid.at(row, col, next_layer) == Block_Type::EMPTY) continue;
+            if (falling_body_contains(game.falling_body, {row, col, next_layer})) continue;
+            block_offset = offset - 1;
+            break;
+        }
+        shadow_offset = std::min(shadow_offset, block_offset);
+    }
+
+    return shadow_offset;
+}
+
 auto draw_tetris_back_walls(const Game& game, gfx::Camera3D& camera) -> void {
     const bool negative_x_wall = camera.position.x >= 0.f;
     const bool positive_y_wall = camera.position.y <= 0.f;
@@ -270,6 +296,21 @@ auto draw(const Game& game, gfx::Camera3D& camera) -> void {
     }
 
     draw_tetris_board(game, camera);
+
+    const u32 shadow_offset = tetris_shadow_layer_offset(game);
+    for (const auto& [row, col, layer] : game.falling_body.blocks) {
+        gfx::draw_mesh(
+            gfx::Mesh_Instance{
+                gfx::UNIT_CUBE,
+                {},
+                tetris_position(game, row, col, layer + shadow_offset),
+                {},
+                {TETRIS_BLOCK_SCALE, TETRIS_BLOCK_SCALE, TETRIS_BLOCK_SCALE},
+                TETRIS_SHADOW_COLOR,
+            },
+            camera
+        );
+    }
 
     for (u32 row = 0; row < game.grid.rows; ++row) {
         for (u32 col = 0; col < game.grid.cols; ++col) {
@@ -451,14 +492,7 @@ auto try_rotating_falling_body(Game& game, Rotation_Axis axis) -> bool {
             return false;
 
         if (game.grid.at(new_coords.x, new_coords.y, new_coords.z) != Block_Type::EMPTY) {
-            bool is_self = false;
-            for (const auto& other : game.falling_body.blocks) {
-                if (other == new_coords) {
-                    is_self = true;
-                    break;
-                }
-            }
-            if (!is_self) return false;
+            if (!falling_body_contains(game.falling_body, new_coords)) return false;
         }
 
         rotated.push_back(new_coords);
@@ -503,14 +537,7 @@ auto try_moving_falling_body(Game& game, s32 row_delta, s32 col_delta) -> bool {
             layer,
         };
         if (game.grid.at(new_coords.x, new_coords.y, new_coords.z) != Block_Type::EMPTY) {
-            bool is_self = false;
-            for (const auto& other : game.falling_body.blocks) {
-                if (other == new_coords) {
-                    is_self = true;
-                    break;
-                }
-            }
-            if (!is_self) return false;
+            if (!falling_body_contains(game.falling_body, new_coords)) return false;
         }
         moved.push_back(new_coords);
     }
