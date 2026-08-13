@@ -1012,6 +1012,20 @@ static Static_Array<Index, 12> unit_cube_indices{{
 }};
 const inline Mesh DEBUG_CUBE{debug_cube_vertices, unit_cube_indices};
 
+static Static_Array<Vertex, 4> unit_plane_vertices{{
+    {{-1.f, -1.f, 0.f}, WHITE, {0.f, 0.f}},
+    {{ 1.f, -1.f, 0.f}, WHITE, {1.f, 0.f}},
+    {{ 1.f,  1.f, 0.f}, WHITE, {1.f, 1.f}},
+    {{-1.f,  1.f, 0.f}, WHITE, {0.f, 1.f}},
+}};
+
+static Static_Array<Index, 4> unit_plane_indices{{
+    {0, 1, 2}, {0, 2, 3},
+    {2, 1, 0}, {3, 2, 0},
+}};
+
+const inline Mesh UNIT_PLANE{unit_plane_vertices, unit_plane_indices};
+
 static Static_Array<Vertex, 24> unit_cube_vertices{{
     {{ 1,  1,  1}, WHITE, {1.f, 0.f}}, {{-1,  1,  1}, WHITE, {0.f, 0.f}}, {{-1, -1,  1}, WHITE, {0.f, 1.f}}, {{ 1, -1,  1}, WHITE, {1.f, 1.f}},
     {{ 1,  1, -1}, WHITE, {1.f, 0.f}}, {{ 1,  1,  1}, WHITE, {0.f, 0.f}}, {{ 1, -1,  1}, WHITE, {0.f, 1.f}}, {{ 1, -1, -1}, WHITE, {1.f, 1.f}},
@@ -1300,6 +1314,26 @@ auto draw_mesh(Mesh_Instance instance, Camera3D camera) -> void {
             .camera = camera,
             .mesh = Mesh_Command{.instance = instance}
         }
+    );
+}
+
+auto draw_plane(
+    Vector3<f32> center,
+    Vector2<f32> size,
+    Color color,
+    Camera3D camera,
+    Quaternion<f32> rotation = {}
+) -> void {
+    draw_mesh(
+        Mesh_Instance{
+            UNIT_PLANE,
+            {},
+            center,
+            rotation,
+            {size.x * 0.5f, size.y * 0.5f, 1.f},
+            color,
+        },
+        camera
     );
 }
 
