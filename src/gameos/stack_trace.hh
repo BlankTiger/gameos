@@ -1,8 +1,9 @@
 #pragma once
 
 #include "kstd/array.hh"
+#include "kstd/allocator.hh"
 #include "kstd/assert.hh"
-#include "kstd/numbers.hh"
+#include "kstd/basic.hh"
 #include "kstd/string.hh"
 
 #include "gameos/halt_format.hh"
@@ -26,14 +27,19 @@
 //
 namespace stack_trace {
 
+namespace hidden {
+    mem::Arena_Allocator stack_trace_allocator(4096);
+}
+
 struct Stack_Trace {
     Stack_Trace* rbp;
-    psize       rip;
+    psize        rip;
 };
 
 struct Frame {
     psize  function_address;
     string function_name;
+    string file_name;
     u32    line_number;
 };
 
