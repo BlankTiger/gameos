@@ -14,6 +14,14 @@
 #define force_inline inline
 #endif
 
+#if defined(__GNUC__) || defined(__clang__)
+#define noinline __attribute__((noinline))
+#elif defined(_MSC_VER)
+#define noinline __declspec(noinline)
+#else
+#define noinline
+#endif
+
 #define NAME_CONCAT_IMPL(x, y) x##y
 #define NAME_CONCAT(x, y) NAME_CONCAT_IMPL(x, y)
 #define DEFER_UNIQ(prefix) NAME_CONCAT(prefix, __COUNTER__)
