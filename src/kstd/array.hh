@@ -181,7 +181,7 @@ struct Static_Array {
             data[i] = value;
     }
 
-    auto operator [] (u64 index, const std::source_location& location = std::source_location::current()) -> T& {
+    constexpr auto operator [] (u64 index, const std::source_location& location = std::source_location::current()) -> T& {
         kstd_assert(index < size, "index out of bounds", location);
         return data[index];
     }

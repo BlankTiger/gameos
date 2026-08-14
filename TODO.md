@@ -14,7 +14,8 @@ graphics:
 - [x] move draw\_char draw\_text to other location
 - [x] draw_text_immediate for asserts and term::print
 - [x] think of a better way of storing b,g,r channels, so we can both load rgb and use bgr elsewhere
-- [ ] draw tetris
+- [x] draw tetris
+- [ ] fix ugly mesh_instance constructors
 - [ ] separate core for graphics
 
 fonts:
@@ -24,6 +25,24 @@ fonts:
 sound:
 - [ ] figure out what to actually do here
 - [ ] 8-bit slowly drifting
+
+tetris:
+- [x] blocks meshes and colors
+- [x] blocks texture
+- [x] handle rotations of blocks correctly
+- [x] camera left/right rotation
+- [x] draw pretty tetris board
+- [x] draw back-walls for game field and rotate them with camera
+- [x] drop
+- [x] fast fall
+- [x] final position shadow
+- [x] camera zoom
+- [x] handle game over
+- [x] make blocks transparent if they occlude falling block
+- [ ] zoom on scroll
+- [ ] add scoring
+- [ ] add preview of next block
+- [ ] add UI
 
 base layer:
 - [x] timers

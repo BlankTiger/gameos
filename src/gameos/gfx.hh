@@ -22,10 +22,43 @@ namespace gfx {
 struct Color {
     u8 r, g, b, a;
 
-    auto with_alpha(u8 alpha) -> Color {
+    auto with_alpha(u8 alpha) const -> Color {
         return {r, g, b, alpha};
     }
+
+    constexpr auto dim(f32 percent) const -> Color {
+        return {
+            static_cast<u8>(r * percent),
+            static_cast<u8>(g * percent),
+            static_cast<u8>(b * percent),
+            a,
+        };
+    }
+
+    constexpr auto modulate(Color other) const -> Color {
+        return {
+            static_cast<u8>(r * other.r / 255),
+            static_cast<u8>(g * other.g / 255),
+            static_cast<u8>(b * other.b / 255),
+            static_cast<u8>(a * other.a / 255),
+        };
+    }
 };
+
+force_inline auto blend_colors(Color background, Color foreground) -> Color {
+    if (foreground.a == 0) return background;
+    if (foreground.a == 255) return foreground;
+
+    const u32 foreground_alpha = foreground.a;
+    const u32 background_alpha = background.a;
+    const u32 inverse_alpha = 255 - foreground_alpha;
+    return {
+        static_cast<u8>((background.r * inverse_alpha + foreground.r * foreground_alpha) / 255),
+        static_cast<u8>((background.g * inverse_alpha + foreground.g * foreground_alpha) / 255),
+        static_cast<u8>((background.b * inverse_alpha + foreground.b * foreground_alpha) / 255),
+        static_cast<u8>(foreground_alpha + (background_alpha * inverse_alpha) / 255),
+    };
+}
 
 constexpr Color BLACK{0, 0, 0, 255};
 constexpr Color WHITE{255, 255, 255, 255};
@@ -193,6 +226,7 @@ struct Mesh {
 struct Mesh_Instance {
     Mesh model;
     Resource_View texture{};
+    Color modulate = WHITE;
     Vector3<f32> translation;
     Quaternion<f32> rotation;
     Vector3<f32> scale;
@@ -203,11 +237,11 @@ struct Mesh_Instance {
     }
 
     Mesh_Instance(Mesh model) : model(model), scale{1.f, 1.f, 1.f}, transform(Matrix4<f32>::identity()) {}
-    Mesh_Instance(Mesh model, Vector3<f32> translation = {}, Quaternion<f32> rotation = {}, Vector3<f32> scale = {1.f, 1.f, 1.f})
-        : model(model), translation(translation), rotation(rotation), scale(scale)
+    Mesh_Instance(Mesh model, Vector3<f32> translation = {}, Quaternion<f32> rotation = {}, Vector3<f32> scale = {1.f, 1.f, 1.f}, Color modulate = WHITE)
+        : model(model), modulate(modulate), translation(translation), rotation(rotation), scale(scale)
         { recompute_matrix(); }
-    Mesh_Instance(Mesh model, Resource_View texture, Vector3<f32> translation = {}, Quaternion<f32> rotation = {}, Vector3<f32> scale = {1.f, 1.f, 1.f})
-        : model(model), texture(texture), translation(translation), rotation(rotation), scale(scale) { recompute_matrix(); }
+    Mesh_Instance(Mesh model, Resource_View texture, Vector3<f32> translation = {}, Quaternion<f32> rotation = {}, Vector3<f32> scale = {1.f, 1.f, 1.f}, Color modulate = WHITE)
+        : model(model), texture(texture), modulate(modulate), translation(translation), rotation(rotation), scale(scale) { recompute_matrix(); }
 
     auto rotate(Vector3<f32> spin_axis, f32 angle) {
         rotation = Quaternion<f32>::from_axis_angle(spin_axis, angle) * rotation;
@@ -364,14 +398,14 @@ static force_inline auto set_pixel(u32 x, u32 y, Color color) -> void {
     frame.back_buffer[index].blend_with(color);
 }
 
-static force_inline auto set_pixel(u32 x, u32 y, Color color, Depth depth) -> void {
+static force_inline auto set_pixel(u32 x, u32 y, Color color, Depth depth, bool write_depth = true) -> void {
     kstd_assert(x < width());
     kstd_assert(y < height());
     auto index = y * hidden::front_buffer.stride + x;
     auto& frame = current_frame();
     if (depth != DEPTH_FAR && depth >= frame.depth_buffer[index]) return;
     frame.back_buffer[index].blend_with(color);
-    if (depth != DEPTH_FAR) frame.depth_buffer[index] = depth;
+    if (depth != DEPTH_FAR && write_depth) frame.depth_buffer[index] = depth;
 }
 
 auto clear(Color color) -> void {
@@ -469,6 +503,18 @@ auto draw_text(u32 x, u32 y, const string text, Color fg = WHITE, Color bg = TRA
             .z     = z,
             .depth = depth,
             .text  = Text_Command{x, y, copied, fg, bg},
+        }
+    );
+}
+
+auto draw_static_text(u32 x, u32 y, const string text, Color fg = WHITE, Color bg = TRANSPARENT, u8 z = 1, Render_Pass pass = Render_Pass::UI, Depth depth = DEPTH_FAR) -> void {
+    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui;
+    queue.push_back(
+        Draw_Command_2D{
+            .type  = Draw_Command_2D_Type::DRAW_TEXT,
+            .z     = z,
+            .depth = depth,
+            .text  = Text_Command{x, y, text, fg, bg},
         }
     );
 }
@@ -959,7 +1005,7 @@ force_inline auto draw_world_2D() -> void {
 //  3D -- camera, projection, meshes, texturing, raster and commands
 // -------------------------------------------------------------------
 
-static Static_Array<Vertex, 24> unit_cube_vertices{{
+static Static_Array<Vertex, 24> debug_cube_vertices{{
     {{ 1,  1,  1}, BLUE,    {1.f, 0.f}}, {{-1,  1,  1}, RED,     {0.f, 0.f}}, {{-1, -1,  1}, BLUE,    {0.f, 1.f}}, {{ 1, -1,  1}, RED,     {1.f, 1.f}},
     {{ 1,  1, -1}, GREEN,   {1.f, 0.f}}, {{ 1,  1,  1}, GREEN,   {0.f, 0.f}}, {{ 1, -1,  1}, GREEN,   {0.f, 1.f}}, {{ 1, -1, -1}, GREEN,   {1.f, 1.f}},
     {{-1,  1, -1}, RED,     {0.f, 0.f}}, {{ 1,  1, -1}, RED,     {1.f, 0.f}}, {{ 1, -1, -1}, RED,     {1.f, 1.f}}, {{-1, -1, -1}, RED,     {0.f, 1.f}},
@@ -975,6 +1021,30 @@ static Static_Array<Index, 12> unit_cube_indices{{
     {12, 13, 14}, {12, 14, 15},
     {16, 17, 18}, {16, 18, 19},
     {20, 21, 22}, {20, 22, 23},
+}};
+const inline Mesh DEBUG_CUBE{debug_cube_vertices, unit_cube_indices};
+
+static Static_Array<Vertex, 4> unit_plane_vertices{{
+    {{-1.f, -1.f, 0.f}, WHITE, {0.f, 0.f}},
+    {{ 1.f, -1.f, 0.f}, WHITE, {1.f, 0.f}},
+    {{ 1.f,  1.f, 0.f}, WHITE, {1.f, 1.f}},
+    {{-1.f,  1.f, 0.f}, WHITE, {0.f, 1.f}},
+}};
+
+static Static_Array<Index, 4> unit_plane_indices{{
+    {0, 1, 2}, {0, 2, 3},
+    {2, 1, 0}, {3, 2, 0},
+}};
+
+const inline Mesh UNIT_PLANE{unit_plane_vertices, unit_plane_indices};
+
+static Static_Array<Vertex, 24> unit_cube_vertices{{
+    {{ 1,  1,  1}, WHITE, {1.f, 0.f}}, {{-1,  1,  1}, WHITE, {0.f, 0.f}}, {{-1, -1,  1}, WHITE, {0.f, 1.f}}, {{ 1, -1,  1}, WHITE, {1.f, 1.f}},
+    {{ 1,  1, -1}, WHITE, {1.f, 0.f}}, {{ 1,  1,  1}, WHITE, {0.f, 0.f}}, {{ 1, -1,  1}, WHITE, {0.f, 1.f}}, {{ 1, -1, -1}, WHITE, {1.f, 1.f}},
+    {{-1,  1, -1}, WHITE, {0.f, 0.f}}, {{ 1,  1, -1}, WHITE, {1.f, 0.f}}, {{ 1, -1, -1}, WHITE, {1.f, 1.f}}, {{-1, -1, -1}, WHITE, {0.f, 1.f}},
+    {{-1,  1,  1}, WHITE, {1.f, 0.f}}, {{-1,  1, -1}, WHITE, {0.f, 0.f}}, {{-1, -1, -1}, WHITE, {0.f, 1.f}}, {{-1, -1,  1}, WHITE, {1.f, 1.f}},
+    {{ 1,  1, -1}, WHITE, {1.f, 0.f}}, {{-1,  1, -1}, WHITE, {0.f, 0.f}}, {{-1,  1,  1}, WHITE, {0.f, 1.f}}, {{ 1,  1,  1}, WHITE, {1.f, 1.f}},
+    {{-1, -1,  1}, WHITE, {0.f, 0.f}}, {{-1, -1, -1}, WHITE, {0.f, 1.f}}, {{ 1, -1, -1}, WHITE, {1.f, 1.f}}, {{ 1, -1,  1}, WHITE, {1.f, 0.f}},
 }};
 const inline Mesh UNIT_CUBE{unit_cube_vertices, unit_cube_indices};
 
@@ -995,7 +1065,7 @@ force_inline auto update_camera(Camera3D& camera, Vector3<f32> new_position = {}
 struct Projection_Settings {
     f32 vertical_fov_degrees = 90.f;
     f32 aspect_ratio = GFX_ASPECT_RATIO;
-    f32 z_near = 1.f, z_far = 10.f;
+    f32 z_near = 1.f, z_far = 100.f;
     f32 x_offset = 0.f, y_offset = 0.f;
     bool depth_range_01 = false;
     Matrix4<f32> M_projection;
@@ -1027,6 +1097,12 @@ force_inline auto sample_texture(const Resource_View& res, f32 u, f32 v) -> Colo
     return colors[ty * res.width + tx];
 }
 
+force_inline auto quantize_depth(f32 z) -> Depth {
+    constexpr f32 DEPTH_3D_MAX = 0xFFFFFE;
+    const f32 normalized = std::clamp((z + 1.f) * 0.5f, f32(0), f32(1));
+    return static_cast<Depth>(normalized * DEPTH_3D_MAX);
+}
+
 auto inner_draw_triangle_3d(
     Vector4<f32> v1, Vector4<f32> v2, Vector4<f32> v3,
     Vector2<f32> uv1, Vector2<f32> uv2, Vector2<f32> uv3,
@@ -1043,6 +1119,7 @@ auto inner_draw_triangle_3d(
     if (is_counter_clockwise) {
         std::swap(v2, v3);
         std::swap(uv2, uv3);
+        std::swap(color2, color3);
         det = -det;
     }
 
@@ -1149,15 +1226,19 @@ auto inner_draw_triangle_3d(
                 };
 
                 if (textured) {
+                    const u8 mesh_alpha = color.a;
                     f32 recip = 1.f / iw;
+                    color = blend_colors(color, sample_texture(texture, u * recip, v * recip));
+                    color.a = static_cast<u8>(color.a * mesh_alpha / 255);
                     set_pixel(
                         x,
                         y,
-                        sample_texture(texture, u * recip, v * recip),
-                        z
+                        color,
+                        quantize_depth(z),
+                        color.a == 255
                     );
                 } else {
-                    set_pixel(x, y, color, z);
+                    set_pixel(x, y, color, quantize_depth(z), color.a == 255);
                 }
             }
 
@@ -1230,10 +1311,13 @@ auto inner_draw_mesh(Mesh_Instance instance, Camera3D camera) -> void {
         const Vertex& a = instance.model.vertices[i1];
         const Vertex& b = instance.model.vertices[i2];
         const Vertex& c = instance.model.vertices[i3];
+        const Color color_a = a.color.modulate(instance.modulate);
+        const Color color_b = b.color.modulate(instance.modulate);
+        const Color color_c = c.color.modulate(instance.modulate);
         if (textured) {
-            inner_draw_triangle_3d(p1, p2, p3, a.uv, b.uv, c.uv, a.color, b.color, c.color, instance.texture);
+            inner_draw_triangle_3d(p1, p2, p3, a.uv, b.uv, c.uv, color_a, color_b, color_c, instance.texture);
         } else {
-            inner_draw_triangle_3d(p1, p2, p3, {}, {}, {}, a.color, b.color, c.color);
+            inner_draw_triangle_3d(p1, p2, p3, {}, {}, {}, color_a, color_b, color_c);
         }
     }
 }
@@ -1248,15 +1332,42 @@ auto draw_mesh(Mesh_Instance instance, Camera3D camera) -> void {
     );
 }
 
+auto draw_plane(
+    Vector3<f32> center,
+    Vector2<f32> size,
+    Color color,
+    Camera3D camera,
+    Quaternion<f32> rotation = {}
+) -> void {
+    draw_mesh(
+        Mesh_Instance{
+            UNIT_PLANE,
+            {},
+            center,
+            rotation,
+            {size.x * 0.5f, size.y * 0.5f, 1.f},
+            color,
+        },
+        camera
+    );
+}
+
 auto inner_draw_raw_line_3d(
     Vector4<f32> p1,
     Vector4<f32> p2,
     Color color
 ) -> void {
-    u32 x1 = static_cast<u32>(p1.x);
-    u32 y1 = static_cast<u32>(p1.y);
-    u32 x2 = static_cast<u32>(p2.x);
-    u32 y2 = static_cast<u32>(p2.y);
+    if ((p1.x < 0.f && p2.x < 0.f) ||
+        (p1.y < 0.f && p2.y < 0.f) ||
+        (p1.x >= static_cast<f32>(width()) && p2.x >= static_cast<f32>(width())) ||
+        (p1.y >= static_cast<f32>(height()) && p2.y >= static_cast<f32>(height()))) return;
+
+    const s32 max_x = static_cast<s32>(width()) - 1;
+    const s32 max_y = static_cast<s32>(height()) - 1;
+    u32 x1 = static_cast<u32>(std::clamp(static_cast<s32>(p1.x), s32(0), max_x));
+    u32 y1 = static_cast<u32>(std::clamp(static_cast<s32>(p1.y), s32(0), max_y));
+    u32 x2 = static_cast<u32>(std::clamp(static_cast<s32>(p2.x), s32(0), max_x));
+    u32 y2 = static_cast<u32>(std::clamp(static_cast<s32>(p2.y), s32(0), max_y));
 
     bool steep = abs_diff(y1, y2) > abs_diff(x1, x2);
     if (steep) {
@@ -1284,10 +1395,10 @@ auto inner_draw_raw_line_3d(
 
     for (u32 x = x1; x <= x2; ++x) {
         if (steep) {
-            set_pixel(y, x, color, z);
+            set_pixel(y, x, color, quantize_depth(z));
         }
         else {
-            set_pixel(x, y, color, z);
+            set_pixel(x, y, color, quantize_depth(z));
         }
 
         if (dx != 0)
@@ -1310,9 +1421,9 @@ auto inner_draw_wireframe(Mesh_Instance instance, Camera3D camera) -> void {
         if (p1.w <= 0.f || p2.w <= 0.f || p3.w <= 0.f) continue;
         const Vertex& a = instance.model.vertices[i1];
         const Vertex& b = instance.model.vertices[i2];
-        inner_draw_raw_line_3d(p1, p2, a.color);
-        inner_draw_raw_line_3d(p1, p3, a.color);
-        inner_draw_raw_line_3d(p2, p3, b.color);
+        inner_draw_raw_line_3d(p1, p2, a.color.modulate(instance.modulate));
+        inner_draw_raw_line_3d(p1, p3, a.color.modulate(instance.modulate));
+        inner_draw_raw_line_3d(p2, p3, b.color.modulate(instance.modulate));
     }
 }
 
@@ -1336,7 +1447,7 @@ force_inline auto draw_world_3D() -> void {
                 inner_draw_mesh(cmd.instance, command.camera);
             } break;
             case DRAW_WIREFRAME: {
-                const Mesh_Command& cmd = command.mesh;
+                const Wireframe_Command& cmd = command.wireframe;
                 inner_draw_wireframe(cmd.instance, command.camera);
             } break;
         }
