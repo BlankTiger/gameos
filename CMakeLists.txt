@@ -14,10 +14,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set(GENERATED_DIR ${CMAKE_BINARY_DIR}/generated)
 
-# Graphics settings (keep in sync with src/config.hh)
-set(GFX_WIDTH 1024)
-set(GFX_HEIGHT 768)
-
 # Configure GRUB
 configure_file(${CMAKE_SOURCE_DIR}/grub.cfg.in ${GENERATED_DIR}/grub.cfg @ONLY)
 
