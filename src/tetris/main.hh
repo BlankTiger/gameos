@@ -101,6 +101,9 @@ struct Game {
 constexpr f32 TETRIS_BLOCK_SCALE = 0.5f;
 constexpr f32 TETRIS_BLOCK_SPACING = 1.f;
 
+constexpr usize TETRIS_SHADOW_MAX_VERTICES = ARBITRARY_FALLING_BODY_BLOCK_SIZE_LIMIT * 6 * 4;
+constexpr usize TETRIS_SHADOW_MAX_INDICES = ARBITRARY_FALLING_BODY_BLOCK_SIZE_LIMIT * 6 * 2;
+
 constexpr f32 TETRIS_ORIGIN_Z = 0.0f;
 constexpr f32 TETRIS_CAMERA_OFFSET_Z = -8.0f;
 constexpr f32 TETRIS_CAMERA_RADIUS = 20.0f;
@@ -140,6 +143,11 @@ constexpr auto TETRIS_DIMMED_BODY_COLORS = make_tetris_dimmed_body_colors();
 
 inline Static_Array<Static_Array<gfx::Vertex, 24>, available_bodies.size()> tetris_solid_vertices;
 inline Static_Array<gfx::Mesh, available_bodies.size()> tetris_solid_meshes;
+
+inline Static_Array<gfx::Vertex, TETRIS_SHADOW_MAX_VERTICES> tetris_shadow_vertices;
+inline Static_Array<gfx::Index, TETRIS_SHADOW_MAX_INDICES> tetris_shadow_indices;
+inline gfx::Mesh tetris_shadow_mesh;
+
 inline Static_Array<gfx::Vertex, TETRIS_BOARD_VERTEX_COUNT> tetris_checkerboard_vertices;
 inline Static_Array<gfx::Index, TETRIS_BOARD_INDEX_COUNT> tetris_checkerboard_indices;
 inline gfx::Mesh tetris_checkerboard_mesh;
@@ -258,6 +266,52 @@ auto tetris_shadow_layer_offset(const Game& game) -> u32 {
     return shadow_offset;
 }
 
+// Remove inside faces from the shadow mesh
+auto update_tetris_shadow_mesh(const Falling_Body& body) -> void {
+    const auto anchor = body.blocks[0];
+    usize vertex_count = 0;
+    usize index_count = 0;
+
+    for (const auto& [row, col, layer] : body.blocks) {
+        const Vector3<f32> offset{
+            static_cast<f32>(row) - static_cast<f32>(anchor.x),
+            static_cast<f32>(col) - static_cast<f32>(anchor.y),
+            static_cast<f32>(anchor.z) - static_cast<f32>(layer),
+        };
+
+        for (usize face = 0; face < 6; ++face) {
+            bool neighbor_inside = false;
+            switch (face) {
+                case 0: neighbor_inside = layer > 0 && falling_body_contains(body, {row, col, layer - 1}); break;
+                case 1: neighbor_inside = falling_body_contains(body, {row + 1, col, layer}); break;
+                case 2: neighbor_inside = falling_body_contains(body, {row, col, layer + 1}); break;
+                case 3: neighbor_inside = row > 0 && falling_body_contains(body, {row - 1, col, layer}); break;
+                case 4: neighbor_inside = falling_body_contains(body, {row, col + 1, layer}); break;
+                case 5: neighbor_inside = col > 0 && falling_body_contains(body, {row, col - 1, layer}); break;
+            }
+            if (neighbor_inside) continue;
+
+            const usize vertex_offset = vertex_count;
+            for (usize vertex = face * 4; vertex < face * 4 + 4; ++vertex) {
+                auto shadow_vertex = gfx::UNIT_CUBE.vertices[vertex];
+                shadow_vertex.position += offset * (TETRIS_BLOCK_SPACING / TETRIS_BLOCK_SCALE);
+                shadow_vertex.color = gfx::WHITE;
+                tetris_shadow_vertices[vertex_count++] = shadow_vertex;
+            }
+            for (usize index = face * 2; index < face * 2 + 2; ++index) {
+                const auto source_index = gfx::UNIT_CUBE.indices[index];
+                tetris_shadow_indices[index_count++] = {
+                    static_cast<u32>(vertex_offset + source_index.x - face * 4),
+                    static_cast<u32>(vertex_offset + source_index.y - face * 4),
+                    static_cast<u32>(vertex_offset + source_index.z - face * 4),
+                };
+            }
+        }
+    }
+
+    tetris_shadow_mesh = gfx::Mesh{tetris_shadow_vertices, tetris_shadow_indices};
+}
+
 auto draw_tetris_back_walls(const Game& game, gfx::Camera3D& camera) -> void {
     const bool negative_x_wall = camera.position.x >= 0.f;
     const bool positive_y_wall = camera.position.y <= 0.f;
@@ -344,19 +398,19 @@ auto draw(const Game& game, gfx::Camera3D& camera) -> void {
     }
 
     const u32 shadow_offset = tetris_shadow_layer_offset(game);
-    for (const auto& [row, col, layer] : game.falling_body.blocks) {
-        gfx::draw_mesh(
-            gfx::Mesh_Instance{
-                gfx::UNIT_CUBE,
-                {},
-                tetris_position(game, row, col, layer + shadow_offset),
-                {},
-                {TETRIS_BLOCK_SCALE, TETRIS_BLOCK_SCALE, TETRIS_BLOCK_SCALE},
-                TETRIS_SHADOW_COLOR,
-            },
-            camera
-        );
-    }
+    update_tetris_shadow_mesh(game.falling_body);
+    const auto shadow_anchor = game.falling_body.blocks[0];
+    gfx::draw_mesh(
+        gfx::Mesh_Instance{
+            tetris_shadow_mesh,
+            {},
+            tetris_position(game, shadow_anchor.x, shadow_anchor.y, shadow_anchor.z + shadow_offset),
+            {},
+            {TETRIS_BLOCK_SCALE, TETRIS_BLOCK_SCALE, TETRIS_BLOCK_SCALE},
+            TETRIS_SHADOW_COLOR,
+        },
+        camera
+    );
 
     gfx::draw_frame();
 }
