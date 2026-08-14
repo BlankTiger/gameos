@@ -8,7 +8,7 @@
 
 #include "stack_trace_unwinding/file_a.hh"
 
-noinline auto function_call_into_other_files() -> Array_View<stack_trace::Frame> {
+noinline auto function_call_into_other_files() -> Array_View<stack_trace::Trace> {
     auto stack_trace = call_function_from_file_b();
     return stack_trace;
 }

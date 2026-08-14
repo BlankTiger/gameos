@@ -135,6 +135,7 @@ target_compile_options(gameos PRIVATE
     $<$<COMPILE_LANGUAGE:C,CXX>:-Wall>
     $<$<COMPILE_LANGUAGE:C,CXX>:-Wextra>
     $<$<COMPILE_LANGUAGE:C,CXX>:-mno-red-zone>
+    $<$<COMPILE_LANGUAGE:C,CXX>:-fno-omit-frame-pointer>
     $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions>
     $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
     $<$<COMPILE_LANGUAGE:CXX>:-ftls-model=local-exec>
