@@ -22,7 +22,7 @@ namespace gfx {
 struct Color {
     u8 r, g, b, a;
 
-    auto with_alpha(u8 alpha) -> Color {
+    auto with_alpha(u8 alpha) const -> Color {
         return {r, g, b, alpha};
     }
 
@@ -398,14 +398,14 @@ static force_inline auto set_pixel(u32 x, u32 y, Color color) -> void {
     frame.back_buffer[index].blend_with(color);
 }
 
-static force_inline auto set_pixel(u32 x, u32 y, Color color, Depth depth) -> void {
+static force_inline auto set_pixel(u32 x, u32 y, Color color, Depth depth, bool write_depth = true) -> void {
     kstd_assert(x < width());
     kstd_assert(y < height());
     auto index = y * hidden::front_buffer.stride + x;
     auto& frame = current_frame();
     if (depth != DEPTH_FAR && depth >= frame.depth_buffer[index]) return;
     frame.back_buffer[index].blend_with(color);
-    if (depth != DEPTH_FAR) frame.depth_buffer[index] = depth;
+    if (depth != DEPTH_FAR && write_depth) frame.depth_buffer[index] = depth;
 }
 
 auto clear(Color color) -> void {
@@ -1226,16 +1226,19 @@ auto inner_draw_triangle_3d(
                 };
 
                 if (textured) {
+                    const u8 mesh_alpha = color.a;
                     f32 recip = 1.f / iw;
                     color = blend_colors(color, sample_texture(texture, u * recip, v * recip));
+                    color.a = static_cast<u8>(color.a * mesh_alpha / 255);
                     set_pixel(
                         x,
                         y,
                         color,
-                        quantize_depth(z)
+                        quantize_depth(z),
+                        color.a == 255
                     );
                 } else {
-                    set_pixel(x, y, color, quantize_depth(z));
+                    set_pixel(x, y, color, quantize_depth(z), color.a == 255);
                 }
             }
 
