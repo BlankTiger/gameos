@@ -125,6 +125,7 @@ constexpr gfx::Color TETRIS_GROUND_COLOR{24, 30, 44, 255};
 constexpr gfx::Color TETRIS_CHECKER_COLOR_A{42, 52, 72, 255};
 constexpr gfx::Color TETRIS_CHECKER_COLOR_B{30, 38, 56, 255};
 constexpr gfx::Color TETRIS_SHADOW_COLOR{128, 128, 128, 96};
+constexpr u8 TETRIS_OCCLUDER_ALPHA = 130;
 
 constexpr Static_Array<gfx::Color, available_bodies.size()> TETRIS_BODY_COLORS{{
     {80, 200, 255, 255},  {255, 180, 60, 255}, {80, 255, 140, 255},  {255, 90, 120, 255},
@@ -266,6 +267,72 @@ auto tetris_shadow_layer_offset(const Game& game) -> u32 {
     return shadow_offset;
 }
 
+struct Tetris_Projected_Block {
+    f32 min_x = F32_MAX;
+    f32 max_x = F32_MIN;
+    f32 min_y = F32_MAX;
+    f32 max_y = F32_MIN;
+    f32 depth = 0.f;
+};
+
+auto tetris_projected_block(
+    const Game& game,
+    gfx::Camera3D& camera,
+    Block_Coords coords
+) -> Tetris_Projected_Block {
+    const auto projected = gfx::project(
+        gfx::Mesh_Instance{
+            gfx::UNIT_CUBE,
+            tetris_position(game, coords.x, coords.y, coords.z),
+            {},
+            {TETRIS_BLOCK_SCALE, TETRIS_BLOCK_SCALE, TETRIS_BLOCK_SCALE},
+        },
+        camera
+    );
+
+    Tetris_Projected_Block result;
+    for (const auto& vertex : projected) {
+        result.min_x = std::min(result.min_x, vertex.x);
+        result.max_x = std::max(result.max_x, vertex.x);
+        result.min_y = std::min(result.min_y, vertex.y);
+        result.max_y = std::max(result.max_y, vertex.y);
+        result.depth += vertex.z;
+    }
+    result.depth /= static_cast<f32>(projected.size);
+    return result;
+}
+
+auto tetris_projected_blocks_overlap(
+    const Tetris_Projected_Block& a,
+    const Tetris_Projected_Block& b
+) -> bool {
+    return a.min_x < b.max_x && b.min_x < a.max_x &&
+           a.min_y < b.max_y && b.min_y < a.max_y;
+}
+
+auto tetris_block_occludes_falling_or_shadow(
+    const Game& game,
+    gfx::Camera3D& camera,
+    Block_Coords coords,
+    u32 shadow_offset
+) -> bool {
+    const auto projected_coords = tetris_projected_block(game, camera, coords);
+    for (const auto& block : game.falling_body.blocks) {
+        const auto projected_falling_block = tetris_projected_block(game, camera, block);
+        if (tetris_projected_blocks_overlap(projected_coords, projected_falling_block) &&
+            projected_coords.depth < projected_falling_block.depth)
+            return true;
+
+        if (shadow_offset >= game.grid.layers - block.z) continue;
+        const Block_Coords shadow_coords{block.x, block.y, block.z + shadow_offset};
+        const auto projected_shadow_block = tetris_projected_block(game, camera, shadow_coords);
+        if (tetris_projected_blocks_overlap(projected_coords, projected_shadow_block) &&
+            projected_coords.depth < projected_shadow_block.depth)
+            return true;
+    }
+    return false;
+}
+
 // Remove inside faces from the shadow mesh
 auto update_tetris_shadow_mesh(const Falling_Body& body) -> void {
     const auto anchor = body.blocks[0];
@@ -309,7 +376,10 @@ auto update_tetris_shadow_mesh(const Falling_Body& body) -> void {
         }
     }
 
-    tetris_shadow_mesh = gfx::Mesh{tetris_shadow_vertices, tetris_shadow_indices};
+    tetris_shadow_mesh = gfx::Mesh{
+        tetris_shadow_vertices.slice(0, vertex_count),
+        tetris_shadow_indices.slice(0, index_count),
+    };
 }
 
 auto draw_tetris_back_walls(const Game& game, gfx::Camera3D& camera) -> void {
@@ -358,59 +428,107 @@ auto draw_tetris_board(const Game& game, gfx::Camera3D& camera) -> void {
     draw_tetris_back_walls(game, camera);
 }
 
+auto draw_tetris_block(
+    const Game& game,
+    gfx::Camera3D& camera,
+    u32 row,
+    u32 col,
+    u32 layer,
+    gfx::Color modulate
+) -> void {
+    const auto type = game.grid.at(row, col, layer);
+    const auto body_index = game.body_indices.at(row, col, layer);
+    const auto mesh = type == Block_Type::FALLING ? gfx::UNIT_CUBE : tetris_solid_meshes[body_index];
+    gfx::draw_mesh(
+        gfx::Mesh_Instance{
+            mesh,
+            @embed("tetris_block.png"),
+            tetris_position(game, row, col, layer),
+            {},
+            {TETRIS_BLOCK_SCALE, TETRIS_BLOCK_SCALE, TETRIS_BLOCK_SCALE},
+            modulate
+        },
+        camera
+    );
+}
+
 auto draw(const Game& game, gfx::Camera3D& camera) -> void {
     gfx::clear(TETRIS_BACKGROUND_COLOR);
 
-    gfx::draw_text(8, 8, tprint("FPS: %", game.fps));
-    gfx::draw_static_text(
-        8,
-        32,
-        "WASD - rotate block\nArrow keys - move block\nSpace - drop\nShift - speed up falling\n+ - zoom in\n- - zoom out\n0 - reset zoom\nESC - quit"
-    );
-    if (game.game_over) {
-        constexpr u32 GAME_OVER_TEXT_WIDTH = 12 * font::GLYPH_WIDTH;
-        const u32 game_over_x = (gfx::width() - GAME_OVER_TEXT_WIDTH) / 2;
-        const u32 game_over_y = (gfx::height() - font::GLYPH_HEIGHT) / 2;
-        gfx::draw_text(game_over_x, game_over_y, "GAME OVER :(", gfx::WHITE, gfx::TRANSPARENT, 2);
+    // Draw FPS and controls help
+    {
+        gfx::draw_text(8, 8, tprint("FPS: %", game.fps));
+        gfx::draw_static_text(
+            8,
+            32,
+            "WASD - rotate block\nArrow keys - move block\nSpace - drop\nShift - speed up falling\n+ - zoom in\n- - zoom out\n0 - reset zoom\nESC - quit"
+        );
+        if (game.game_over) {
+            constexpr u32 GAME_OVER_TEXT_WIDTH = 12 * font::GLYPH_WIDTH;
+            const u32 game_over_x = (gfx::width() - GAME_OVER_TEXT_WIDTH) / 2;
+            const u32 game_over_y = (gfx::height() - font::GLYPH_HEIGHT) / 2;
+            gfx::draw_text(game_over_x, game_over_y, "GAME OVER :(", gfx::WHITE, gfx::TRANSPARENT, 2);
+        }
     }
 
-    draw_tetris_board(game, camera);
+    // Draw checkerboard + ground
+    {
+        draw_tetris_board(game, camera);
+    }
 
-    for (u32 row = 0; row < game.grid.rows; ++row) {
-        for (u32 col = 0; col < game.grid.cols; ++col) {
-            for (u32 layer = 0; layer < game.grid.layers; ++layer) {
-                const auto type = game.grid.at(row, col, layer);
-                if (type == Block_Type::EMPTY) continue;
-                const auto body_index = game.body_indices.at(row, col, layer);
-                const auto mesh     = type == Block_Type::FALLING ? gfx::UNIT_CUBE : tetris_solid_meshes[body_index];
-                const auto modulate = type == Block_Type::FALLING ? TETRIS_BODY_COLORS[body_index] : gfx::WHITE;
-                gfx::draw_mesh(
-                gfx::Mesh_Instance{
-                    mesh,
-                    @embed("tetris_block.png"),
-                    tetris_position(game, row, col, layer),
-                    {},
-                    {TETRIS_BLOCK_SCALE, TETRIS_BLOCK_SCALE, TETRIS_BLOCK_SCALE},
-                    modulate
-                }, camera);
+    const u32 shadow_offset = tetris_shadow_layer_offset(game);
+
+    // Draw solid blocks that are not occluding current falling blocks or it's shadow
+    {
+        for (u32 row = 0; row < game.grid.rows; ++row) {
+            for (u32 col = 0; col < game.grid.cols; ++col) {
+                for (u32 layer = 0; layer < game.grid.layers; ++layer) {
+                    const auto type = game.grid.at(row, col, layer);
+                    if (type != Block_Type::SOLID) continue;
+                    if (tetris_block_occludes_falling_or_shadow(game, camera, {row, col, layer}, shadow_offset)) continue;
+                    draw_tetris_block(game, camera, row, col, layer, gfx::WHITE);
+                }
             }
         }
     }
 
-    const u32 shadow_offset = tetris_shadow_layer_offset(game);
-    update_tetris_shadow_mesh(game.falling_body);
-    const auto shadow_anchor = game.falling_body.blocks[0];
-    gfx::draw_mesh(
-        gfx::Mesh_Instance{
-            tetris_shadow_mesh,
-            {},
-            tetris_position(game, shadow_anchor.x, shadow_anchor.y, shadow_anchor.z + shadow_offset),
-            {},
-            {TETRIS_BLOCK_SCALE, TETRIS_BLOCK_SCALE, TETRIS_BLOCK_SCALE},
-            TETRIS_SHADOW_COLOR,
-        },
-        camera
-    );
+    // Draw falling blocks
+    {
+        for (const auto& [row, col, layer] : game.falling_body.blocks) {
+            const auto body_index = game.body_indices.at(row, col, layer);
+            draw_tetris_block(game, camera, row, col, layer, TETRIS_BODY_COLORS[body_index]);
+        }
+    }
+
+    // Draw blocks that occlude current falling blocks or it's shadow
+    {
+        for (u32 row = 0; row < game.grid.rows; ++row) {
+            for (u32 col = 0; col < game.grid.cols; ++col) {
+                for (u32 layer = 0; layer < game.grid.layers; ++layer) {
+                    if (game.grid.at(row, col, layer) != Block_Type::SOLID) continue;
+                    if (!tetris_block_occludes_falling_or_shadow(game, camera, {row, col, layer}, shadow_offset)) continue;
+                    draw_tetris_block(game, camera, row, col, layer, gfx::WHITE.with_alpha(TETRIS_OCCLUDER_ALPHA));
+                }
+            }
+        }
+    }
+
+    // Draw shadow of falling blocks
+    {
+        update_tetris_shadow_mesh(game.falling_body);
+        const auto shadow_anchor = game.falling_body.blocks[0];
+        gfx::draw_mesh(
+            gfx::Mesh_Instance{
+                tetris_shadow_mesh,
+                {},
+                tetris_position(game, shadow_anchor.x, shadow_anchor.y, shadow_anchor.z + shadow_offset),
+                {},
+                {TETRIS_BLOCK_SCALE, TETRIS_BLOCK_SCALE, TETRIS_BLOCK_SCALE},
+                TETRIS_SHADOW_COLOR,
+            },
+            camera
+        );
+    }
 
     gfx::draw_frame();
 }
