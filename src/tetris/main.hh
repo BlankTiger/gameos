@@ -72,6 +72,11 @@ constexpr gfx::Nine_Patch TETRIS_NINE_PATCH_UI{
     {16, 48, 16, 48}
 };
 
+constexpr gfx::Nine_Patch TETRIS_NINE_PATCH_TRANSPARENT_UI{
+    @embed("tetris_ui_transparent.png"),
+    {16, 48, 16, 48}
+};
+
 constexpr u32 TETRIS_BOARD_CELL_ROWS = 10;
 constexpr u32 TETRIS_BOARD_CELL_COLS = 10;
 constexpr u32 TETRIS_BOARD_CELL_COUNT = TETRIS_BOARD_CELL_ROWS * TETRIS_BOARD_CELL_COLS;
@@ -84,6 +89,7 @@ struct Game {
     Grid3<u8> body_indices;
     Falling_Body falling_body;
     usize falling_body_index = 0;
+    usize next_falling_body_index = krand::generate(0, available_bodies.size());
     bool game_over = false;
 
     Array<u32> layers_to_destroy;
@@ -105,6 +111,13 @@ struct Game {
 
 constexpr f32 TETRIS_BLOCK_SCALE = 0.5f;
 constexpr f32 TETRIS_BLOCK_SPACING = 1.f;
+
+constexpr u32 TETRIS_PREVIEW_WIDTH = 168;
+constexpr u32 TETRIS_PREVIEW_HEIGHT = 144;
+constexpr u32 TETRIS_PREVIEW_MARGIN = 8;
+constexpr f32 TETRIS_PREVIEW_DISTANCE = 8.f;
+constexpr f32 TETRIS_PREVIEW_BLOCK_SCALE = TETRIS_BLOCK_SCALE / 3;
+constexpr f32 TETRIS_PREVIEW_BLOCK_SPACING = TETRIS_BLOCK_SPACING / 3;
 
 constexpr usize TETRIS_SHADOW_MAX_VERTICES = ARBITRARY_FALLING_BODY_BLOCK_SIZE_LIMIT * 6 * 4;
 constexpr usize TETRIS_SHADOW_MAX_INDICES = ARBITRARY_FALLING_BODY_BLOCK_SIZE_LIMIT * 6 * 2;
@@ -459,8 +472,98 @@ auto draw_tetris_block(
     );
 }
 
+auto draw_tetris_block(
+    gfx::Camera3D& camera,
+    usize body_index,
+    Vector3<f32> position,
+    Vector3<f32> scale = {TETRIS_BLOCK_SCALE, TETRIS_BLOCK_SCALE, TETRIS_BLOCK_SCALE}
+) -> void {
+    gfx::draw_mesh(
+        gfx::Mesh_Instance{
+            gfx::UNIT_CUBE,
+            @embed("tetris_block.png"),
+            position,
+            {},
+            scale,
+            TETRIS_BODY_COLORS[body_index],
+        },
+        camera
+    );
+}
+
+auto tetris_preview_world_position(const gfx::Camera3D& camera) -> Vector3<f32> {
+    const f32 panel_width = TETRIS_PREVIEW_WIDTH + TETRIS_PREVIEW_MARGIN * 2.f;
+    const f32 center_x = TETRIS_PREVIEW_MARGIN + panel_width / 2.f;
+    const f32 center_y = static_cast<f32>(gfx::height()) / 2.f;
+    const f32 ndc_x = center_x / static_cast<f32>(gfx::width()) * 2.f - 1.f;
+    const f32 ndc_y = 1.f - center_y / static_cast<f32>(gfx::height()) * 2.f;
+    const Vector4<f32> camera_position{
+        ndc_x * TETRIS_PREVIEW_DISTANCE * GFX_ASPECT_RATIO,
+        ndc_y * TETRIS_PREVIEW_DISTANCE,
+        -TETRIS_PREVIEW_DISTANCE,
+        1.f,
+    };
+    const auto world_position = multiply(
+        make_rotation_matrix<Matrix4<f32>>(camera.rotation),
+        camera_position
+    );
+    return camera.position + Vector3<f32>{world_position.x, world_position.y, world_position.z};
+}
+
+auto draw_tetris_preview(const Game& game, gfx::Camera3D& camera) -> void {
+    const u32 preview_x = TETRIS_PREVIEW_MARGIN;
+    const u32 preview_y = (gfx::height() - TETRIS_PREVIEW_HEIGHT - TETRIS_PREVIEW_MARGIN * 2) / 2;
+    gfx::draw_nine_patch(
+        TETRIS_NINE_PATCH_TRANSPARENT_UI,
+        preview_x,
+        preview_y,
+        TETRIS_PREVIEW_WIDTH + TETRIS_PREVIEW_MARGIN * 2,
+        TETRIS_PREVIEW_HEIGHT + TETRIS_PREVIEW_MARGIN * 2,
+        4
+    );
+
+    const Body body = available_bodies.begin()[game.next_falling_body_index];
+    u32 min_row = U32_MAX, max_row = 0;
+    u32 min_col = U32_MAX, max_col = 0;
+    u32 min_layer = U32_MAX, max_layer = 0;
+    for (const auto& [row, col, layer] : body) {
+        min_row = std::min(min_row, row);
+        max_row = std::max(max_row, row);
+        min_col = std::min(min_col, col);
+        max_col = std::max(max_col, col);
+        min_layer = std::min(min_layer, layer);
+        max_layer = std::max(max_layer, layer);
+    }
+
+    const Vector3<f32> preview_position = tetris_preview_world_position(camera);
+    const Vector3<f32> center{
+        (static_cast<f32>(min_row) + static_cast<f32>(max_row)) / 2.f,
+        (static_cast<f32>(min_col) + static_cast<f32>(max_col)) / 2.f,
+        (static_cast<f32>(min_layer) + static_cast<f32>(max_layer)) / 2.f,
+    };
+
+    for (const auto& [row, col, layer] : body) {
+        const Vector3<f32> offset{
+            (static_cast<f32>(row) - center.x) * TETRIS_PREVIEW_BLOCK_SPACING,
+            (static_cast<f32>(col) - center.y) * TETRIS_PREVIEW_BLOCK_SPACING,
+            (center.z - static_cast<f32>(layer)) * TETRIS_PREVIEW_BLOCK_SPACING,
+        };
+        draw_tetris_block(
+            camera,
+            game.next_falling_body_index,
+            preview_position + Vector3<f32>{offset.x, offset.y, offset.z},
+            {TETRIS_PREVIEW_BLOCK_SCALE, TETRIS_PREVIEW_BLOCK_SCALE, TETRIS_PREVIEW_BLOCK_SCALE}
+        );
+    }
+}
+
 auto draw(const Game& game, gfx::Camera3D& camera) -> void {
     gfx::clear(TETRIS_BACKGROUND_COLOR);
+
+    // Draw preview of next block
+    {
+        draw_tetris_preview(game, camera);
+    }
 
     // Draw FPS and controls help in a nice UI box
     {
@@ -563,7 +666,8 @@ auto create_new_falling_body(Body blocks) -> Falling_Body {
 // available space -> true
 // otherwise       -> false
 auto produce_new_falling_body(Game& game) -> bool {
-    const auto body_index = krand::generate(0, available_bodies.size());
+    const auto body_index = game.next_falling_body_index;
+    game.next_falling_body_index = krand::generate(0, available_bodies.size());
     const auto body       = available_bodies.begin()[body_index];
 
     auto falling_body = create_new_falling_body(body);

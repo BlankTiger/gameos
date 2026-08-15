@@ -15,9 +15,9 @@
 
 namespace gfx {
 
-// -------------------------------------------------------------------
-//  Common -- Color, Pixel, depth
-// -------------------------------------------------------------------
+//
+// Common types
+//
 
 struct Color {
     u8 r, g, b, a;
@@ -137,9 +137,9 @@ constexpr Depth DEPTH_FAR = static_cast<Depth>(-1);
 
 using namespace math;
 
-// -------------------------------------------------------------------
-//  Common -- 2D command types
-// -------------------------------------------------------------------
+//
+// 2D commands types
+//
 
 enum struct Draw_Command_2D_Type: u8 {
     DRAW_CHAR,
@@ -206,9 +206,9 @@ struct Draw_Command_2D {
     };
 };
 
-// -------------------------------------------------------------------
-//  Common -- 3D command types
-// -------------------------------------------------------------------
+//
+// 3D command types
+//
 
 struct Vertex {
     Vector3<f32> position;
@@ -286,9 +286,9 @@ struct Draw_Command_3D {
     };
 };
 
-// -------------------------------------------------------------------
-//  Common -- UI command types
-// -------------------------------------------------------------------
+//
+// UI command types
+//
 
 struct Nine_Patch_Splits {
     u32 x1;
@@ -333,9 +333,9 @@ struct Draw_Command_UI {
     };
 };
 
-// -------------------------------------------------------------------
-//  Common -- Framebuffer, double buffering, set_pixel, clear
-// -------------------------------------------------------------------
+//
+// Framebuffer API
+//
 
 struct Framebuffer {
     Array_View<Pixel, GFX_PIXEL_COUNT> pixels;
@@ -355,10 +355,9 @@ namespace hidden {
         Static_Array<Pixel, GFX_PIXEL_COUNT> back_buffer;
         Static_Array<Depth, GFX_PIXEL_COUNT> depth_buffer;
         mem::Arena_Allocator<> arena{GFX_ARENA_SIZE};
-        Array<Draw_Command_2D> draw_commands_ui_2d{256};
+        Array<Draw_Command_2D> draw_commands_2d{256};
         Array<Draw_Command_UI> draw_commands_ui{256};
-        Array<Draw_Command_2D> draw_commands_world_2d{256};
-        Array<Draw_Command_3D> draw_commands_world_3d{256};
+        Array<Draw_Command_3D> draw_commands_3d{256};
     };
 
     inline Static_Array<Frame_Data, FRAME_OVERLAP> frames;
@@ -464,15 +463,9 @@ auto clear(Color color) -> void {
     kstd_memset32(depth_buffer.data, DEPTH_FAR, depth_buffer.size_in_bytes / sizeof(Depth));
 }
 
-enum struct Render_Pass : u8 {
-    WORLD_2D,
-    WORLD_3D,
-    UI,
-};
-
-// --------------------------------------------------------------------------------
-//  2D -- draw_char, draw_text, draw_line, draw_circle, draw_sprite, draw_triangle
-// --------------------------------------------------------------------------------
+//
+// 2D API
+//
 
 template <bool IMMEDIATE>
 auto inner_draw_char(u32 x, u32 y, char c, Color fg, Color bg, Depth depth = DEPTH_FAR) -> void {
@@ -498,10 +491,9 @@ auto inner_draw_char(u32 x, u32 y, char c, Color fg, Color bg, Depth depth = DEP
     }
 }
 
-auto draw_char(u32 x, u32 y, char c, Color fg, Color bg, u8 z = 1, Render_Pass pass = Render_Pass::UI, Depth depth = DEPTH_FAR) -> void {
+auto draw_char(u32 x, u32 y, char c, Color fg, Color bg, u8 z = 1, Depth depth = DEPTH_FAR) -> void {
     if (x >= width() || y >= height()) return;
-    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui_2d;
-    queue.push_back(
+    current_frame().draw_commands_2d.push_back(
         Draw_Command_2D{
             .type      = Draw_Command_2D_Type::DRAW_CHAR,
             .z         = z,
@@ -541,11 +533,10 @@ auto inner_draw_text(u32 x, u32 y, string text, Color fg = WHITE, Color bg = TRA
     }
 }
 
-auto draw_text(u32 x, u32 y, const string text, Color fg = WHITE, Color bg = TRANSPARENT, u8 z = 1, Render_Pass pass = Render_Pass::UI, Depth depth = DEPTH_FAR) -> void {
+auto draw_text(u32 x, u32 y, const string text, Color fg = WHITE, Color bg = TRANSPARENT, u8 z = 1, Depth depth = DEPTH_FAR) -> void {
     auto& arena = current_frame().arena;
     auto copied = copy_string(text, &arena);
-    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui_2d;
-    queue.push_back(
+    current_frame().draw_commands_2d.push_back(
         Draw_Command_2D{
             .type  = Draw_Command_2D_Type::DRAW_TEXT,
             .z     = z,
@@ -555,9 +546,8 @@ auto draw_text(u32 x, u32 y, const string text, Color fg = WHITE, Color bg = TRA
     );
 }
 
-auto draw_static_text(u32 x, u32 y, const string text, Color fg = WHITE, Color bg = TRANSPARENT, u8 z = 1, Render_Pass pass = Render_Pass::UI, Depth depth = DEPTH_FAR) -> void {
-    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui_2d;
-    queue.push_back(
+auto draw_static_text(u32 x, u32 y, const string text, Color fg = WHITE, Color bg = TRANSPARENT, u8 z = 1, Depth depth = DEPTH_FAR) -> void {
+    current_frame().draw_commands_2d.push_back(
         Draw_Command_2D{
             .type  = Draw_Command_2D_Type::DRAW_TEXT,
             .z     = z,
@@ -631,10 +621,9 @@ auto inner_draw_circle(u32 x, u32 y, u32 r, Color color, Depth depth = DEPTH_FAR
     }
 }
 
-auto draw_circle(u32 x, u32 y, u32 r, Color color, u8 z = 1, Render_Pass pass = Render_Pass::UI, Depth depth = DEPTH_FAR) -> void {
+auto draw_circle(u32 x, u32 y, u32 r, Color color, u8 z = 1, Depth depth = DEPTH_FAR) -> void {
     if (x >= width() || y >= height()) return;
-    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui_2d;
-    queue.push_back(
+    current_frame().draw_commands_2d.push_back(
         Draw_Command_2D{
             .type   = Draw_Command_2D_Type::DRAW_CIRCLE,
             .z      = z,
@@ -724,7 +713,7 @@ auto inner_draw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color, Depth depth = 
     }
 }
 
-auto draw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color, u8 z = 1, Render_Pass pass = Render_Pass::UI, Depth depth = DEPTH_FAR) -> void {
+auto draw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color, u8 z = 1, Depth depth = DEPTH_FAR) -> void {
     if (width() < 2 || height() < 2) return;
     if (x1 >= width() || y1 >= height()) return;
     if (x2 >= width() || y2 >= height()) return;
@@ -735,8 +724,7 @@ auto draw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color, u8 z = 1, Render_Pas
     x2 = std::min(x2, max_x);
     y2 = std::min(y2, max_y);
 
-    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui_2d;
-    queue.push_back(
+    current_frame().draw_commands_2d.push_back(
         Draw_Command_2D{
             .type  = Draw_Command_2D_Type::DRAW_LINE,
             .z     = z,
@@ -780,7 +768,7 @@ auto inner_draw_raw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color, Depth dept
     }
 }
 
-auto draw_raw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color, u8 z = 1, Render_Pass pass = Render_Pass::UI, Depth depth = DEPTH_FAR) -> void {
+auto draw_raw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color, u8 z = 1, Depth depth = DEPTH_FAR) -> void {
     if (x1 >= width() || y1 >= height()) return;
     if (x2 >= width() || y2 >= height()) return;
     u32 max_x = width()  - 2;
@@ -790,8 +778,7 @@ auto draw_raw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color, u8 z = 1, Render
     x2 = std::min(x2, max_x);
     y2 = std::min(y2, max_y);
 
-    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui_2d;
-    queue.push_back(
+    current_frame().draw_commands_2d.push_back(
         Draw_Command_2D{
             .type  = Draw_Command_2D_Type::DRAW_RAW_LINE,
             .z     = z,
@@ -811,10 +798,9 @@ auto inner_draw_rect(u32 x, u32 y, u32 w, u32 h, Color color, Depth depth = DEPT
     }
 }
 
-auto draw_rect(u32 x, u32 y, u32 w, u32 h, Color color, u8 z = 1, Render_Pass pass = Render_Pass::UI, Depth depth = DEPTH_FAR) -> void {
+auto draw_rect(u32 x, u32 y, u32 w, u32 h, Color color, u8 z = 1, Depth depth = DEPTH_FAR) -> void {
     if (x >= width() || y >= height()) return;
-    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui_2d;
-    queue.push_back(
+    current_frame().draw_commands_2d.push_back(
         Draw_Command_2D{
             .type      = Draw_Command_2D_Type::DRAW_RECT,
             .z         = z,
@@ -837,11 +823,10 @@ auto inner_draw_sprite(const Resource_View res, u32 x, u32 y, u32 width, u32 hei
     }
 }
 
-auto draw_sprite(const Resource_View res, u32 x, u32 y, u8 z = 1, Render_Pass pass = Render_Pass::UI, Depth depth = DEPTH_FAR) -> void {
+auto draw_sprite(const Resource_View res, u32 x, u32 y, u8 z = 1, Depth depth = DEPTH_FAR) -> void {
     if (res.width == 0 || res.height == 0) return;
     if (x >= width() || y >= height()) return;
-    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui_2d;
-    queue.push_back(
+    current_frame().draw_commands_2d.push_back(
         Draw_Command_2D{
             .type   = Draw_Command_2D_Type::DRAW_SPRITE,
             .z      = z,
@@ -858,14 +843,12 @@ auto draw_sprite_scaled(
     u32 scaled_width,
     u32 scaled_height,
     u8          z     = 1,
-    Render_Pass pass  = Render_Pass::UI,
     Depth       depth = DEPTH_FAR
 ) -> void {
     if (res.width == 0 || res.height == 0 || scaled_width == 0 || scaled_height == 0) return;
     if (x >= width() || y >= height()) return;
 
-    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui_2d;
-    queue.push_back(
+    current_frame().draw_commands_2d.push_back(
         Draw_Command_2D{
             .type   = Draw_Command_2D_Type::DRAW_SPRITE,
             .z      = z,
@@ -947,7 +930,7 @@ auto draw_triangle(Vector4<f32> v1, Vector4<f32> v2, Vector4<f32> v3, Color colo
         std::swap(v2, v3);
         det = -det;
     }
-    current_frame().draw_commands_world_2d.push_back(
+    current_frame().draw_commands_2d.push_back(
         Draw_Command_2D{
             .type = Draw_Command_2D_Type::DRAW_TRIANGLE,
             .z = z,
@@ -956,8 +939,8 @@ auto draw_triangle(Vector4<f32> v1, Vector4<f32> v2, Vector4<f32> v3, Color colo
     );
 }
 
-force_inline auto draw_world_2D() -> void {
-    for (const auto& command : current_frame().draw_commands_world_2d) {
+force_inline auto draw_2D() -> void {
+    for (const auto& command : current_frame().draw_commands_2d) {
         using enum Draw_Command_2D_Type;
         switch (command.type) {
             case DRAW_CHAR: {
@@ -995,12 +978,12 @@ force_inline auto draw_world_2D() -> void {
         }
     }
 
-    current_frame().draw_commands_world_2d.clear();
+    current_frame().draw_commands_2d.clear();
 }
 
-// --------------------------------------------------------------------------------
-//  UI -- draw_nine_patch, draw_nine_patch_text
-// --------------------------------------------------------------------------------
+//
+// UI API
+//
 
 auto map_nine_patch_coordinate(
     u32 coordinate,
@@ -1067,12 +1050,10 @@ auto draw_nine_patch(
     u32 width,
     u32 height,
     u8 z = 1,
-    Render_Pass pass = Render_Pass::UI,
     Depth depth = DEPTH_FAR
 ) -> void {
     const auto& res = nine_patch.texture;
     const auto& splits = nine_patch.splits;
-    if (pass != Render_Pass::UI) return;
     if (res.width == 0 || res.height == 0 || width == 0 || height == 0) return;
     if (splits.x1 > splits.x2 || splits.y1 > splits.y2 || splits.x2 > res.width || splits.y2 > res.height) return;
     if (x >= gfx::width() || y >= gfx::height()) return;
@@ -1132,12 +1113,10 @@ auto draw_nine_patch_text(
     u32 y,
     u32 margin,
     u8 z = 1,
-    Render_Pass pass = Render_Pass::UI,
     Depth depth = DEPTH_FAR
 ) -> void {
     const auto& res = nine_patch.texture;
     const auto& splits = nine_patch.splits;
-    if (pass != Render_Pass::UI) return;
     if (res.width == 0 || res.height == 0) return;
     if (splits.x1 > splits.x2 || splits.y1 > splits.y2 || splits.x2 > res.width || splits.y2 > res.height) return;
     if (x >= gfx::width() || y >= gfx::height()) return;
@@ -1172,12 +1151,10 @@ auto draw_nine_patch_static_text(
     u32 y,
     u32 margin,
     u8 z = 1,
-    Render_Pass pass = Render_Pass::UI,
     Depth depth = DEPTH_FAR
 ) -> void {
     const auto& res = nine_patch.texture;
     const auto& splits = nine_patch.splits;
-    if (pass != Render_Pass::UI) return;
     if (res.width == 0 || res.height == 0) return;
     if (splits.x1 > splits.x2 || splits.y1 > splits.y2 || splits.x2 > res.width || splits.y2 > res.height) return;
     if (x >= gfx::width() || y >= gfx::height()) return;
@@ -1201,57 +1178,6 @@ auto draw_nine_patch_static_text(
             },
         }
     );
-}
-
-template <bool z_sort = true>
-force_inline auto draw_ui_2d() -> void {
-    if (z_sort) {
-        std::stable_sort(current_frame().draw_commands_ui_2d.begin(), current_frame().draw_commands_ui_2d.end(),
-            [](const Draw_Command_2D& a, const Draw_Command_2D& b) {
-                return a.z < b.z;
-            }
-        );
-    }
-
-    for (const auto& command : current_frame().draw_commands_ui_2d) {
-        using enum Draw_Command_2D_Type;
-        switch (command.type) {
-            case DRAW_CHAR: {
-                const Char_Command& cmd = command.character;
-                inner_draw_char<false>(cmd.x, cmd.y, cmd.c, cmd.fg, cmd.bg);
-            } break;
-            case DRAW_TEXT: {
-                const Text_Command& cmd = command.text;
-                inner_draw_text(cmd.x, cmd.y, cmd.text, cmd.fg, cmd.bg);
-            } break;
-            case DRAW_CIRCLE: {
-                const Circle_Command& cmd = command.circle;
-                inner_draw_circle(cmd.x, cmd.y, cmd.r, cmd.color);
-            } break;
-            case DRAW_LINE: {
-                const Line_Command& cmd = command.line;
-                inner_draw_line(cmd.x1, cmd.y1, cmd.x2, cmd.y2, cmd.color);
-            } break;
-            case DRAW_RAW_LINE: {
-                const Line_Command& cmd = command.line;
-                inner_draw_raw_line(cmd.x1, cmd.y1, cmd.x2, cmd.y2, cmd.color, command.depth);
-            } break;
-            case DRAW_RECT: {
-                const Rect_Command& cmd = command.rectangle;
-                inner_draw_rect(cmd.x, cmd.y, cmd.w, cmd.h, cmd.color);
-            } break;
-            case DRAW_SPRITE: {
-                const Sprite_Command& cmd = command.sprite;
-                inner_draw_sprite(cmd.res, cmd.x, cmd.y, cmd.width, cmd.height);
-            } break;
-            case DRAW_TRIANGLE: {
-                const Triangle_Command& cmd = command.triangle;
-                inner_draw_triangle(cmd.v1, cmd.v2, cmd.v3, cmd.color);
-            } break;
-        }
-    }
-
-    current_frame().draw_commands_ui_2d.clear();
 }
 
 template <bool z_sort = true>
@@ -1287,9 +1213,9 @@ force_inline auto draw_ui() -> void {
     current_frame().draw_commands_ui.clear();
 }
 
-// -------------------------------------------------------------------
-//  3D -- camera, projection, meshes, texturing, raster and commands
-// -------------------------------------------------------------------
+//
+// 3D
+//
 
 static Static_Array<Vertex, 24> debug_cube_vertices{{
     {{ 1,  1,  1}, BLUE,    {1.f, 0.f}}, {{-1,  1,  1}, RED,     {0.f, 0.f}}, {{-1, -1,  1}, BLUE,    {0.f, 1.f}}, {{ 1, -1,  1}, RED,     {1.f, 1.f}},
@@ -1609,7 +1535,7 @@ auto inner_draw_mesh(Mesh_Instance instance, Camera3D camera) -> void {
 }
 
 auto draw_mesh(Mesh_Instance instance, Camera3D camera) -> void {
-    current_frame().draw_commands_world_3d.push_back(
+    current_frame().draw_commands_3d.push_back(
         Draw_Command_3D{
             .type = Draw_Command_3D_Type::DRAW_MESH,
             .camera = camera,
@@ -1714,7 +1640,7 @@ auto inner_draw_wireframe(Mesh_Instance instance, Camera3D camera) -> void {
 }
 
 auto draw_wireframe(Mesh_Instance instance, Camera3D camera) -> void {
-    current_frame().draw_commands_world_3d.push_back(
+    current_frame().draw_commands_3d.push_back(
         Draw_Command_3D{
             .type = Draw_Command_3D_Type::DRAW_WIREFRAME,
             .camera = camera,
@@ -1724,8 +1650,8 @@ auto draw_wireframe(Mesh_Instance instance, Camera3D camera) -> void {
 }
 
 
-force_inline auto draw_world_3D() -> void {
-    for (const auto& command : current_frame().draw_commands_world_3d) {
+force_inline auto draw_3D() -> void {
+    for (const auto& command : current_frame().draw_commands_3d) {
         using enum Draw_Command_3D_Type;
         switch (command.type) {
             case DRAW_MESH: {
@@ -1738,17 +1664,16 @@ force_inline auto draw_world_3D() -> void {
             } break;
         }
     }
-    current_frame().draw_commands_world_3d.clear();
+    current_frame().draw_commands_3d.clear();
 }
 
-// -------------------------------------------------------------------
-//  Frame -- top-level drawing orchestration
-// -------------------------------------------------------------------
+//
+// Frame drawing order
+//
 
 auto draw_frame() -> void {
-    draw_world_3D();
-    draw_world_2D();
-    draw_ui_2d();
+    draw_3D();
+    draw_2D();
     draw_ui();
     swap_buffers();
     current_frame().arena.reset();
