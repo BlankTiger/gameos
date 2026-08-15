@@ -42,7 +42,7 @@ tetris:
 - [ ] zoom on scroll
 - [ ] add scoring
 - [ ] add preview of next block
-- [ ] add UI
+- [x] add UI
 
 base layer:
 - [x] timers
