@@ -532,31 +532,33 @@ TEST(Debug_Allocator, allows_destruction_when_all_freed) {
     mem::Debug_Allocator  debug{&hosted};
 
     void* a = debug.alloc(16);
+    defer(debug.free(a, 16));
+
     void* b = debug.alloc(64);
+    defer(debug.free(b, 64));
+
     ASSERT_NE(a, nullptr);
     ASSERT_NE(b, nullptr);
-
-    debug.free(a, 16);
-    debug.free(b, 64);
 }
 
+// @TODO(blanktiger): Implement is_this_yours on allocators, currently this tests nothing.
 TEST(Allocator, convenience_alloc_and_free_use_current_allocator) {
     mem::Hosted_Allocator hosted{};
-    mem::Push_Allocator push{&hosted};
+    PUSH_ALLOCATOR(&hosted);
 
     void* pointer = mem::alloc(16, alignof(u64));
+    defer(mem::free(pointer, 16, alignof(u64)));
 
     ASSERT_NE(pointer, nullptr);
-    mem::free(pointer, 16, alignof(u64));
 }
 
 TEST(Allocator, convenience_alloc_and_free_accept_explicit_allocator) {
     mem::Hosted_Allocator hosted{};
 
     void* pointer = mem::alloc(16, alignof(u64), &hosted);
+    defer(mem::free(pointer, 16, alignof(u64), &hosted));
 
     ASSERT_NE(pointer, nullptr);
-    mem::free(pointer, 16, alignof(u64), &hosted);
 }
 
 TEST(Debug_Allocator, detects_leaked_allocations) {

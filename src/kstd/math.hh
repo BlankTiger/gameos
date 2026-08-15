@@ -192,6 +192,22 @@ force_inline constexpr auto log2(T value) -> s32 {
     return static_cast<s32>(std::bit_width(static_cast<Unsigned_T>(value))) - 1;
 }
 
+template <std::integral T>
+requires (!std::same_as<std::remove_cv_t<T>, bool>)
+[[nodiscard]] force_inline constexpr auto next_power_of_two(T value) -> T {
+    kstd_assert(value != 0);
+
+    T result = 1;
+    while (value > result) result += result;
+    return result;
+}
+
+template <std::integral T>
+requires (!std::same_as<std::remove_cv_t<T>, bool>)
+[[nodiscard]] force_inline constexpr auto is_power_of_two(T value) -> bool {
+    return (value & (value - 1)) == 0;
+}
+
 // Tangent, ported from the Cephes single-precision math library (tanf.c's
 // tancotf with cotflg=0, i.e. cotf support dropped, Stephen L. Moshier, public
 // domain, netlib.org/cephes). Range-reduces modulo pi/4 via Cody-Waite

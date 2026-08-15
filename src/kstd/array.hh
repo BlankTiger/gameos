@@ -97,6 +97,78 @@ struct Array_View<T, DYNAMIC_EXTENT> {
     ARRAY_ITERATOR()
 };
 
+namespace mem {
+
+struct Array_Allocation_Header {
+    void* base;
+    usize size;
+};
+
+template <typename T>
+force_inline auto alloc_array_size(usize count, usize alignment = alignof(T)) -> usize {
+    if (count == 0) return 0;
+    if (count > static_cast<usize>(-1) / sizeof(T)) return 0;
+
+    if (alignment < alignof(T)) alignment = alignof(T);
+    if ((alignment & (alignment - 1)) != 0) return 0;
+
+    const usize size = count * sizeof(T);
+    if (size > static_cast<usize>(-1) - sizeof(Array_Allocation_Header)) return 0;
+
+    const usize size_with_header = size + sizeof(Array_Allocation_Header);
+    if (size_with_header > static_cast<usize>(-1) - (alignment - 1)) return 0;
+
+    return size_with_header + alignment - 1;
+}
+
+template <typename T>
+force_inline auto alloc_array(
+    usize count,
+    usize alignment = alignof(T),
+    Allocator* allocator = nullptr
+) -> Array_View<T> {
+    if (alignment < alignof(T)) alignment = alignof(T);
+
+    const usize allocation_size = alloc_array_size<T>(count, alignment);
+    if (allocation_size == 0) return {0, nullptr};
+
+    void* base = alloc(allocation_size, alignof(std::max_align_t), allocator);
+    if (base == nullptr) return {0, nullptr};
+
+    auto* data = reinterpret_cast<T*>(align_up(
+        ptr_addr(base) + sizeof(Array_Allocation_Header),
+        static_cast<psize>(alignment)
+    ));
+    auto* header = reinterpret_cast<Array_Allocation_Header*>(
+        reinterpret_cast<u8*>(data) - sizeof(Array_Allocation_Header)
+    );
+    header->base = base;
+    header->size = allocation_size;
+    return {count, data};
+}
+
+template <typename T>
+force_inline auto alloc_array(usize count, Allocator* allocator) -> Array_View<T> {
+    return alloc_array<T>(count, alignof(T), allocator);
+}
+
+template <typename T>
+force_inline auto free_array(void* pointer, Allocator* allocator = nullptr) -> void {
+    if (pointer == nullptr) return;
+
+    auto* header = reinterpret_cast<Array_Allocation_Header*>(
+        static_cast<u8*>(pointer) - sizeof(Array_Allocation_Header)
+    );
+    free(header->base, header->size, alignof(std::max_align_t), allocator);
+}
+
+template <typename T>
+force_inline auto free_array(Array_View<T> array, Allocator* allocator = nullptr) -> void {
+    free_array<T>(array.data, allocator);
+}
+
+}  // namespace mem
+
 template <typename T, usize N>
 struct Static_Array {
     static constexpr auto size = N;
@@ -956,6 +1028,41 @@ TEST(Array, const_slice_returns_const_view) {
 
     EXPECT_EQ(part.size, 1);
     EXPECT_EQ(part[0], 2);
+}
+
+TEST(Allocator, alloc_array_returns_dynamic_array_view) {
+    auto array = mem::alloc_array<u64>(3);
+    defer(mem::free_array(array));
+
+    ASSERT_NE(array.data, nullptr);
+    ASSERT_EQ(array.size, 3u);
+    ASSERT_EQ(ptr_addr(array.data) % alignof(u64), 0u);
+}
+
+TEST(Allocator, alloc_array_accepts_custom_allocator_without_alignment) {
+    mem::Hosted_Allocator hosted{};
+
+    auto array = mem::alloc_array<u64>(3, &hosted);
+    defer(mem::free_array(array, &hosted));
+
+    ASSERT_NE(array.data, nullptr);
+    ASSERT_EQ(array.size, 3u);
+}
+
+TEST(Allocator, free_array_accepts_pointer) {
+    auto array = mem::alloc_array<u64>(3);
+    defer(mem::free_array<u64>(array.data));
+
+    ASSERT_NE(array.data, nullptr);
+    ASSERT_EQ(array.size, 3u);
+}
+
+TEST(Allocator, alloc_array_size_uses_type_alignment_by_default) {
+    ASSERT_EQ(
+        mem::alloc_array_size<u64>(3),
+        3u * sizeof(u64) + sizeof(mem::Array_Allocation_Header) + alignof(u64) - 1u
+    );
+    ASSERT_EQ(mem::alloc_array_size<u64>(3, 1), mem::alloc_array_size<u64>(3));
 }
 
 #endif
