@@ -30,8 +30,8 @@ struct Array_View {
         return data[index];
     }
 
-    auto elements()       -> T*       { return data; }
-    auto elements() const -> const T* { return data; }
+    constexpr auto elements()       -> T*       { return data; }
+    constexpr auto elements() const -> const T* { return data; }
     constexpr auto empty() const -> bool { return size == 0; }
 
     force_inline auto slice(usize index, usize count) -> Array_View<T> {
@@ -68,8 +68,8 @@ struct Array_View<T, DYNAMIC_EXTENT> {
         return data[index];
     }
 
-    auto elements()       -> T*       { return data; }
-    auto elements() const -> const T* { return data; }
+    constexpr auto elements()       -> T*       { return data; }
+    constexpr auto elements() const -> const T* { return data; }
     auto empty() const -> bool { return size == 0; }
 
     force_inline auto slice(usize index, usize count) -> Array_View<T> {

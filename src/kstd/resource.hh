@@ -15,10 +15,10 @@ struct Resource {
     const u32 height;
 
     constexpr auto view() const -> Resource_View {
-        return { Array_View<const u8>{data.size, data.elements()}, width, height };
+        return { Array_View<const u8>{data.size, data.data}, width, height };
     }
 
-    operator const Resource_View() const {
+    constexpr operator const Resource_View() const {
         return view();
     }
 };
