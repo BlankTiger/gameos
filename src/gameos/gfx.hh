@@ -287,6 +287,53 @@ struct Draw_Command_3D {
 };
 
 // -------------------------------------------------------------------
+//  Common -- UI command types
+// -------------------------------------------------------------------
+
+struct Nine_Patch_Splits {
+    u32 x1;
+    u32 x2;
+    u32 y1;
+    u32 y2;
+};
+
+struct Nine_Patch {
+    Resource_View texture;
+    Nine_Patch_Splits splits;
+};
+
+enum struct Draw_Command_UI_Type: u8 {
+    DRAW_NINE_PATCH,
+    DRAW_NINE_PATCH_TEXT,
+    DRAW_NINE_PATCH_STATIC_TEXT,
+};
+
+struct Nine_Patch_Command {
+    Nine_Patch nine_patch;
+    u32 x, y;
+    u32 width, height;
+};
+
+struct Nine_Patch_Text_Command {
+    Nine_Patch nine_patch;
+    string text;
+    u32 x, y;
+    u32 width, height;
+    u32 margin;
+};
+
+struct Draw_Command_UI {
+    Draw_Command_UI_Type type;
+    u8 z;
+    Depth depth = DEPTH_FAR;
+
+    union {
+        Nine_Patch_Command      nine_patch;
+        Nine_Patch_Text_Command nine_patch_text;
+    };
+};
+
+// -------------------------------------------------------------------
 //  Common -- Framebuffer, double buffering, set_pixel, clear
 // -------------------------------------------------------------------
 
@@ -308,7 +355,8 @@ namespace hidden {
         Static_Array<Pixel, GFX_PIXEL_COUNT> back_buffer;
         Static_Array<Depth, GFX_PIXEL_COUNT> depth_buffer;
         mem::Arena_Allocator<> arena{GFX_ARENA_SIZE};
-        Array<Draw_Command_2D> draw_commands_ui{256};
+        Array<Draw_Command_2D> draw_commands_ui_2d{256};
+        Array<Draw_Command_UI> draw_commands_ui{256};
         Array<Draw_Command_2D> draw_commands_world_2d{256};
         Array<Draw_Command_3D> draw_commands_world_3d{256};
     };
@@ -422,9 +470,9 @@ enum struct Render_Pass : u8 {
     UI,
 };
 
-// -------------------------------------------------------------------
-//  2D -- primitives, raster UI, command-queue execution
-// -------------------------------------------------------------------
+// --------------------------------------------------------------------------------
+//  2D -- draw_char, draw_text, draw_line, draw_circle, draw_sprite, draw_triangle
+// --------------------------------------------------------------------------------
 
 template <bool IMMEDIATE>
 auto inner_draw_char(u32 x, u32 y, char c, Color fg, Color bg, Depth depth = DEPTH_FAR) -> void {
@@ -452,7 +500,7 @@ auto inner_draw_char(u32 x, u32 y, char c, Color fg, Color bg, Depth depth = DEP
 
 auto draw_char(u32 x, u32 y, char c, Color fg, Color bg, u8 z = 1, Render_Pass pass = Render_Pass::UI, Depth depth = DEPTH_FAR) -> void {
     if (x >= width() || y >= height()) return;
-    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui;
+    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui_2d;
     queue.push_back(
         Draw_Command_2D{
             .type      = Draw_Command_2D_Type::DRAW_CHAR,
@@ -496,7 +544,7 @@ auto inner_draw_text(u32 x, u32 y, string text, Color fg = WHITE, Color bg = TRA
 auto draw_text(u32 x, u32 y, const string text, Color fg = WHITE, Color bg = TRANSPARENT, u8 z = 1, Render_Pass pass = Render_Pass::UI, Depth depth = DEPTH_FAR) -> void {
     auto& arena = current_frame().arena;
     auto copied = copy_string(text, &arena);
-    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui;
+    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui_2d;
     queue.push_back(
         Draw_Command_2D{
             .type  = Draw_Command_2D_Type::DRAW_TEXT,
@@ -508,7 +556,7 @@ auto draw_text(u32 x, u32 y, const string text, Color fg = WHITE, Color bg = TRA
 }
 
 auto draw_static_text(u32 x, u32 y, const string text, Color fg = WHITE, Color bg = TRANSPARENT, u8 z = 1, Render_Pass pass = Render_Pass::UI, Depth depth = DEPTH_FAR) -> void {
-    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui;
+    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui_2d;
     queue.push_back(
         Draw_Command_2D{
             .type  = Draw_Command_2D_Type::DRAW_TEXT,
@@ -585,7 +633,7 @@ auto inner_draw_circle(u32 x, u32 y, u32 r, Color color, Depth depth = DEPTH_FAR
 
 auto draw_circle(u32 x, u32 y, u32 r, Color color, u8 z = 1, Render_Pass pass = Render_Pass::UI, Depth depth = DEPTH_FAR) -> void {
     if (x >= width() || y >= height()) return;
-    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui;
+    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui_2d;
     queue.push_back(
         Draw_Command_2D{
             .type   = Draw_Command_2D_Type::DRAW_CIRCLE,
@@ -687,7 +735,7 @@ auto draw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color, u8 z = 1, Render_Pas
     x2 = std::min(x2, max_x);
     y2 = std::min(y2, max_y);
 
-    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui;
+    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui_2d;
     queue.push_back(
         Draw_Command_2D{
             .type  = Draw_Command_2D_Type::DRAW_LINE,
@@ -742,7 +790,7 @@ auto draw_raw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color, u8 z = 1, Render
     x2 = std::min(x2, max_x);
     y2 = std::min(y2, max_y);
 
-    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui;
+    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui_2d;
     queue.push_back(
         Draw_Command_2D{
             .type  = Draw_Command_2D_Type::DRAW_RAW_LINE,
@@ -765,7 +813,7 @@ auto inner_draw_rect(u32 x, u32 y, u32 w, u32 h, Color color, Depth depth = DEPT
 
 auto draw_rect(u32 x, u32 y, u32 w, u32 h, Color color, u8 z = 1, Render_Pass pass = Render_Pass::UI, Depth depth = DEPTH_FAR) -> void {
     if (x >= width() || y >= height()) return;
-    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui;
+    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui_2d;
     queue.push_back(
         Draw_Command_2D{
             .type      = Draw_Command_2D_Type::DRAW_RECT,
@@ -792,7 +840,7 @@ auto inner_draw_sprite(const Resource_View res, u32 x, u32 y, u32 width, u32 hei
 auto draw_sprite(const Resource_View res, u32 x, u32 y, u8 z = 1, Render_Pass pass = Render_Pass::UI, Depth depth = DEPTH_FAR) -> void {
     if (res.width == 0 || res.height == 0) return;
     if (x >= width() || y >= height()) return;
-    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui;
+    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui_2d;
     queue.push_back(
         Draw_Command_2D{
             .type   = Draw_Command_2D_Type::DRAW_SPRITE,
@@ -816,7 +864,7 @@ auto draw_sprite_scaled(
     if (res.width == 0 || res.height == 0 || scaled_width == 0 || scaled_height == 0) return;
     if (x >= width() || y >= height()) return;
 
-    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui;
+    auto& queue = (pass == Render_Pass::WORLD_2D) ? current_frame().draw_commands_world_2d : current_frame().draw_commands_ui_2d;
     queue.push_back(
         Draw_Command_2D{
             .type   = Draw_Command_2D_Type::DRAW_SPRITE,
@@ -908,57 +956,6 @@ auto draw_triangle(Vector4<f32> v1, Vector4<f32> v2, Vector4<f32> v3, Color colo
     );
 }
 
-template <bool z_sort = true>
-force_inline auto draw_ui() -> void {
-    if (z_sort) {
-        std::stable_sort(current_frame().draw_commands_ui.begin(), current_frame().draw_commands_ui.end(),
-            [](const Draw_Command_2D& a, const Draw_Command_2D& b) {
-                return a.z < b.z;
-            }
-        );
-    }
-
-    for (const auto& command : current_frame().draw_commands_ui) {
-        using enum Draw_Command_2D_Type;
-        switch (command.type) {
-            case DRAW_CHAR: {
-                const Char_Command& cmd = command.character;
-                inner_draw_char<false>(cmd.x, cmd.y, cmd.c, cmd.fg, cmd.bg);
-            } break;
-            case DRAW_TEXT: {
-                const Text_Command& cmd = command.text;
-                inner_draw_text(cmd.x, cmd.y, cmd.text, cmd.fg, cmd.bg);
-            } break;
-            case DRAW_CIRCLE: {
-                const Circle_Command& cmd = command.circle;
-                inner_draw_circle(cmd.x, cmd.y, cmd.r, cmd.color);
-            } break;
-            case DRAW_LINE: {
-                const Line_Command& cmd = command.line;
-                inner_draw_line(cmd.x1, cmd.y1, cmd.x2, cmd.y2, cmd.color);
-            } break;
-            case DRAW_RAW_LINE: {
-                const Line_Command& cmd = command.line;
-                inner_draw_raw_line(cmd.x1, cmd.y1, cmd.x2, cmd.y2, cmd.color, command.depth);
-            } break;
-            case DRAW_RECT: {
-                const Rect_Command& cmd = command.rectangle;
-                inner_draw_rect(cmd.x, cmd.y, cmd.w, cmd.h, cmd.color);
-            } break;
-            case DRAW_SPRITE: {
-                const Sprite_Command& cmd = command.sprite;
-                inner_draw_sprite(cmd.res, cmd.x, cmd.y, cmd.width, cmd.height);
-            } break;
-            case DRAW_TRIANGLE: {
-                const Triangle_Command& cmd = command.triangle;
-                inner_draw_triangle(cmd.v1, cmd.v2, cmd.v3, cmd.color);
-            } break;
-        }
-    }
-
-    current_frame().draw_commands_ui.clear();
-}
-
 force_inline auto draw_world_2D() -> void {
     for (const auto& command : current_frame().draw_commands_world_2d) {
         using enum Draw_Command_2D_Type;
@@ -999,6 +996,295 @@ force_inline auto draw_world_2D() -> void {
     }
 
     current_frame().draw_commands_world_2d.clear();
+}
+
+// --------------------------------------------------------------------------------
+//  UI -- draw_nine_patch, draw_nine_patch_text
+// --------------------------------------------------------------------------------
+
+auto map_nine_patch_coordinate(
+    u32 coordinate,
+    u32 source_length,
+    u32 source_split1,
+    u32 source_split2,
+    u32 destination_length
+) -> u32 {
+    const u32 source_left_margin    = source_split1;
+    const u32 source_right_margin   = source_length - source_split2;
+    const u64 source_margins_length = static_cast<u64>(source_left_margin) + source_right_margin;
+
+    u32 destination_left_margin = source_left_margin;
+    u32 destination_right_margin = source_right_margin;
+
+    // Compress fixed margins proportionally when the destination is too small.
+    if (source_margins_length > destination_length) {
+        destination_left_margin = static_cast<u32>(static_cast<u64>(source_left_margin) * destination_length / source_margins_length);
+        destination_right_margin = destination_length - destination_left_margin;
+    }
+
+    const u32 destination_middle_start = destination_left_margin;
+    const u32 destination_middle_end   = destination_length - destination_right_margin;
+    // Map through the left, middle, or right source band.
+    if (coordinate < destination_middle_start) {
+        if (destination_left_margin == 0) return 0;
+        return coordinate * source_left_margin / destination_left_margin;
+    }
+
+    if (coordinate < destination_middle_end) {
+        const u32 destination_middle_length = destination_middle_end - destination_middle_start;
+        const u32 source_middle_length = source_split2 - source_split1;
+        if (destination_middle_length == 0 || source_middle_length == 0) return source_split1;
+        return source_split1 + (coordinate - destination_middle_start) * source_middle_length / destination_middle_length;
+    }
+
+    if (destination_right_margin == 0) return source_split2;
+    return source_split2 + (coordinate - destination_middle_end) * source_right_margin / destination_right_margin;
+}
+
+auto inner_draw_nine_patch(const Nine_Patch& nine_patch, u32 x, u32 y, u32 width, u32 height, Depth depth = DEPTH_FAR) -> void {
+    const Resource_View& res = nine_patch.texture;
+    const Nine_Patch_Splits& splits = nine_patch.splits;
+    if (res.width == 0 || res.height == 0 || width == 0 || height == 0) return;
+    if (splits.x1 > splits.x2 || splits.y1 > splits.y2 || splits.x2 > res.width || splits.y2 > res.height) return;
+    if (x >= gfx::width() || y >= gfx::height()) return;
+
+    const Color* colors = reinterpret_cast<const Color*>(res.data.data);
+    const u32 clipped_width = std::min(width, gfx::width() - x);
+    const u32 clipped_height = std::min(height, gfx::height() - y);
+    for (u32 py = 0; py < clipped_height; ++py) {
+        const u32 source_y = map_nine_patch_coordinate(py, res.height, splits.y1, splits.y2, height);
+        for (u32 px = 0; px < clipped_width; ++px) {
+            const u32 source_x = map_nine_patch_coordinate(px, res.width, splits.x1, splits.x2, width);
+            set_pixel(x + px, y + py, colors[source_y * res.width + source_x], depth);
+        }
+    }
+}
+
+auto draw_nine_patch(
+    Nine_Patch nine_patch,
+    u32 x,
+    u32 y,
+    u32 width,
+    u32 height,
+    u8 z = 1,
+    Render_Pass pass = Render_Pass::UI,
+    Depth depth = DEPTH_FAR
+) -> void {
+    const auto& res = nine_patch.texture;
+    const auto& splits = nine_patch.splits;
+    if (pass != Render_Pass::UI) return;
+    if (res.width == 0 || res.height == 0 || width == 0 || height == 0) return;
+    if (splits.x1 > splits.x2 || splits.y1 > splits.y2 || splits.x2 > res.width || splits.y2 > res.height) return;
+    if (x >= gfx::width() || y >= gfx::height()) return;
+
+    current_frame().draw_commands_ui.push_back(
+        Draw_Command_UI{
+            .type = Draw_Command_UI_Type::DRAW_NINE_PATCH,
+            .z = z,
+            .depth = depth,
+            .nine_patch = Nine_Patch_Command{nine_patch, x, y, width, height},
+        }
+    );
+}
+
+struct Text_Bounds {
+    u32 width;
+    u32 height;
+};
+
+auto measure_text(const string& text) -> Text_Bounds {
+    u32 line_width = 0;
+    u32 max_line_width = 0;
+    u32 line_count = 1;
+    for (const char c : text) {
+        if (c == '\n') {
+            max_line_width = std::max(max_line_width, line_width);
+            line_width = 0;
+            ++line_count;
+            continue;
+        }
+        ++line_width;
+    }
+    max_line_width = std::max(max_line_width, line_width);
+    return {
+        max_line_width * font::GLYPH_WIDTH,
+        line_count * font::GLYPH_HEIGHT,
+    };
+}
+
+auto measure_nine_patch_text(const Nine_Patch& nine_patch, const string& text, u32 margin) -> Text_Bounds {
+    const Text_Bounds text_bounds = measure_text(text);
+    const Nine_Patch_Splits& splits = nine_patch.splits;
+    const u32 left_margin = splits.x1;
+    const u32 right_margin = nine_patch.texture.width - splits.x2;
+    const u32 top_margin = splits.y1;
+    const u32 bottom_margin = nine_patch.texture.height - splits.y2;
+    return {
+        text_bounds.width + left_margin + right_margin + margin * 2,
+        text_bounds.height + top_margin + bottom_margin + margin * 2,
+    };
+}
+
+auto draw_nine_patch_text(
+    Nine_Patch nine_patch,
+    const string& text,
+    u32 x,
+    u32 y,
+    u32 margin,
+    u8 z = 1,
+    Render_Pass pass = Render_Pass::UI,
+    Depth depth = DEPTH_FAR
+) -> void {
+    const auto& res = nine_patch.texture;
+    const auto& splits = nine_patch.splits;
+    if (pass != Render_Pass::UI) return;
+    if (res.width == 0 || res.height == 0) return;
+    if (splits.x1 > splits.x2 || splits.y1 > splits.y2 || splits.x2 > res.width || splits.y2 > res.height) return;
+    if (x >= gfx::width() || y >= gfx::height()) return;
+
+    const Text_Bounds box_bounds = measure_nine_patch_text(nine_patch, text, margin);
+    const u32 box_width = box_bounds.width;
+    const u32 box_height = box_bounds.height;
+    auto& arena = current_frame().arena;
+    const auto copied_text = copy_string(text, &arena);
+    current_frame().draw_commands_ui.push_back(
+        Draw_Command_UI{
+            .type = Draw_Command_UI_Type::DRAW_NINE_PATCH_TEXT,
+            .z = z,
+            .depth = depth,
+            .nine_patch_text = Nine_Patch_Text_Command{
+                nine_patch,
+                copied_text,
+                x,
+                y,
+                box_width,
+                box_height,
+                margin,
+            },
+        }
+    );
+}
+
+auto draw_nine_patch_static_text(
+    Nine_Patch nine_patch,
+    const string text,
+    u32 x,
+    u32 y,
+    u32 margin,
+    u8 z = 1,
+    Render_Pass pass = Render_Pass::UI,
+    Depth depth = DEPTH_FAR
+) -> void {
+    const auto& res = nine_patch.texture;
+    const auto& splits = nine_patch.splits;
+    if (pass != Render_Pass::UI) return;
+    if (res.width == 0 || res.height == 0) return;
+    if (splits.x1 > splits.x2 || splits.y1 > splits.y2 || splits.x2 > res.width || splits.y2 > res.height) return;
+    if (x >= gfx::width() || y >= gfx::height()) return;
+
+    const Text_Bounds box_bounds = measure_nine_patch_text(nine_patch, text, margin);
+    const u32 box_width = box_bounds.width;
+    const u32 box_height = box_bounds.height;
+    current_frame().draw_commands_ui.push_back(
+        Draw_Command_UI{
+            .type = Draw_Command_UI_Type::DRAW_NINE_PATCH_STATIC_TEXT,
+            .z = z,
+            .depth = depth,
+            .nine_patch_text = Nine_Patch_Text_Command{
+                nine_patch,
+                text,
+                x,
+                y,
+                box_width,
+                box_height,
+                margin,
+            },
+        }
+    );
+}
+
+template <bool z_sort = true>
+force_inline auto draw_ui_2d() -> void {
+    if (z_sort) {
+        std::stable_sort(current_frame().draw_commands_ui_2d.begin(), current_frame().draw_commands_ui_2d.end(),
+            [](const Draw_Command_2D& a, const Draw_Command_2D& b) {
+                return a.z < b.z;
+            }
+        );
+    }
+
+    for (const auto& command : current_frame().draw_commands_ui_2d) {
+        using enum Draw_Command_2D_Type;
+        switch (command.type) {
+            case DRAW_CHAR: {
+                const Char_Command& cmd = command.character;
+                inner_draw_char<false>(cmd.x, cmd.y, cmd.c, cmd.fg, cmd.bg);
+            } break;
+            case DRAW_TEXT: {
+                const Text_Command& cmd = command.text;
+                inner_draw_text(cmd.x, cmd.y, cmd.text, cmd.fg, cmd.bg);
+            } break;
+            case DRAW_CIRCLE: {
+                const Circle_Command& cmd = command.circle;
+                inner_draw_circle(cmd.x, cmd.y, cmd.r, cmd.color);
+            } break;
+            case DRAW_LINE: {
+                const Line_Command& cmd = command.line;
+                inner_draw_line(cmd.x1, cmd.y1, cmd.x2, cmd.y2, cmd.color);
+            } break;
+            case DRAW_RAW_LINE: {
+                const Line_Command& cmd = command.line;
+                inner_draw_raw_line(cmd.x1, cmd.y1, cmd.x2, cmd.y2, cmd.color, command.depth);
+            } break;
+            case DRAW_RECT: {
+                const Rect_Command& cmd = command.rectangle;
+                inner_draw_rect(cmd.x, cmd.y, cmd.w, cmd.h, cmd.color);
+            } break;
+            case DRAW_SPRITE: {
+                const Sprite_Command& cmd = command.sprite;
+                inner_draw_sprite(cmd.res, cmd.x, cmd.y, cmd.width, cmd.height);
+            } break;
+            case DRAW_TRIANGLE: {
+                const Triangle_Command& cmd = command.triangle;
+                inner_draw_triangle(cmd.v1, cmd.v2, cmd.v3, cmd.color);
+            } break;
+        }
+    }
+
+    current_frame().draw_commands_ui_2d.clear();
+}
+
+template <bool z_sort = true>
+force_inline auto draw_ui() -> void {
+    if (z_sort) {
+        std::stable_sort(current_frame().draw_commands_ui.begin(), current_frame().draw_commands_ui.end(),
+            [](const Draw_Command_UI& a, const Draw_Command_UI& b) {
+                return a.z < b.z;
+            }
+        );
+    }
+
+    for (const auto& command : current_frame().draw_commands_ui) {
+        using enum Draw_Command_UI_Type;
+        switch (command.type) {
+            case DRAW_NINE_PATCH: {
+                const Nine_Patch_Command& cmd = command.nine_patch;
+                inner_draw_nine_patch(cmd.nine_patch, cmd.x, cmd.y, cmd.width, cmd.height, command.depth);
+            } break;
+            case DRAW_NINE_PATCH_TEXT: {
+                const Nine_Patch_Text_Command& cmd = command.nine_patch_text;
+                inner_draw_nine_patch(cmd.nine_patch, cmd.x, cmd.y, cmd.width, cmd.height, command.depth);
+                inner_draw_text(cmd.x + cmd.nine_patch.splits.x1 + cmd.margin, cmd.y + cmd.nine_patch.splits.y1 + cmd.margin, cmd.text);
+            } break;
+            case DRAW_NINE_PATCH_STATIC_TEXT: {
+                const Nine_Patch_Text_Command& cmd = command.nine_patch_text;
+                inner_draw_nine_patch(cmd.nine_patch, cmd.x, cmd.y, cmd.width, cmd.height, command.depth);
+                inner_draw_text(cmd.x + cmd.nine_patch.splits.x1 + cmd.margin, cmd.y + cmd.nine_patch.splits.y1 + cmd.margin, cmd.text);
+            } break;
+        }
+    }
+
+    current_frame().draw_commands_ui.clear();
 }
 
 // -------------------------------------------------------------------
@@ -1462,6 +1748,7 @@ force_inline auto draw_world_3D() -> void {
 auto draw_frame() -> void {
     draw_world_3D();
     draw_world_2D();
+    draw_ui_2d();
     draw_ui();
     swap_buffers();
     current_frame().arena.reset();

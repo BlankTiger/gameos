@@ -67,6 +67,11 @@ enum struct Block_Type {
     FALLING,
 };
 
+constexpr gfx::Nine_Patch TETRIS_NINE_PATCH_UI{
+    @embed("tetris_ui.png"),
+    {16, 48, 16, 48}
+};
+
 constexpr u32 TETRIS_BOARD_CELL_ROWS = 10;
 constexpr u32 TETRIS_BOARD_CELL_COLS = 10;
 constexpr u32 TETRIS_BOARD_CELL_COUNT = TETRIS_BOARD_CELL_ROWS * TETRIS_BOARD_CELL_COLS;
@@ -316,6 +321,8 @@ auto tetris_block_occludes_falling_or_shadow(
     Block_Coords coords,
     u32 shadow_offset
 ) -> bool {
+    if (game.game_over) return false;
+
     const auto projected_coords = tetris_projected_block(game, camera, coords);
     for (const auto& block : game.falling_body.blocks) {
         const auto projected_falling_block = tetris_projected_block(game, camera, block);
@@ -455,19 +462,26 @@ auto draw_tetris_block(
 auto draw(const Game& game, gfx::Camera3D& camera) -> void {
     gfx::clear(TETRIS_BACKGROUND_COLOR);
 
-    // Draw FPS and controls help
+    // Draw FPS and controls help in a nice UI box
     {
         gfx::draw_text(8, 8, tprint("FPS: %", game.fps));
-        gfx::draw_static_text(
-            8,
-            32,
-            "WASD - rotate block\nArrow keys - move block\nSpace - drop\nShift - speed up falling\n+ - zoom in\n- - zoom out\n0 - reset zoom\nESC - quit"
+        gfx::draw_nine_patch_static_text(
+            TETRIS_NINE_PATCH_UI,
+            "WASD - rotate block\nArrow keys - move block\nSpace - drop\nShift - speed up falling\n+ - zoom in\n- - zoom out\n0 - reset zoom\nESC - quit",
+            8, 64,
+            4
         );
         if (game.game_over) {
             constexpr u32 GAME_OVER_TEXT_WIDTH = 12 * font::GLYPH_WIDTH;
-            const u32 game_over_x = (gfx::width() - GAME_OVER_TEXT_WIDTH) / 2;
-            const u32 game_over_y = (gfx::height() - font::GLYPH_HEIGHT) / 2;
-            gfx::draw_text(game_over_x, game_over_y, "GAME OVER :(", gfx::WHITE, gfx::TRANSPARENT, 2);
+            const u32 game_over_x = (gfx::width() - GAME_OVER_TEXT_WIDTH - 4 - 32) / 2;
+            const u32 game_over_y = (gfx::height() - font::GLYPH_HEIGHT - 4 - 32) / 2;
+            gfx::draw_nine_patch_static_text(
+                TETRIS_NINE_PATCH_UI,
+                "GAME OVER :(",
+                game_over_x, game_over_y,
+                4,
+                10 // z
+            );
         }
     }
 
@@ -492,42 +506,44 @@ auto draw(const Game& game, gfx::Camera3D& camera) -> void {
         }
     }
 
-    // Draw falling blocks
-    {
-        for (const auto& [row, col, layer] : game.falling_body.blocks) {
-            const auto body_index = game.body_indices.at(row, col, layer);
-            draw_tetris_block(game, camera, row, col, layer, TETRIS_BODY_COLORS[body_index]);
+    if (!game.game_over) {
+        // Draw falling blocks
+        {
+            for (const auto& [row, col, layer] : game.falling_body.blocks) {
+                const auto body_index = game.body_indices.at(row, col, layer);
+                draw_tetris_block(game, camera, row, col, layer, TETRIS_BODY_COLORS[body_index]);
+            }
         }
-    }
 
-    // Draw blocks that occlude current falling blocks or it's shadow
-    {
-        for (u32 row = 0; row < game.grid.rows; ++row) {
-            for (u32 col = 0; col < game.grid.cols; ++col) {
-                for (u32 layer = 0; layer < game.grid.layers; ++layer) {
-                    if (game.grid.at(row, col, layer) != Block_Type::SOLID) continue;
-                    if (!tetris_block_occludes_falling_or_shadow(game, camera, {row, col, layer}, shadow_offset)) continue;
-                    draw_tetris_block(game, camera, row, col, layer, gfx::WHITE.with_alpha(TETRIS_OCCLUDER_ALPHA));
+        // Draw blocks that occlude current falling blocks or it's shadow
+        {
+            for (u32 row = 0; row < game.grid.rows; ++row) {
+                for (u32 col = 0; col < game.grid.cols; ++col) {
+                    for (u32 layer = 0; layer < game.grid.layers; ++layer) {
+                        if (game.grid.at(row, col, layer) != Block_Type::SOLID) continue;
+                        if (!tetris_block_occludes_falling_or_shadow(game, camera, {row, col, layer}, shadow_offset)) continue;
+                        draw_tetris_block(game, camera, row, col, layer, gfx::WHITE.with_alpha(TETRIS_OCCLUDER_ALPHA));
+                    }
                 }
             }
         }
-    }
 
-    // Draw shadow of falling blocks
-    {
-        update_tetris_shadow_mesh(game.falling_body);
-        const auto shadow_anchor = game.falling_body.blocks[0];
-        gfx::draw_mesh(
-            gfx::Mesh_Instance{
-                tetris_shadow_mesh,
-                {},
-                tetris_position(game, shadow_anchor.x, shadow_anchor.y, shadow_anchor.z + shadow_offset),
-                {},
-                {TETRIS_BLOCK_SCALE, TETRIS_BLOCK_SCALE, TETRIS_BLOCK_SCALE},
-                TETRIS_SHADOW_COLOR,
-            },
-            camera
-        );
+        // Draw shadow of falling blocks
+        {
+            update_tetris_shadow_mesh(game.falling_body);
+            const auto shadow_anchor = game.falling_body.blocks[0];
+            gfx::draw_mesh(
+                gfx::Mesh_Instance{
+                    tetris_shadow_mesh,
+                    {},
+                    tetris_position(game, shadow_anchor.x, shadow_anchor.y, shadow_anchor.z + shadow_offset),
+                    {},
+                    {TETRIS_BLOCK_SCALE, TETRIS_BLOCK_SCALE, TETRIS_BLOCK_SCALE},
+                    TETRIS_SHADOW_COLOR,
+                },
+                camera
+            );
+        }
     }
 
     gfx::draw_frame();
