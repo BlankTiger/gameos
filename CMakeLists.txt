@@ -115,7 +115,7 @@ foreach(source ${all_cxx_sources})
     add_custom_command(
         OUTPUT ${stamp}
         COMMAND ${CMAKE_CXX_COMPILER}
-                -std=c++23 -ffreestanding -fno-exceptions -fno-rtti -mno-red-zone
+                -std=c++23 -ffreestanding -fno-exceptions -fno-rtti -mno-red-zone -gdwarf-5
                 -Wall -Wextra
                 -I ${GENERATED_DIR}/src -I ${GENERATED_DIR}
                 -fsyntax-only ${source}
@@ -131,6 +131,7 @@ target_include_directories(gameos PRIVATE ${GENERATED_DIR} ${GENERATED_DIR}/src)
 
 target_compile_options(gameos PRIVATE
     $<$<COMPILE_LANGUAGE:C,CXX>:-ffreestanding>
+    $<$<COMPILE_LANGUAGE:C,CXX,ASM>:-gdwarf-5>
     $<$<COMPILE_LANGUAGE:C,CXX>:-Wall>
     $<$<COMPILE_LANGUAGE:C,CXX>:-Wextra>
     $<$<COMPILE_LANGUAGE:C,CXX>:-mno-red-zone>
