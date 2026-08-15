@@ -25,7 +25,7 @@ ExternalProject_Add(preprocessor_build
     BINARY_DIR ${CMAKE_BINARY_DIR}/tools
     CMAKE_ARGS
         -DCMAKE_TOOLCHAIN_FILE=${CMAKE_SOURCE_DIR}/cmake/Toolchain-gcc.cmake
-        -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+        -DCMAKE_BUILD_TYPE=Debug
     BUILD_COMMAND ${CMAKE_COMMAND} --build .
     BUILD_ALWAYS  TRUE
     INSTALL_COMMAND ""
@@ -131,11 +131,11 @@ target_include_directories(gameos PRIVATE ${GENERATED_DIR} ${GENERATED_DIR}/src)
 
 target_compile_options(gameos PRIVATE
     $<$<COMPILE_LANGUAGE:C,CXX>:-ffreestanding>
-    $<$<COMPILE_LANGUAGE:C,CXX>:-O2>
     $<$<COMPILE_LANGUAGE:C,CXX>:-Wall>
     $<$<COMPILE_LANGUAGE:C,CXX>:-Wextra>
     $<$<COMPILE_LANGUAGE:C,CXX>:-mno-red-zone>
     $<$<COMPILE_LANGUAGE:C,CXX>:-fno-omit-frame-pointer>
+    $<$<CONFIG:Release>:-g>
     $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions>
     $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
     $<$<COMPILE_LANGUAGE:CXX>:-ftls-model=local-exec>
