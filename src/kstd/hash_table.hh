@@ -167,11 +167,11 @@ struct Hash_Table {
         if ((slots_filled + item_count) * 100 < entries.size * LOAD_FACTOR_PERCENT) return;
 
         //
-        // @NOTE: We check slots_filled above, because check if we can insert
-        // the new entries in the currently allocated space, including space
-        // occupied by tombstones. But when calculating new_slot_count, we use
-        // count instead of slots_filled, because resizing the table will
-        // remove the tombstones.
+        // @NOTE: We check slots_filled above, because there is a possibility
+        // that we can insert the new entries in the currently allocated space,
+        // including space occupied by tombstones. But when calculating
+        // new_slot_count, we use count instead of slots_filled, because
+        // resizing the table will remove the tombstones.
         //
         auto new_slot_count = ((count + item_count) * 100) / LOAD_FACTOR_PERCENT;
         new_slot_count = math::next_power_of_two(new_slot_count);
@@ -261,8 +261,9 @@ TEST(Hash_Table, set_replaces_existing_value) {
 
     auto* value = table.find(6);
     ASSERT_TRUE(value != nullptr);
-    ASSERT_EQ(*value, 8);
-    ASSERT_EQ(table.count, 1);
+    ASSERT_EQ(*value,             8);
+    ASSERT_EQ(table.count,        1);
+    ASSERT_EQ(table.slots_filled, 1);
 }
 
 TEST(Hash_Table, expansion_preserves_hash_two) {
@@ -283,18 +284,27 @@ TEST(Hash_Table, contains) {
 
     table.add(6, 7);
     ASSERT_TRUE(table.contains(6));
+    ASSERT_EQ(table.count,        1);
+    ASSERT_EQ(table.slots_filled, 1);
 }
 
 TEST(Hash_Table, remove) {
     Hash_Table<u32, u32> table;
+
     table.add(6, 7);
     table.add(7, 7);
+
+    ASSERT_EQ(table.count,        2);
+    ASSERT_EQ(table.slots_filled, 2);
+
     auto [success, value] = table.remove(6);
 
     ASSERT_TRUE(success);
     ASSERT_EQ(value, 7);
     ASSERT_FALSE(table.contains(6));
     ASSERT_TRUE(table.contains(7));
+    ASSERT_EQ(table.count,        1);
+    ASSERT_EQ(table.slots_filled, 2);
 }
 
 TEST(Hash_Table, indeed_67_maps_to_67) {

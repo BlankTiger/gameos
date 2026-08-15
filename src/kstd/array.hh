@@ -153,9 +153,8 @@ force_inline auto alloc_array(usize count, Allocator* allocator) -> Array_View<T
 }
 
 template <typename T>
-force_inline auto free_array(void* pointer, usize count, Allocator* allocator = nullptr) -> void {
+force_inline auto free_array(void* pointer, Allocator* allocator = nullptr) -> void {
     if (pointer == nullptr) return;
-    (void)count;
 
     auto* header = reinterpret_cast<Array_Allocation_Header*>(
         static_cast<u8*>(pointer) - sizeof(Array_Allocation_Header)
@@ -165,7 +164,7 @@ force_inline auto free_array(void* pointer, usize count, Allocator* allocator = 
 
 template <typename T>
 force_inline auto free_array(Array_View<T> array, Allocator* allocator = nullptr) -> void {
-    free_array<T>(array.data, array.size, allocator);
+    free_array<T>(array.data, allocator);
 }
 
 }  // namespace mem
@@ -1050,9 +1049,9 @@ TEST(Allocator, alloc_array_accepts_custom_allocator_without_alignment) {
     ASSERT_EQ(array.size, 3u);
 }
 
-TEST(Allocator, free_array_accepts_pointer_and_count) {
+TEST(Allocator, free_array_accepts_pointer) {
     auto array = mem::alloc_array<u64>(3);
-    defer(mem::free_array<u64>(array.data, array.size));
+    defer(mem::free_array<u64>(array.data));
 
     ASSERT_NE(array.data, nullptr);
     ASSERT_EQ(array.size, 3u);
