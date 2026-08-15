@@ -17,6 +17,7 @@ graphics:
 - [x] draw tetris
 - [ ] fix ugly mesh_instance constructors
 - [ ] separate core for graphics
+- [ ] fix reinterpret_cast<Color*>
 
 fonts:
 - [ ] embedding ttfs
@@ -41,7 +42,7 @@ tetris:
 - [x] make blocks transparent if they occlude falling block
 - [ ] zoom on scroll
 - [ ] add scoring
-- [ ] add preview of next block
+- [x] add preview of next block
 - [x] add UI
 
 base layer:
