@@ -6,6 +6,7 @@
 #include "gameos/application_processor.hh"
 #include "gameos/cpu_local.hh"
 #include "gameos/cpuid.hh"
+#include "gameos/dwarf.hh"
 #include "gameos/gfx.hh"
 #include "gameos/global_constructor_handling.hh"
 #include "gameos/global_descriptors.hh"
@@ -52,6 +53,8 @@ inline auto kernel_startup(u32 magic, const boot::Multiboot2_Info* mbi) -> void 
     // constructor that calls operator new has a valid global allocator (must
     // be called after mem::initialize).
     run_global_constructors();
+
+    dwarf::build_debug_info();
 
     serial::println("Parsing ACPI MADT");
     auto madt_ok = acpi::parse_madt(mbi);
