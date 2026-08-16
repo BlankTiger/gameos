@@ -33,6 +33,26 @@ SECTIONS
 	.rodata BLOCK(4K) : ALIGN(4K)
 	{
 		*(.rodata)
+
+		__debug_info_start = .;
+		KEEP(*(.debug_info))
+		__debug_info_end = .;
+
+		__debug_abbrev_start = .;
+		KEEP(*(.debug_abbrev))
+		__debug_abbrev_end = .;
+
+		__debug_str_start = .;
+		KEEP(*(.debug_str))
+		__debug_str_end = .;
+
+		__debug_line_start = .;
+		KEEP(*(.debug_line))
+		__debug_line_end = .;
+
+		__debug_line_str_start = .;
+		KEEP(*(.debug_line_str))
+		__debug_line_str_end = .;
 	}
 
 	.init_array BLOCK(4K) : ALIGN(4K)
