@@ -115,7 +115,9 @@ foreach(source ${all_cxx_sources})
     add_custom_command(
         OUTPUT ${stamp}
         COMMAND ${CMAKE_CXX_COMPILER}
-                -std=c++23 -ffreestanding -fno-exceptions -fno-rtti -mno-red-zone -gdwarf-5
+                -std=c++23 -ffreestanding
+                -fno-exceptions -fno-rtti
+                -mno-red-zone -gdwarf-5
                 -Wall -Wextra
                 -I ${GENERATED_DIR}/src -I ${GENERATED_DIR}
                 -fsyntax-only ${source}
