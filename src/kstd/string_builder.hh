@@ -234,7 +234,7 @@ auto sprint(First&& first, Rest&&... rest) -> string {
 // Format into mem::temporary_allocator, fire-and-forget until temporary_allocator.reset().
 template <typename... Args>
 auto tprint(Args&&... args) -> string {
-    return sprint(&mem::temporary_allocator, std::forward<Args>(args)...);
+    return sprint(mem::resolve_temporary_allocator(), std::forward<Args>(args)...);
 }
 
 // C string print: formats into allocator heap (null -> current global), null-terminated.
@@ -259,7 +259,7 @@ auto csprint(First&& first, Rest&&... rest) -> const char* {
 // Valid until temporary_allocator.reset().
 template <typename... Args>
 auto ctprint(Args&&... args) -> const char* {
-    return csprint(&mem::temporary_allocator, std::forward<Args>(args)...);
+    return csprint(mem::resolve_temporary_allocator(), std::forward<Args>(args)...);
 }
 
 #ifdef UNIT_TESTS_KSTD_STRING_BUILDER

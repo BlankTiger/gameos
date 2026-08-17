@@ -2,10 +2,10 @@
 
 #include "kstd/allocator.hh"
 #include "kstd/array.hh"
-#include "kstd/assert.hh"
 #include "kstd/basic.hh"
 #include "kstd/string_builder.hh"
 
+#include "gameos/assert.hh"
 #include "gameos/application_processor_state.hh"
 #include "gameos/cpu_local.hh"
 #include "gameos/global_descriptors.hh"

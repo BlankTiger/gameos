@@ -1,8 +1,8 @@
 #pragma once
 
-#include "kstd/assert.hh"
 #include "kstd/basic.hh"
 
+#include "gameos/assert.hh"
 #include "gameos/cpuid.hh"
 
 namespace krand {

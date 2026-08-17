@@ -1,7 +1,6 @@
 #pragma once
 
-#include "kstd/assert.hh"
-
+#include "gameos/assert.hh"
 #include "gameos/interrupts.hh"
 #include "gameos/local_apic.hh"
 #include "gameos/advanced_configuration_and_power_interface.hh"

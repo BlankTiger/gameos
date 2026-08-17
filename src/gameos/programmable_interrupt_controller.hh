@@ -1,7 +1,6 @@
 #pragma once
 
-#include "kstd/assert.hh"
-
+#include "gameos/assert.hh"
 #include "gameos/low_level_io.hh"
 
 namespace pic {

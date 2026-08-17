@@ -1,7 +1,8 @@
 #pragma once
 
-#include "kstd/assert.hh"
 #include "kstd/format.hh"
+
+#include "gameos/assert.hh"
 
 #if !HOSTED
 

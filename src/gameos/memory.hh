@@ -3,10 +3,10 @@
 #include <cstddef>
 #include <new>
 
-#include "kstd/assert.hh"
-#include "kstd/allocator.hh"
 #include "kstd/array.hh"
 
+#include "gameos/assert.hh"
+#include "gameos/allocator.hh"
 #include "gameos/multiboot2.hh"
 
 namespace mem {
@@ -151,32 +151,33 @@ auto initialize(const boot::Multiboot2_Info* mbi) -> void {
     void* temporary_memory = buddy.alloc(TEMPORARY_ALLOCATOR_SIZE);
     kstd_assert(temporary_memory != nullptr, "failed to allocate temporary allocator backing");
     temporary_allocator.init(temporary_memory, TEMPORARY_ALLOCATOR_SIZE);
+    set_temporary_allocator(&temporary_allocator);
 }
 
 }  // namespace mem
 
 auto operator new(usize size) -> void* {
-    if (void* ptr = mem::hidden::current_global_allocator->alloc(size)) return ptr;
+    if (void* ptr = mem::resolve_allocator()->alloc(size)) return ptr;
     halt::forever("new failed");
 }
 
 auto operator new[](usize size) -> void* {
-    if (void* ptr = mem::hidden::current_global_allocator->alloc(size)) return ptr;
+    if (void* ptr = mem::resolve_allocator()->alloc(size)) return ptr;
     halt::forever("new[] failed");
 }
 
 auto operator delete(void* ptr) noexcept -> void {
-    mem::hidden::current_global_allocator->free(ptr, 0);
+    mem::resolve_allocator()->free(ptr, 0);
 }
 
 auto operator delete[](void* ptr) noexcept -> void {
-    mem::hidden::current_global_allocator->free(ptr, 0);
+    mem::resolve_allocator()->free(ptr, 0);
 }
 
 auto operator delete(void* ptr, usize size) noexcept -> void {
-    mem::hidden::current_global_allocator->free(ptr, size);
+    mem::resolve_allocator()->free(ptr, size);
 }
 
 auto operator delete[](void* ptr, usize size) noexcept -> void {
-    mem::hidden::current_global_allocator->free(ptr, size);
+    mem::resolve_allocator()->free(ptr, size);
 }

@@ -111,7 +111,7 @@ inline auto copy_string(string s, mem::Allocator* allocator = nullptr) -> string
 }
 
 force_inline auto tcopy(string s) -> string {
-    return copy_string(s, &mem::temporary_allocator);
+    return copy_string(s, mem::resolve_temporary_allocator());
 }
 
 // Null-terminated copy in temp (for C APIs). Not counted in the string length.

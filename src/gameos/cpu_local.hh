@@ -3,9 +3,9 @@
 #include <cstddef>
 
 #include "kstd/basic.hh"
-#include "kstd/assert.hh"
 #include "kstd/array.hh"
 
+#include "gameos/assert.hh"
 #include "gameos/advanced_configuration_and_power_interface.hh"
 #include "gameos/local_apic.hh"
 #include "gameos/low_level_io.hh"

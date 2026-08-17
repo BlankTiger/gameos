@@ -1,7 +1,7 @@
 #pragma once
 
-#include "kstd/assert.hh"
 
+#include "gameos/assert.hh"
 #include "gameos/advanced_configuration_and_power_interface.hh"
 #include "gameos/application_processor.hh"
 #include "gameos/cpu_local.hh"
