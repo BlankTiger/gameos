@@ -31,72 +31,54 @@ struct Byte_Reader {
     };
 
     auto read_u8() -> Read_Result<u8> {
-        if (current_offset + sizeof(u8) > size) return { u8{}, false };
+        if (size - current_offset < sizeof(u8)) return { u8{}, false };
         Read_Result<u8> result(source[current_offset], true);
         current_offset += sizeof(u8);
         return result;
     }
 
     auto read_u16() -> Read_Result<u16> {
-        if (current_offset + sizeof(u16) > size) return { u16{}, false };
-        auto [low_bytes,  ok1] = read_u8();
-        auto [high_bytes, ok2] = read_u8();
-        kstd_assert(ok1);
-        kstd_assert(ok2);
+        if (size - current_offset < sizeof(u16)) return { u16{}, false };
 
-        u16 result =
-            static_cast<u16>(high_bytes) << 8 |
-            static_cast<u16>(low_bytes);
+        u16 result = 0;
+        @for (int i = 0; i < 2; ++i) {
+            u16 byte = source[current_offset + i];
+
+            constexpr u32 shift = i * 8;
+            result = result | (byte << shift);
+        }
+        current_offset += sizeof(u16);
+
         return { result, true };
     }
 
     auto read_u32() -> Read_Result<u32> {
-        if (current_offset + sizeof(u32) > size) return { u32{}, false };
-        auto [bytes1, ok1] = read_u8();
-        auto [bytes2, ok2] = read_u8();
-        auto [bytes3, ok3] = read_u8();
-        auto [bytes4, ok4] = read_u8();
-        kstd_assert(ok1);
-        kstd_assert(ok2);
-        kstd_assert(ok3);
-        kstd_assert(ok4);
+        if (size - current_offset < sizeof(u32)) return { u32{}, false };
 
-        u32 result =
-            static_cast<u32>(bytes4) << 24 |
-            static_cast<u32>(bytes3) << 16 |
-            static_cast<u32>(bytes2) << 8  |
-            static_cast<u32>(bytes1);
+        u32 result = 0;
+        @for (int i = 0; i < 4; ++i) {
+            u32 byte = source[current_offset + i];
+
+            constexpr u32 shift = i * 8;
+            result = result | (byte << shift);
+        }
+        current_offset += sizeof(u32);
+
         return { result, true };
     }
 
     auto read_u64() -> Read_Result<u64> {
-        if (current_offset + sizeof(u64) > size) return { u64{}, false };
-        auto [bytes1, ok1] = read_u8();
-        auto [bytes2, ok2] = read_u8();
-        auto [bytes3, ok3] = read_u8();
-        auto [bytes4, ok4] = read_u8();
-        auto [bytes5, ok5] = read_u8();
-        auto [bytes6, ok6] = read_u8();
-        auto [bytes7, ok7] = read_u8();
-        auto [bytes8, ok8] = read_u8();
-        kstd_assert(ok1);
-        kstd_assert(ok2);
-        kstd_assert(ok3);
-        kstd_assert(ok4);
-        kstd_assert(ok5);
-        kstd_assert(ok6);
-        kstd_assert(ok7);
-        kstd_assert(ok8);
+        if (size - current_offset < sizeof(u64)) return { u64{}, false };
 
-        u64 result =
-            static_cast<u64>(bytes8) << 56 |
-            static_cast<u64>(bytes7) << 48 |
-            static_cast<u64>(bytes6) << 40 |
-            static_cast<u64>(bytes5) << 32 |
-            static_cast<u64>(bytes4) << 24 |
-            static_cast<u64>(bytes3) << 16 |
-            static_cast<u64>(bytes2) << 8  |
-            static_cast<u64>(bytes1);
+        u64 result = 0;
+        @for (int i = 0; i < 8; ++i) {
+            u64 byte = source[current_offset + i];
+
+            constexpr u32 shift = i * 8;
+            result = result | (byte << shift);
+        }
+        current_offset += sizeof(u64);
+
         return { result, true };
     }
 };
