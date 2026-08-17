@@ -296,12 +296,10 @@ struct Hosted_Allocator_Init {
 #endif
 
 force_inline auto set_global_allocator(Allocator* allocator) -> void {
-    using namespace hidden;
     kstd::context.global_allocator = allocator != nullptr ? allocator : &null_global_allocator;
 }
 
 force_inline auto set_temporary_allocator(Allocator* allocator) -> void {
-    using namespace hidden;
     kstd::context.temporary_allocator = allocator != nullptr ? allocator : &null_temporary_allocator;
 }
 
