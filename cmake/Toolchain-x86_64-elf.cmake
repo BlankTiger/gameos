@@ -7,5 +7,5 @@ set(CMAKE_ASM_COMPILER x86_64-elf-gcc)
 
 set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
 
-set(CMAKE_C_FLAGS_INIT   "-ffreestanding -O2 -Wall -Wextra -mno-red-zone")
-set(CMAKE_CXX_FLAGS_INIT "-ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-rtti -mno-red-zone")
+set(CMAKE_C_FLAGS_INIT   "-ffreestanding -Wall -Wextra -mno-red-zone")
+set(CMAKE_CXX_FLAGS_INIT "-ffreestanding -Wall -Wextra -fno-exceptions -fno-rtti -mno-red-zone -D_GLIBCXX_NO_ASSERTIONS")

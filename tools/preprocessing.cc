@@ -106,6 +106,7 @@ public:
 
     auto run(std::string_view source) -> std::pair<bool, std::string> {
         clear_state(source);
+        prescan_constants();
         prescan_enums();
         using enum State;
         while (pos < input.size()) {
@@ -139,6 +140,7 @@ private:
     std::string output;
     bool has_embed = false;
     std::map<std::string, std::vector<std::string>> enum_map;
+    std::map<std::string, long long> constants;
 
     void clear_state(std::string_view source) {
         input     = source;
@@ -146,6 +148,7 @@ private:
         line_no   = 1;
         output    = "";
         has_embed = false;
+        constants.clear();
     }
 
     auto peek(size_t offset = 0) const -> char {
@@ -184,6 +187,17 @@ private:
         else if (match("@T(")) {
             typename_state();
             return;
+        }
+        else if (input.substr(pos, 4) == "@for") {
+            size_t directive_pos = pos;
+            pos += 4;
+            while (std::isspace(static_cast<unsigned char>(peek()))) get();
+            if (peek() == '(') {
+                get();
+                for_state(directive_pos);
+                return;
+            }
+            pos = directive_pos;
         }
         else if (peek() == '"') {
             output += get();
@@ -286,6 +300,198 @@ private:
         assert(depth == 0 && "Unterminated @T");
 
         output += "typename " + expr; // replace @T(expr) with "typename expr"
+    }
+
+    static auto trim(std::string value) -> std::string {
+        auto first = value.find_first_not_of(" \t\r\n");
+        if (first == std::string::npos) return {};
+        auto last = value.find_last_not_of(" \t\r\n");
+        return value.substr(first, last - first + 1);
+    }
+
+    auto constant_value(std::string expr) const -> long long {
+        expr = trim(std::move(expr));
+        auto it = constants.find(expr);
+        if (it != constants.end()) return it->second;
+
+        size_t end = 0;
+        long long value = 0;
+        try {
+            value = std::stoll(expr, &end, 0);
+        }
+        catch (...) {
+            assert(false && "@for expects an integer expression");
+        }
+        assert(end == expr.size() && "@for expects an integer expression");
+        return value;
+    }
+
+    void prescan_constants() {
+        size_t i = 0;
+        while (i < input.size()) {
+            size_t line_end = input.find('\n', i);
+            if (line_end == std::string_view::npos) line_end = input.size();
+            std::string line = trim(std::string(input.substr(i, line_end - i)));
+
+            if (line.starts_with("#define ")) {
+                std::string definition = trim(line.substr(8));
+                auto split = definition.find_first_of(" \t");
+                if (split != std::string::npos) {
+                    auto name = definition.substr(0, split);
+                    auto value = trim(definition.substr(split + 1));
+                    if (!name.empty() && !value.empty()) {
+                        try {
+                            size_t end = 0;
+                            auto number = std::stoll(value, &end, 0);
+                            if (end == value.size()) constants[name] = number;
+                        }
+                        catch (...) {}
+                    }
+                }
+            }
+
+            auto constexpr_pos = line.find("constexpr ");
+            if (constexpr_pos != std::string::npos) {
+                auto equals = line.find('=', constexpr_pos + 10);
+                if (equals != std::string::npos) {
+                    auto declaration = trim(line.substr(constexpr_pos + 10, equals - constexpr_pos - 10));
+                    auto space = declaration.find_last_of(" \t");
+                    auto name = space == std::string::npos ? declaration : declaration.substr(space + 1);
+                    auto value = trim(line.substr(equals + 1));
+                    if (!value.empty() && value.back() == ';') value.pop_back();
+                    if (!name.empty()) {
+                        try {
+                            size_t end = 0;
+                            auto number = std::stoll(trim(value), &end, 0);
+                            if (end == trim(value).size()) constants[name] = number;
+                        }
+                        catch (...) {}
+                    }
+                }
+            }
+            i = line_end == input.size() ? input.size() : line_end + 1;
+        }
+    }
+
+    auto replace_for_variable(std::string_view body, std::string_view variable, long long value) -> std::string {
+        std::string result;
+        size_t i = 0;
+        while (i < body.size()) {
+            if (body[i] == '"' || body[i] == '\'') {
+                char quote = body[i++];
+                result += quote;
+                while (i < body.size()) {
+                    char c = body[i++];
+                    result += c;
+                    if (c == '\\' && i < body.size()) result += body[i++];
+                    else if (c == quote) break;
+                }
+                continue;
+            }
+            if (i + 1 < body.size() && body[i] == '/' && body[i + 1] == '/') {
+                auto end = body.find('\n', i);
+                if (end == std::string_view::npos) end = body.size();
+                result.append(body.substr(i, end - i));
+                i = end;
+                continue;
+            }
+            if (i + 1 < body.size() && body[i] == '/' && body[i + 1] == '*') {
+                auto end = body.find("*/", i + 2);
+                end = end == std::string_view::npos ? body.size() : end + 2;
+                result.append(body.substr(i, end - i));
+                i = end;
+                continue;
+            }
+            if ((std::isalpha(static_cast<unsigned char>(body[i])) || body[i] == '_')) {
+                size_t start = i++;
+                while (i < body.size() && (std::isalnum(static_cast<unsigned char>(body[i])) || body[i] == '_')) i++;
+                auto token = body.substr(start, i - start);
+                if (token == variable) result += std::to_string(value);
+                else result.append(token);
+                continue;
+            }
+            result += body[i++];
+        }
+        return result;
+    }
+
+    void for_state(size_t directive_pos) {
+        std::string header;
+        int depth = 1;
+        while (peek() != '\0') {
+            char c = get();
+            if (c == '(') depth++;
+            else if (c == ')' && --depth == 0) break;
+            header += c;
+        }
+        assert(depth == 0 && "Unterminated @for header");
+
+        auto first = header.find(';');
+        auto second = header.find(';', first + 1);
+        assert(first != std::string::npos && second != std::string::npos && "@for expects init; condition; increment");
+
+        auto init = trim(header.substr(0, first));
+        auto condition = trim(header.substr(first + 1, second - first - 1));
+        auto increment = trim(header.substr(second + 1));
+        auto equals = init.find('=');
+        assert(equals != std::string::npos && "@for init expects variable = value");
+        auto variable = trim(init.substr(0, equals));
+        auto space = variable.find_last_of(" \t");
+        if (space != std::string::npos) variable = variable.substr(space + 1);
+
+        std::string comparator;
+        for (auto candidate : {"<=", ">=", "<", ">"}) {
+            auto p = condition.find(candidate);
+            if (p != std::string::npos) { comparator = candidate; condition = trim(condition.substr(p + comparator.size())); break; }
+        }
+        assert(!comparator.empty() && "@for condition expects <, <=, >, or >=");
+
+        long long start = constant_value(init.substr(equals + 1));
+        long long limit = constant_value(condition);
+        long long step = increment.find("++") != std::string::npos ? 1 : increment.find("--") != std::string::npos ? -1 : 0;
+        assert(step != 0 && "@for increment expects ++variable or --variable");
+
+        while (std::isspace(static_cast<unsigned char>(peek()))) get();
+        assert(get() == '{' && "@for expects a braced body");
+        size_t body_line = line_no;
+        size_t body_start = pos;
+        int braces = 1;
+        while (pos < input.size() && braces > 0) {
+            char c = get();
+            if (c == '"' || c == '\'') {
+                char quote = c;
+                while (pos < input.size()) { c = get(); if (c == '\\') get(); else if (c == quote) break; }
+            }
+            else if (c == '{') braces++;
+            else if (c == '}') braces--;
+        }
+        assert(braces == 0 && "Unterminated @for body");
+        size_t after_line = line_no;
+        auto body = input.substr(body_start, pos - body_start - 1);
+        size_t line_start = input.rfind('\n', directive_pos);
+        line_start = line_start == std::string_view::npos ? 0 : line_start + 1;
+        size_t indent_end = line_start;
+        while (indent_end < directive_pos && (input[indent_end] == ' ' || input[indent_end] == '\t')) indent_end++;
+        std::string indent(input.substr(line_start, indent_end - line_start));
+
+        auto condition_holds = [&](long long value) {
+            if (comparator == "<") return value < limit;
+            if (comparator == "<=") return value <= limit;
+            if (comparator == ">") return value > limit;
+            return value >= limit;
+        };
+        assert(((step > 0 && (comparator == "<" || comparator == "<=")) ||
+                (step < 0 && (comparator == ">" || comparator == ">="))) &&
+               "@for increment moves away from loop condition");
+        for (long long value = start; condition_holds(value); value += step) {
+            output += "#line " + std::to_string(body_line) + "\n";
+            output += indent + "{";
+            auto expanded_body = replace_for_variable(body, variable, value);
+            output += expanded_body;
+            if (!expanded_body.empty() && expanded_body.back() == '\n') output += indent;
+            output += "}\n";
+        }
+        output += "#line " + std::to_string(after_line) + "\n";
     }
 
     void prescan_enums() {
@@ -585,4 +791,3 @@ auto main(int argc, char** argv) -> int {
     std::println("Writing {}", (output_dir / "resources.hh").string());
     write_resources_header(output_dir / "resources.hh", pool.get());
 }
-

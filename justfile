@@ -10,8 +10,20 @@ default:
 build: configure
     cmake --build {{build_dir}}
 
+build-debug: configure-debug
+    cmake --build {{build_dir}}
+
+build-release: configure-release
+    cmake --build {{build_dir}}
+
 configure:
     cmake -S . -B {{build_dir}} -G Ninja -DCMAKE_TOOLCHAIN_FILE=cmake/Toolchain-x86_64-elf.cmake
+
+configure-debug:
+    cmake -S . -B {{build_dir}} -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_TOOLCHAIN_FILE=cmake/Toolchain-x86_64-elf.cmake
+
+configure-release:
+    cmake -S . -B {{build_dir}} -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=cmake/Toolchain-x86_64-elf.cmake
 
 preprocess: configure
     cmake --build {{build_dir}} --target generate_files
