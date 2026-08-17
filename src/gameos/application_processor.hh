@@ -10,6 +10,7 @@
 
 #include "gameos/assert.hh"
 #include "gameos/advanced_configuration_and_power_interface.hh"
+#include "gameos/allocator.hh"
 #include "gameos/application_processor_state.hh"
 #include "gameos/cpu_local.hh"
 #include "gameos/global_descriptors.hh"
@@ -237,7 +238,10 @@ auto ap_main(u32 cpu_index) -> void {
     // Load kernel IDT (table already built by the BSP).
     idt::load();
 
-    tls::initialize_application_processor(cpu_index);
+    tls::initialize_application_processor(cpu_index, {
+        .global_allocator    = &mem::buddy,
+        .temporary_allocator = &mem::temporary_allocator,
+    });
     serial::println("AP index=% started", cpu_index);
 
     auto* kernel_top = addr_as<u8*>(ap::STACK_POINTER_ADDR);

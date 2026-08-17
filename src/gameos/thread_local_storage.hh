@@ -29,6 +29,7 @@ struct Block {
 
     void*           allocation = nullptr;
     mem::Allocator* allocator  = nullptr;
+    kstd::Context   context{};
     Bounded_Array<Destructor, MAX_DESTRUCTORS> destructors;
 };
 
@@ -51,17 +52,20 @@ force_inline auto base() -> void* {
     return addr_as<void*>(low_level_io::read_model_specific_register(IA32_FS_BASE));
 }
 
-auto create() -> Block* {
-    auto* allocator = mem::resolve_allocator();
+auto create(const kstd::Context& inherited_context) -> Block* {
+    auto* allocator = inherited_context.global_allocator;
+    kstd_assert(allocator != nullptr);
     auto* block     = static_cast<Block*>(allocator->alloc(sizeof(Block), alignof(Block)));
     auto* image     = static_cast<u8*>(allocator->alloc(allocation_size(), TLS_ALIGNMENT));
     kstd_assert(block != nullptr && image != nullptr, "TLS allocation failed");
 
     kstd_memset(image, 0, allocation_size());
     kstd_memcpy(image, __tls_start, ptr_addr(__tdata_end) - ptr_addr(__tls_start));
+
     *block = {
         .allocation  = image,
         .allocator   = allocator,
+        .context     = inherited_context,
         .destructors = {},
     };
     return block;
@@ -77,6 +81,7 @@ auto activate(Block* block) -> void {
     *reinterpret_cast<Block**>(block_pointer_storage) = block;
 
     set_base(thread_pointer);
+    kstd::context = block->context;
 }
 
 auto destroy(Block* block) -> void {
@@ -108,14 +113,17 @@ extern "C" auto __cxa_thread_atexit(
     return 0;
 }
 
-auto initialize_bsp() -> void {
-    auto* block = create();
+auto initialize_bsp(const kstd::Context& inherited_context) -> void {
+    auto* block = create(inherited_context);
     idle_blocks[0] = block;
     activate(block);
 }
 
-auto initialize_application_processor(u32 cpu_index) -> void {
-    auto* ap_block = create();
+auto initialize_application_processor(
+    u32 cpu_index,
+    const kstd::Context& inherited_context
+) -> void {
+    auto* ap_block = create(inherited_context);
     idle_blocks[cpu_index] = ap_block;
     activate(ap_block);
 }

@@ -145,13 +145,11 @@ auto initialize(const boot::Multiboot2_Info* mbi) -> void {
     for (const auto& region : regions) {
         buddy.add_region(region.base, region.size);
     }
-    set_global_allocator(&buddy);
 
     constexpr usize TEMPORARY_ALLOCATOR_SIZE = 1 * 1024 * 1024;
     void* temporary_memory = buddy.alloc(TEMPORARY_ALLOCATOR_SIZE);
     kstd_assert(temporary_memory != nullptr, "failed to allocate temporary allocator backing");
     temporary_allocator.init(temporary_memory, TEMPORARY_ALLOCATOR_SIZE);
-    set_temporary_allocator(&temporary_allocator);
 }
 
 }  // namespace mem

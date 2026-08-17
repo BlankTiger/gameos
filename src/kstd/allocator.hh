@@ -271,10 +271,8 @@ struct Hosted_Allocator final : Allocator {
 
 #endif
 
-namespace hidden {
-    inline Null_Allocator null_global_allocator{};
-    inline Null_Allocator null_temporary_allocator{};
-}
+inline Null_Allocator null_global_allocator{};
+inline Null_Allocator null_temporary_allocator{};
 
 #if HOSTED && UNIT_TEST
 namespace hidden {
