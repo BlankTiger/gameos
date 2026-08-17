@@ -543,6 +543,7 @@ auto join(Thread_Handle<Result_Type> handle) -> Result_Type {
     }
 
     unreachable();
+    return Result_Type{};
 }
 
 namespace smoke_tests {
