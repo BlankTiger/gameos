@@ -211,7 +211,6 @@ auto initialize() -> void {
         "mov %%ax, %%ds\n"
         "mov %%ax, %%es\n"
         "mov %%ax, %%ss\n"
-        "mov %%ax, %%fs\n"
         "mov %%ax, %%gs\n"
         :
         : [sel] "r"(KERNEL_DATA_SEGMENT)
@@ -229,7 +228,6 @@ auto load_shared() -> void {
         "mov %%ax, %%ds\n"
         "mov %%ax, %%es\n"
         "mov %%ax, %%ss\n"
-        "mov %%ax, %%fs\n"
         :
         : [sel] "r"(KERNEL_DATA_SEGMENT)
         : "ax"
