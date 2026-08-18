@@ -1,7 +1,7 @@
 #pragma once
 
-#include "kstd/assert.hh"
 #include "kstd/basic.hh"
+#include "kstd/assert.hh"
 
 #include "gameos/cpuid.hh"
 

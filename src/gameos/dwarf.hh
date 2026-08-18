@@ -7,7 +7,6 @@
 
 #include "gameos/serial_format.hh"
 
-
 namespace dwarf {
 
 extern "C" const u8 __debug_info_start[];

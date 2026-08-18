@@ -9,11 +9,11 @@
 #include <utility>
 
 #include "kstd/array.hh"
-#include "kstd/assert.hh"
 #include "kstd/allocator.hh"
 #include "kstd/basic.hh"
 #include "kstd/ring_buffer.hh"
 #include "kstd/string_builder.hh"
+#include "kstd/assert.hh"
 
 #include "gameos/advanced_configuration_and_power_interface.hh"
 #include "gameos/application_processor_state.hh"
@@ -276,7 +276,7 @@ auto create_thread(
     auto* allocator = mem::resolve_allocator();
     auto* stack = allocator->alloc(stack_size, AP_STACK_ALIGNMENT);
     kstd_assert(stack != nullptr, "Thread stack allocation failed");
-    auto* tls_block = tls::create();
+    auto* tls_block = tls::create(kstd::context);
 
     auto handle = create_thread<void>(
         procedure,
@@ -473,7 +473,7 @@ auto spawn(Procedure procedure, Arguments&&... args) -> Thread_Handle<hidden::Pr
         storage_size,
         control_alignment,
         ptr_addr(typed_thread_start<Procedure, Result_Type, Arguments...>),
-        tls::create()
+        tls::create(kstd::context)
     );
 
     auto& thread = threads[handle.index];

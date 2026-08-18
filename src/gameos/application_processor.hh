@@ -2,8 +2,9 @@
 
 #include <atomic>
 
-#include "kstd/assert.hh"
 #include "kstd/array.hh"
+#include "kstd/allocator.hh"
+#include "kstd/assert.hh"
 #include "kstd/basic.hh"
 #include "kstd/cstring.hh"
 #include "kstd/pointer_utils.hh"
@@ -237,7 +238,13 @@ auto ap_main(u32 cpu_index) -> void {
     // Load kernel IDT (table already built by the BSP).
     idt::load();
 
-    tls::initialize_application_processor(cpu_index);
+    tls::initialize_application_processor(cpu_index, {
+        .allocator = &mem::buddy,
+        // This is set intentionally. If we hit an assert because we actually
+        // want to use a temporary allocator in the APs startup then we can
+        // reconsider.
+        .temporary_allocator = &mem::null_allocator,
+    });
     serial::println("AP index=% started", cpu_index);
 
     auto* kernel_top = addr_as<u8*>(ap::STACK_POINTER_ADDR);

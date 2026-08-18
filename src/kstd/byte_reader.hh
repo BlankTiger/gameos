@@ -6,7 +6,6 @@
 #include "kstd/array.hh"
 #include "kstd/basic.hh"
 
-
 struct Byte_Reader {
     u8*   source;
     usize size;

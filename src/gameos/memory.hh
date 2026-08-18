@@ -3,9 +3,9 @@
 #include <cstddef>
 #include <new>
 
+#include "kstd/array.hh"
 #include "kstd/assert.hh"
 #include "kstd/allocator.hh"
-#include "kstd/array.hh"
 
 #include "gameos/multiboot2.hh"
 
@@ -145,7 +145,6 @@ auto initialize(const boot::Multiboot2_Info* mbi) -> void {
     for (const auto& region : regions) {
         buddy.add_region(region.base, region.size);
     }
-    set_global_allocator(&buddy);
 
     constexpr usize TEMPORARY_ALLOCATOR_SIZE = 1 * 1024 * 1024;
     void* temporary_memory = buddy.alloc(TEMPORARY_ALLOCATOR_SIZE);
@@ -156,27 +155,27 @@ auto initialize(const boot::Multiboot2_Info* mbi) -> void {
 }  // namespace mem
 
 auto operator new(usize size) -> void* {
-    if (void* ptr = mem::hidden::current_global_allocator->alloc(size)) return ptr;
+    if (void* ptr = mem::resolve_allocator()->alloc(size)) return ptr;
     halt::forever("new failed");
 }
 
 auto operator new[](usize size) -> void* {
-    if (void* ptr = mem::hidden::current_global_allocator->alloc(size)) return ptr;
+    if (void* ptr = mem::resolve_allocator()->alloc(size)) return ptr;
     halt::forever("new[] failed");
 }
 
 auto operator delete(void* ptr) noexcept -> void {
-    mem::hidden::current_global_allocator->free(ptr, 0);
+    mem::resolve_allocator()->free(ptr, 0);
 }
 
 auto operator delete[](void* ptr) noexcept -> void {
-    mem::hidden::current_global_allocator->free(ptr, 0);
+    mem::resolve_allocator()->free(ptr, 0);
 }
 
 auto operator delete(void* ptr, usize size) noexcept -> void {
-    mem::hidden::current_global_allocator->free(ptr, size);
+    mem::resolve_allocator()->free(ptr, size);
 }
 
 auto operator delete[](void* ptr, usize size) noexcept -> void {
-    mem::hidden::current_global_allocator->free(ptr, size);
+    mem::resolve_allocator()->free(ptr, size);
 }

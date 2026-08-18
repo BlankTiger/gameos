@@ -1,10 +1,12 @@
 #pragma once
 
-#include "tetris/main.hh"
+#include "kstd/string_builder.hh"
+
 #include "gameos/input.hh"
 #include "gameos/gfx.hh"
 #include "gameos/time.hh"
-#include "kstd/string_builder.hh"
+
+#include "tetris/main.hh"
 
 constexpr usize BLOCK_TEST_BODY_COUNT = available_bodies.size();
 constexpr usize BLOCK_TEST_MAX_BLOCKS = ARBITRARY_FALLING_BODY_BLOCK_SIZE_LIMIT;

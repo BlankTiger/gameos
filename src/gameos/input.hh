@@ -2,7 +2,7 @@
 
 #include "kstd/enum_array.hh"
 #include "kstd/ring_buffer.hh"
-#include "synchronization.hh"
+#include "kstd/synchronization.hh"
 
 namespace input {
 
