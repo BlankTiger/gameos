@@ -19,7 +19,8 @@ enum struct Attribute_Type : u64 {
 @enum_to_string(Attribute_Type);
 
 enum struct Form_Type : u64 {
-    STRING = 0x08,
+    STRING         = 0x08,
+    IMPLICIT_CONST = 0x21,
 };
 @enum_to_string(Form_Type);
 
@@ -87,11 +88,16 @@ auto parse_abbreviations(Array_View<const u8> bytes) -> Abbreviations {
 
             if (attribute_type_value == 0 && form_type_value == 0) break;
 
-            attribute_specs.push_back({
-                static_cast<Attribute_Type>(attribute_type_value),
-                static_cast<Form_Type>(form_type_value),
-                0,
-            });
+            auto attribute_type = static_cast<Attribute_Type>(attribute_type_value);
+            auto form_type      = static_cast<Form_Type>(form_type_value);
+            s64  implicit_const = 0;
+            if (form_type == Form_Type::IMPLICIT_CONST) {
+                auto [implicit_const_value, implicit_const_ok] = reader.read_sleb128();
+                kstd_assert(implicit_const_ok);
+                implicit_const = implicit_const_value;
+            }
+
+            attribute_specs.push_back({ attribute_type, form_type, implicit_const });
         }
 
         Abbreviation abbreviation(tag, has_children, attribute_specs);
