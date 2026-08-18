@@ -243,7 +243,7 @@ auto ap_main(u32 cpu_index) -> void {
         // This is set intentionally. If we hit an assert because we actually
         // want to use a temporary allocator in the APs startup then we can
         // reconsider.
-        .temporary_allocator = &mem::null_temporary_allocator,
+        .temporary_allocator = &mem::null_allocator,
     });
     serial::println("AP index=% started", cpu_index);
 

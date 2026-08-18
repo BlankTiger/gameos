@@ -274,7 +274,6 @@ struct Hosted_Allocator final : Allocator {
 #endif
 
 inline Null_Allocator null_allocator{};
-inline Null_Allocator null_temporary_allocator{};
 
 #if HOSTED
 struct Hosted_Thread_Temporary_Storage final : Allocator {
@@ -290,7 +289,7 @@ struct Hosted_Thread_Temporary_Storage final : Allocator {
 };
 
 inline auto create_thread_temporary_allocator(Allocator* allocator, Allocator* inherited_allocator) -> Allocator* {
-    if (inherited_allocator == nullptr || inherited_allocator == &null_temporary_allocator) return inherited_allocator;
+    if (inherited_allocator == nullptr || inherited_allocator == &null_allocator) return inherited_allocator;
 
     kstd_assert(allocator != nullptr);
     auto* storage_memory = allocator->alloc(sizeof(Hosted_Thread_Temporary_Storage), alignof(Hosted_Thread_Temporary_Storage));
@@ -304,7 +303,7 @@ inline auto create_thread_temporary_allocator(Allocator* allocator, Allocator* i
 }
 
 inline auto destroy_thread_temporary_allocator(Allocator* allocator) -> void {
-    if (allocator == nullptr || allocator == &null_temporary_allocator) return;
+    if (allocator == nullptr || allocator == &null_allocator) return;
 
     auto* storage = static_cast<Hosted_Thread_Temporary_Storage*>(allocator);
     auto* backing = storage->backing;
@@ -339,7 +338,7 @@ force_inline auto set_allocator(Allocator* allocator) -> void {
 }
 
 force_inline auto set_temporary_allocator(Allocator* allocator) -> void {
-    kstd::context.temporary_allocator = allocator != nullptr ? allocator : &null_temporary_allocator;
+    kstd::context.temporary_allocator = allocator != nullptr ? allocator : &null_allocator;
 }
 
 force_inline auto resolve_allocator(Allocator* allocator) -> Allocator* {
