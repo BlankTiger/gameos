@@ -29,6 +29,10 @@ struct Byte_Reader {
         bool ok;
     };
 
+    auto remaining() -> usize {
+        return size - current_offset;
+    }
+
     auto read_u8() -> Read_Result<u8> {
         if (size - current_offset < sizeof(u8)) return { u8{}, false };
         Read_Result<u8> result(source[current_offset], true);
@@ -161,6 +165,13 @@ struct Byte_Reader {
 
         defer(current_offset += string_size + 1);
         return { { reinterpret_cast<const char*>(source + current_offset), string_size }, true };
+    }
+
+    // Returns true if there was enough bytes left to skip over them.
+    auto skip(usize count) -> bool {
+        if (size - current_offset < count) return false;
+        current_offset += count;
+        return true;
     }
 };
 
@@ -380,6 +391,59 @@ TEST(Byte_Reader, read_cstring_source_exhausted) {
     ASSERT_FALSE(ok);
     ASSERT_EQ(value.size, 0);
     ASSERT_EQ(reader.current_offset, 0);
+}
+
+TEST(Byte_Reader, skip) {
+    Static_Array<u8, 4> source{{1, 2, 3, 4}};
+    Byte_Reader reader(source);
+
+    ASSERT_TRUE(reader.skip(1));
+    ASSERT_EQ(reader.current_offset, 1);
+
+    auto [byte, ok] = reader.read_u8();
+    ASSERT_TRUE(ok);
+    ASSERT_EQ(byte, 2);
+    ASSERT_EQ(reader.current_offset, 2);
+
+    ASSERT_TRUE(reader.skip(2));
+    ASSERT_EQ(reader.current_offset, 4);
+
+    ASSERT_FALSE(reader.skip(1));
+    ASSERT_EQ(reader.current_offset, 4);
+}
+
+TEST(Byte_Reader, skip_zero_count) {
+    Static_Array<u8, 1> source{{1}};
+    Byte_Reader reader(source);
+
+    ASSERT_TRUE(reader.skip(0));
+    ASSERT_EQ(reader.current_offset, 0);
+}
+
+TEST(Byte_Reader, remaining) {
+    Static_Array<u8, 4> source{{1, 2, 3, 4}};
+    Byte_Reader reader(source);
+
+    ASSERT_EQ(reader.remaining(), 4);
+
+    auto [byte, ok] = reader.read_u8();
+    ASSERT_TRUE(ok);
+    ASSERT_EQ(byte, 1);
+    ASSERT_EQ(reader.remaining(), 3);
+
+    ASSERT_TRUE(reader.skip(2));
+    ASSERT_EQ(reader.remaining(), 1);
+
+    auto [bytes, bytes_ok] = reader.read_bytes(1);
+    ASSERT_TRUE(bytes_ok);
+    ASSERT_EQ(bytes[0], 4);
+    ASSERT_EQ(reader.remaining(), 0);
+}
+
+TEST(Byte_Reader, remaining_empty_source) {
+    Byte_Reader reader(nullptr, 0);
+
+    ASSERT_EQ(reader.remaining(), 0);
 }
 
 TEST(Byte_Reader, source_empty) {
