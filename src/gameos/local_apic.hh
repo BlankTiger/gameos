@@ -2,8 +2,8 @@
 
 #include "kstd/basic.hh"
 #include "kstd/pointer_utils.hh"
+#include "kstd/assert.hh"
 
-#include "gameos/assert.hh"
 #include "gameos/cpuid.hh"
 #include "gameos/interrupts_constants.hh"
 #include "gameos/low_level_io.hh"

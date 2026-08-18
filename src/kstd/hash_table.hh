@@ -6,8 +6,6 @@
 #include "kstd/basic.hh"
 #include "kstd/hash.hh"
 #include "kstd/math.hh"
-#include "numbers.hh"
-
 
 // @TODO(blanktiger): implement iterators.
 template <typename Key_Type, typename Value_Type, u32 LOAD_FACTOR_PERCENT = 70, bool REUSE_TOMBSTONES = true>

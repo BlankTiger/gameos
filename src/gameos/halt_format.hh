@@ -1,10 +1,7 @@
 #pragma once
 
 #include "kstd/format.hh"
-
-#include "gameos/assert.hh"
-
-#if !HOSTED
+#include "kstd/assert.hh"
 
 // halt::print needs fmt; assert.hh cannot include this header (cycle).
 namespace halt {
@@ -56,5 +53,3 @@ auto println(string format, T&& value, Rest&&... rest) -> int {
 }
 
 } // namespace halt
-
-#endif

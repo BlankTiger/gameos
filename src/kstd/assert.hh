@@ -4,36 +4,12 @@
 
 #include "kstd/basic.hh"
 
-#if HOSTED
-#include <cstdio>
-#include <cstdlib>
-#endif
-
 namespace kstd {
 
-#if HOSTED
-
-[[noreturn]] constexpr force_inline auto assertion_failure(
-    const char* message,
-    const std::source_location& location
-) -> void {
-    const char* msg = message ? message : "assertion failed";
-    std::fprintf(
-        stderr, "%s:%u:%u: %s\n",
-        location.file_name(), location.line(), location.column(), msg
-    );
-    std::abort();
-}
-
-#else
-
-// Freestanding users provide platform-specific assertion failure behavior.
 [[noreturn]] auto assertion_failure(
     const char* message,
     const std::source_location& location
 ) -> void;
-
-#endif
 
 } // namespace kstd
 
@@ -71,3 +47,11 @@ constexpr force_inline auto unreachable(
 ) -> void {
     kstd_assert(false, message ? message : "unreachable", location);
 }
+
+#if OS == GAMEOS
+#include "gameos/assert.hh"
+#elif OS == LINUX
+#include "linux/assert.hh"
+#else
+#error "Unsupported OS"
+#endif

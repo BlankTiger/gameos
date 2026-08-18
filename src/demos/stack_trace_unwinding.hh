@@ -1,8 +1,8 @@
 #pragma once
 
 #include "kstd/basic.hh"
+#include "kstd/stack_trace.hh"
 
-#include "gameos/stack_trace.hh"
 #include "gameos/serial_format.hh"
 #include "gameos/power.hh"
 

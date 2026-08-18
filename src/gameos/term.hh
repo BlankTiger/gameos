@@ -2,8 +2,8 @@
 
 #include "kstd/basic.hh"
 #include "kstd/format.hh"
+#include "kstd/assert.hh"
 
-#include "gameos/assert.hh"
 #include "gameos/gfx.hh"
 
 namespace term {

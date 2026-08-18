@@ -2,10 +2,13 @@
 
 #include "numbers.hh"
 
-#if defined(__STDC_HOSTED__) && __STDC_HOSTED__
-#define HOSTED 1
+#define GAMEOS 1
+#define LINUX  2
+
+#if defined(__linux__)
+#define OS LINUX
 #else
-#define HOSTED 0
+#define OS GAMEOS
 #endif
 
 #if defined(__GNUC__) || defined(__clang__)
@@ -45,4 +48,3 @@ inline constexpr usize DYNAMIC_EXTENT = static_cast<usize>(-1);
 namespace mem {
     inline constexpr usize PAGE_SIZE = 4096;
 }
-

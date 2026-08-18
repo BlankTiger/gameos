@@ -5,8 +5,8 @@
 #include "kstd/basic.hh"
 #include "kstd/string.hh"
 #include "kstd/pointer_utils.hh"
+#include "kstd/assert.hh"
 
-#include "gameos/assert.hh"
 #include "gameos/halt_format.hh"
 
 //

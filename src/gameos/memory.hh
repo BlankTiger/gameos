@@ -4,9 +4,9 @@
 #include <new>
 
 #include "kstd/array.hh"
+#include "kstd/assert.hh"
+#include "kstd/allocator.hh"
 
-#include "gameos/assert.hh"
-#include "gameos/allocator.hh"
 #include "gameos/multiboot2.hh"
 
 namespace mem {

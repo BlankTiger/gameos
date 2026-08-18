@@ -4,8 +4,8 @@
 #include "kstd/basic.hh"
 #include "kstd/cstring.hh"
 #include "kstd/pointer_utils.hh"
+#include "kstd/assert.hh"
 
-#include "gameos/assert.hh"
 #include "gameos/cpuid.hh"
 #include "gameos/multiboot2.hh"
 #include "gameos/serial_format.hh"

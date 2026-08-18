@@ -1,8 +1,8 @@
 #pragma once
 
 #include "kstd/allocator.hh"
+#include "kstd/assert.hh"
 
-#include "gameos/assert.hh"
 #include "gameos/synchronization.hh"
 
 namespace mem {

@@ -6,18 +6,6 @@
 
 namespace synchronization {
 
-#if HOSTED
-
-force_inline auto interrupts_enabled() -> bool {
-    return true;
-}
-
-force_inline auto disable_interrupts() -> void {}
-
-force_inline auto enable_interrupts() -> void {}
-
-#else
-
 force_inline auto interrupts_enabled() -> bool {
     u64 flags;
     asm volatile("pushfq\n\tpopq %0" : "=r"(flags));
@@ -31,8 +19,6 @@ force_inline auto disable_interrupts() -> void {
 force_inline auto enable_interrupts() -> void {
     asm volatile("sti");
 }
-
-#endif
 
 struct Interrupt_Guard {
     bool enabled;

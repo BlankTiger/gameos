@@ -3,14 +3,14 @@
 #include <atomic>
 
 #include "kstd/array.hh"
+#include "kstd/allocator.hh"
+#include "kstd/assert.hh"
 #include "kstd/basic.hh"
 #include "kstd/cstring.hh"
 #include "kstd/pointer_utils.hh"
 #include "kstd/string_builder.hh"
 
-#include "gameos/assert.hh"
 #include "gameos/advanced_configuration_and_power_interface.hh"
-#include "gameos/allocator.hh"
 #include "gameos/application_processor_state.hh"
 #include "gameos/cpu_local.hh"
 #include "gameos/global_descriptors.hh"

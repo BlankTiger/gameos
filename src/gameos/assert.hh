@@ -7,8 +7,6 @@ using Halt_Print_Fn = auto (*)(char) -> void;
 using Pre_Halt_Hook = auto (*)() -> void;
 }
 
-#if !HOSTED
-
 namespace serial {
 auto put_char(char c) -> void;
 }
@@ -140,11 +138,3 @@ namespace kstd {
 }
 
 } // namespace kstd
-
-#else
-
-namespace halt {
-force_inline auto add_printer(Halt_Print_Fn) -> void {}
-}
-
-#endif
