@@ -981,7 +981,7 @@ auto update(Game& game, f32 camera_orbit_angle) -> void {
 
 auto tetris_main() -> void {
     mem::Debug_Allocator dbg_allocator{};
-    mem::set_global_allocator(&dbg_allocator);
+    mem::set_allocator(&dbg_allocator);
 
     gfx::Camera3D camera;
     f32 camera_orbit_angle = 0.f;

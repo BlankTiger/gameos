@@ -239,8 +239,11 @@ auto ap_main(u32 cpu_index) -> void {
     idt::load();
 
     tls::initialize_application_processor(cpu_index, {
-        .global_allocator    = &mem::buddy,
-        .temporary_allocator = &mem::temporary_allocator,
+        .allocator = &mem::buddy,
+        // This is set intentionally. If we hit an assert because we actually
+        // want to use a temporary allocator in the APs startup then we can
+        // reconsider.
+        .temporary_allocator = &mem::null_temporary_allocator,
     });
     serial::println("AP index=% started", cpu_index);
 

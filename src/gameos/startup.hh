@@ -48,7 +48,7 @@ inline auto kernel_startup(u32 magic, const boot::Multiboot2_Info* mbi) -> void 
     serial::println("Initializing mem");
     mem::initialize(mbi);
     tls::initialize_bsp({
-        .global_allocator    = &mem::buddy,
+        .allocator           = &mem::buddy,
         .temporary_allocator = &mem::temporary_allocator,
     });
 

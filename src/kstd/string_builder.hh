@@ -289,13 +289,13 @@ TEST(String_Builder, to_string_uses_current_global) {
     mem::Hosted_Allocator allocator_b;
 
     mem::Allocator* previous = mem::resolve_allocator();
-    defer(mem::set_global_allocator(previous));
+    defer(mem::set_allocator(previous));
 
-    mem::set_global_allocator(&allocator_a);
+    mem::set_allocator(&allocator_a);
     String_Builder builder;
     builder.append("stable");
 
-    mem::set_global_allocator(&allocator_b);
+    mem::set_allocator(&allocator_b);
     string s = builder.to_string();
     defer(free_string(s, &allocator_b));
     EXPECT_EQ(s, "stable");

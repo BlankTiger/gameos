@@ -14,6 +14,8 @@ struct Static_Array;
 
 namespace mem {
 
+constexpr usize TEMPORARY_STORAGE_SIZE = 16 * 1024;
+
 struct Allocator {
     virtual auto alloc(usize size, usize alignment = alignof(std::max_align_t)) -> void* = 0;
     virtual auto free(void* pointer, usize size, usize alignment = alignof(std::max_align_t)) -> void = 0;
@@ -271,8 +273,45 @@ struct Hosted_Allocator final : Allocator {
 
 #endif
 
-inline Null_Allocator null_global_allocator{};
+inline Null_Allocator null_allocator{};
 inline Null_Allocator null_temporary_allocator{};
+
+#if HOSTED
+struct Hosted_Thread_Temporary_Storage final : Allocator {
+    Allocator* backing = nullptr;
+    Temporary_Allocator temporary_allocator{};
+    alignas(16) u8 memory[TEMPORARY_STORAGE_SIZE]{};
+
+    auto alloc(usize size, usize alignment = alignof(std::max_align_t)) -> void* override {
+        return temporary_allocator.alloc(size, alignment);
+    }
+
+    auto free(void*, usize, usize = alignof(std::max_align_t)) -> void override {}
+};
+
+inline auto create_thread_temporary_allocator(Allocator* allocator, Allocator* inherited_allocator) -> Allocator* {
+    if (inherited_allocator == nullptr || inherited_allocator == &null_temporary_allocator) return inherited_allocator;
+
+    kstd_assert(allocator != nullptr);
+    auto* storage_memory = allocator->alloc(sizeof(Hosted_Thread_Temporary_Storage), alignof(Hosted_Thread_Temporary_Storage));
+    auto* storage = static_cast<Hosted_Thread_Temporary_Storage*>(storage_memory);
+    kstd_assert(storage != nullptr, "Thread temporary storage allocation failed");
+
+    new (storage) Hosted_Thread_Temporary_Storage{};
+    storage->backing = allocator;
+    storage->temporary_allocator.init(storage->memory, TEMPORARY_STORAGE_SIZE);
+    return storage;
+}
+
+inline auto destroy_thread_temporary_allocator(Allocator* allocator) -> void {
+    if (allocator == nullptr || allocator == &null_temporary_allocator) return;
+
+    auto* storage = static_cast<Hosted_Thread_Temporary_Storage*>(allocator);
+    auto* backing = storage->backing;
+    storage->~Hosted_Thread_Temporary_Storage();
+    backing->free(storage, sizeof(Hosted_Thread_Temporary_Storage), alignof(Hosted_Thread_Temporary_Storage));
+}
+#endif
 
 #if HOSTED && UNIT_TEST
 namespace hidden {
@@ -286,7 +325,7 @@ struct Hosted_Allocator_Init {
             hosted_temporary_allocator_buffer,
             HOSTED_TEMPORARY_ALLOCATOR_SIZE
         );
-        kstd::context.global_allocator    = &hosted_allocator;
+        kstd::context.allocator           = &hosted_allocator;
         kstd::context.temporary_allocator = &temporary_allocator;
     }
 };
@@ -295,8 +334,8 @@ struct Hosted_Allocator_Init {
 }
 #endif
 
-force_inline auto set_global_allocator(Allocator* allocator) -> void {
-    kstd::context.global_allocator = allocator != nullptr ? allocator : &null_global_allocator;
+force_inline auto set_allocator(Allocator* allocator) -> void {
+    kstd::context.allocator = allocator != nullptr ? allocator : &null_allocator;
 }
 
 force_inline auto set_temporary_allocator(Allocator* allocator) -> void {
@@ -304,7 +343,7 @@ force_inline auto set_temporary_allocator(Allocator* allocator) -> void {
 }
 
 force_inline auto resolve_allocator(Allocator* allocator) -> Allocator* {
-    return allocator != nullptr ? allocator : kstd::context.global_allocator;
+    return allocator != nullptr ? allocator : kstd::context.allocator;
 }
 
 force_inline auto resolve_temporary_allocator() -> Allocator* {
@@ -324,11 +363,11 @@ force_inline auto free(void* pointer, usize size, usize alignment, Allocator* al
 struct Push_Allocator {
     Allocator* previous_allocator;
 
-    Push_Allocator(Allocator* new_allocator) : previous_allocator(kstd::context.global_allocator) {
-        set_global_allocator(new_allocator);
+    Push_Allocator(Allocator* new_allocator) : previous_allocator(kstd::context.allocator) {
+        set_allocator(new_allocator);
     }
     ~Push_Allocator() {
-        set_global_allocator(previous_allocator);
+        set_allocator(previous_allocator);
     }
 };
 
