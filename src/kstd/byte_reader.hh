@@ -139,6 +139,14 @@ struct Byte_Reader {
         current_offset += byte_shift + 1;
         return { static_cast<s64>(result), true };
     }
+
+    auto read_bytes(usize count) -> Read_Result<Array_View<const u8>> {
+        if (size - current_offset < count) return { {}, false };
+
+        Array_View<const u8> result{count, source + current_offset};
+        current_offset += count;
+        return {result, true};
+    }
 };
 
 
@@ -282,6 +290,45 @@ TEST(Byte_Reader, read_sleb128_source_exhausted) {
     auto [value, ok] = reader.read_sleb128();
     ASSERT_FALSE(ok);
     ASSERT_EQ(value, s64{});
+    ASSERT_EQ(reader.current_offset, 0);
+}
+
+TEST(Byte_Reader, read_bytes) {
+    Static_Array<u8, 4> source{{1, 2, 3, 4}};
+    Byte_Reader reader(source);
+
+    auto [bytes, ok] = reader.read_bytes(2);
+    ASSERT_TRUE(ok);
+    ASSERT_EQ(bytes.size, 2);
+    ASSERT_EQ(bytes[0], 1);
+    ASSERT_EQ(bytes[1], 2);
+    ASSERT_EQ(reader.current_offset, 2);
+
+    auto [remaining, remaining_ok] = reader.read_bytes(2);
+    ASSERT_TRUE(remaining_ok);
+    ASSERT_EQ(remaining.size, 2);
+    ASSERT_EQ(remaining[0], 3);
+    ASSERT_EQ(remaining[1], 4);
+    ASSERT_EQ(reader.current_offset, 4);
+}
+
+TEST(Byte_Reader, read_bytes_zero_count) {
+    Static_Array<u8, 1> source{{1}};
+    Byte_Reader reader(source);
+
+    auto [bytes, ok] = reader.read_bytes(0);
+    ASSERT_TRUE(ok);
+    ASSERT_EQ(bytes.size, 0);
+    ASSERT_EQ(reader.current_offset, 0);
+}
+
+TEST(Byte_Reader, read_bytes_source_exhausted) {
+    Static_Array<u8, 2> source{{1, 2}};
+    Byte_Reader reader(source);
+
+    auto [bytes, ok] = reader.read_bytes(3);
+    ASSERT_FALSE(ok);
+    ASSERT_EQ(bytes.size, 0);
     ASSERT_EQ(reader.current_offset, 0);
 }
 
