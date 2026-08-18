@@ -140,12 +140,27 @@ struct Byte_Reader {
         return { static_cast<s64>(result), true };
     }
 
+    // Returns a non-owning view into the source bytes.
     auto read_bytes(usize count) -> Read_Result<Array_View<const u8>> {
         if (size - current_offset < count) return { {}, false };
 
-        Array_View<const u8> result{count, source + current_offset};
+        Array_View<const u8> result{ count, source + current_offset };
         current_offset += count;
-        return {result, true};
+        return { result, true };
+    }
+
+    // Returns a non-owning string view from the source bytes.
+    auto read_cstring() -> Read_Result<string> {
+        usize string_size = 0;
+        while (true) {
+            if (size - current_offset <= string_size) return { {}, false };
+
+            if (source[current_offset + string_size] == '\0') break;
+            ++string_size;
+        }
+
+        defer(current_offset += string_size + 1);
+        return { { reinterpret_cast<const char*>(source + current_offset), string_size }, true };
     }
 };
 
@@ -329,6 +344,41 @@ TEST(Byte_Reader, read_bytes_source_exhausted) {
     auto [bytes, ok] = reader.read_bytes(3);
     ASSERT_FALSE(ok);
     ASSERT_EQ(bytes.size, 0);
+    ASSERT_EQ(reader.current_offset, 0);
+}
+
+TEST(Byte_Reader, read_cstring) {
+    Static_Array<u8, 13> source{{'f', 'i', 'r', 's', 't', 0, 's', 'e', 'c', 'o', 'n', 'd', 0}};
+    Byte_Reader reader(source);
+
+    auto [first, first_ok] = reader.read_cstring();
+    ASSERT_TRUE(first_ok);
+    ASSERT_EQ(first, "first");
+    ASSERT_EQ(reader.current_offset, 6);
+
+    auto [second, second_ok] = reader.read_cstring();
+    ASSERT_TRUE(second_ok);
+    ASSERT_EQ(second, "second");
+    ASSERT_EQ(reader.current_offset, 13);
+}
+
+TEST(Byte_Reader, read_cstring_empty) {
+    Static_Array<u8, 1> source{{0}};
+    Byte_Reader reader(source);
+
+    auto [value, ok] = reader.read_cstring();
+    ASSERT_TRUE(ok);
+    ASSERT_EQ(value.size, 0);
+    ASSERT_EQ(reader.current_offset, 1);
+}
+
+TEST(Byte_Reader, read_cstring_source_exhausted) {
+    Static_Array<u8, 3> source{{'a', 'b', 'c'}};
+    Byte_Reader reader(source);
+
+    auto [value, ok] = reader.read_cstring();
+    ASSERT_FALSE(ok);
+    ASSERT_EQ(value.size, 0);
     ASSERT_EQ(reader.current_offset, 0);
 }
 
