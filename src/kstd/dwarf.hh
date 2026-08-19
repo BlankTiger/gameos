@@ -75,8 +75,11 @@ auto parse_attribute_specs(Byte_Reader& reader) -> Array<Attribute_Spec> {
 
 using Abbreviations = Hash_Table<u64, Abbreviation>;
 
-auto parse_abbreviations(Array_View<const u8> debug_abbrev_bytes) -> Abbreviations {
-    Byte_Reader reader(debug_abbrev_bytes);
+//
+// `reader` must be initialized with memory of the .debug_abbrev section.
+// It's stopped at the (0, 0, 0) terminator that ends the abbreviations table.
+//
+auto parse_abbreviations(Byte_Reader& reader) -> Abbreviations {
     Abbreviations abbreviations;
 
     static constexpr u64 STOP_CODE = 0;
