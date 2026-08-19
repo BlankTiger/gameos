@@ -56,6 +56,31 @@ struct Subprogram_Info {
     psize  high_pc;
 };
 
+auto parse_attribute_specs(Byte_Reader& reader) -> Array<Attribute_Spec> {
+    Array<Attribute_Spec> attribute_specs;
+    for (;;) {
+        auto [attribute_type_value, attribute_type_ok] = reader.read_uleb128();
+        kstd_assert(attribute_type_ok);
+
+        auto [form_type_value, form_type_ok] = reader.read_uleb128();
+        kstd_assert(form_type_ok);
+
+        if (attribute_type_value == 0 && form_type_value == 0) break;
+
+        auto attribute_type = static_cast<Attribute_Type>(attribute_type_value);
+        auto form_type      = static_cast<Form_Type>(form_type_value);
+        s64  implicit_const = 0;
+        if (form_type == Form_Type::IMPLICIT_CONST) {
+            auto [implicit_const_value, implicit_const_ok] = reader.read_sleb128();
+            kstd_assert(implicit_const_ok);
+            implicit_const = implicit_const_value;
+        }
+
+        attribute_specs.push_back({ attribute_type, form_type, implicit_const });
+    }
+    return attribute_specs;
+}
+
 using Abbreviations = Hash_Table<u64, Abbreviation>;
 
 auto parse_abbreviations(Array_View<const u8> bytes) -> Abbreviations {
@@ -78,27 +103,7 @@ auto parse_abbreviations(Array_View<const u8> bytes) -> Abbreviations {
         kstd_assert(has_children_ok);
         auto has_children = static_cast<bool>(has_children_value);
 
-        Array<Attribute_Spec> attribute_specs;
-        for (;;) {
-            auto [attribute_type_value, attribute_type_ok] = reader.read_uleb128();
-            kstd_assert(attribute_type_ok);
-
-            auto [form_type_value, form_type_ok] = reader.read_uleb128();
-            kstd_assert(form_type_ok);
-
-            if (attribute_type_value == 0 && form_type_value == 0) break;
-
-            auto attribute_type = static_cast<Attribute_Type>(attribute_type_value);
-            auto form_type      = static_cast<Form_Type>(form_type_value);
-            s64  implicit_const = 0;
-            if (form_type == Form_Type::IMPLICIT_CONST) {
-                auto [implicit_const_value, implicit_const_ok] = reader.read_sleb128();
-                kstd_assert(implicit_const_ok);
-                implicit_const = implicit_const_value;
-            }
-
-            attribute_specs.push_back({ attribute_type, form_type, implicit_const });
-        }
+        auto attribute_specs = parse_attribute_specs(reader);
 
         Abbreviation abbreviation(tag, has_children, attribute_specs);
         abbreviations.set(abbreviation_code, abbreviation);
