@@ -18,23 +18,15 @@ enum struct Attribute_Type : u64 {
 };
 @enum_to_string(Attribute_Type);
 
-enum struct Form_Type : u64 {
+enum struct Form : u64 {
     STRING         = 0x08,
     IMPLICIT_CONST = 0x21,
 };
-@enum_to_string(Form_Type);
-
-// struct Form {
-//     Form_Type type;
-//
-//     union {
-//
-//     };
-// };
+@enum_to_string(Form);
 
 struct Attribute_Spec {
     Attribute_Type attribute_type;
-    Form_Type      form_type;
+    Form           form;
     s64            implicit_const;
 };
 
@@ -62,30 +54,30 @@ auto parse_attribute_specs(Byte_Reader& reader) -> Array<Attribute_Spec> {
         auto [attribute_type_value, attribute_type_ok] = reader.read_uleb128();
         kstd_assert(attribute_type_ok);
 
-        auto [form_type_value, form_type_ok] = reader.read_uleb128();
-        kstd_assert(form_type_ok);
+        auto [form_value, form_ok] = reader.read_uleb128();
+        kstd_assert(form_ok);
 
-        if (attribute_type_value == 0 && form_type_value == 0) break;
+        if (attribute_type_value == 0 && form_value == 0) break;
 
         auto attribute_type = static_cast<Attribute_Type>(attribute_type_value);
-        auto form_type      = static_cast<Form_Type>(form_type_value);
+        auto form           = static_cast<Form>(form_value);
         s64  implicit_const = 0;
-        if (form_type == Form_Type::IMPLICIT_CONST) {
+        if (form == Form::IMPLICIT_CONST) {
             auto [implicit_const_value, implicit_const_ok] = reader.read_sleb128();
             kstd_assert(implicit_const_ok);
             implicit_const = implicit_const_value;
         }
 
-        attribute_specs.push_back({ attribute_type, form_type, implicit_const });
+        attribute_specs.push_back({ attribute_type, form, implicit_const });
     }
     return attribute_specs;
 }
 
 using Abbreviations = Hash_Table<u64, Abbreviation>;
 
-auto parse_abbreviations(Array_View<const u8> bytes) -> Abbreviations {
+auto parse_abbreviations(Array_View<const u8> debug_abbrev_bytes) -> Abbreviations {
+    Byte_Reader reader(debug_abbrev_bytes);
     Abbreviations abbreviations;
-    Byte_Reader reader(bytes);
 
     static constexpr u64 STOP_CODE = 0;
 
@@ -110,6 +102,58 @@ auto parse_abbreviations(Array_View<const u8> bytes) -> Abbreviations {
     }
 
     return abbreviations;
+}
+
+enum struct Unit_Type : u8 {
+    COMPILE = 0x01,
+};
+
+struct Compilation_Unit_Header {
+    u64       length;
+    u16       version;
+    Unit_Type type;
+    u8        address_size;
+    u64       abbreviation_offset;
+};
+
+constexpr auto DWARF_VERSION = 5;
+
+auto parse_compilation_unit_header(Byte_Reader& reader) -> Compilation_Unit_Header {
+    // @NOTE: This is only for 32-bit DWARF, for 64-bit the handling is different.
+    auto [length, length_ok] = reader.read_u32();
+    kstd_assert(length_ok);
+
+    static constexpr auto LENGTH_FOR_64_BIT_DWARF = 0xffffffff;
+    kstd_assert(length != LENGTH_FOR_64_BIT_DWARF, "dwarf: 64-bit DWARF format unsupported");
+
+    auto [version, version_ok] = reader.read_u16();
+    kstd_assert(version_ok);
+
+    //
+    // @TODO(blanktiger): Consider if this shouldn't just be where we bail out
+    // instead of asserting, we could just notify instead of halting the entire
+    // kernel. Then again, this means that it was not compiled correctly or
+    // something.
+    //
+    kstd_assert(version == DWARF_VERSION, "We only support DWARF5.");
+
+    auto [type_value, type_value_ok] = reader.read_u8();
+    kstd_assert(type_value_ok);
+
+    auto [address_size, address_size_ok] = reader.read_u8();
+    kstd_assert(address_size_ok);
+
+    // @NOTE: This is only for 32-bit DWARF.
+    auto [abbreviation_offset, abbreviation_offset_ok] = reader.read_u32();
+    kstd_assert(abbreviation_offset_ok);
+
+    return {
+        length,
+        version,
+        static_cast<Unit_Type>(type_value),
+        address_size,
+        abbreviation_offset
+    };
 }
 
 }
