@@ -29,6 +29,10 @@ struct Byte_Reader {
         bool ok;
     };
 
+    auto remaining() -> usize {
+        return size - current_offset;
+    }
+
     auto read_u8() -> Read_Result<u8> {
         if (size - current_offset < sizeof(u8)) return { u8{}, false };
         Read_Result<u8> result(source[current_offset], true);
@@ -138,6 +142,36 @@ struct Byte_Reader {
 
         current_offset += byte_shift + 1;
         return { static_cast<s64>(result), true };
+    }
+
+    // Returns a non-owning view into the source bytes.
+    auto read_bytes(usize count) -> Read_Result<Array_View<const u8>> {
+        if (size - current_offset < count) return { {}, false };
+
+        Array_View<const u8> result{ count, source + current_offset };
+        current_offset += count;
+        return { result, true };
+    }
+
+    // Returns a non-owning string view from the source bytes.
+    auto read_cstring() -> Read_Result<string> {
+        usize string_size = 0;
+        while (true) {
+            if (size - current_offset <= string_size) return { {}, false };
+
+            if (source[current_offset + string_size] == '\0') break;
+            ++string_size;
+        }
+
+        defer(current_offset += string_size + 1);
+        return { { reinterpret_cast<const char*>(source + current_offset), string_size }, true };
+    }
+
+    // Returns true if there was enough bytes left to skip over them.
+    auto skip(usize count) -> bool {
+        if (size - current_offset < count) return false;
+        current_offset += count;
+        return true;
     }
 };
 
@@ -283,6 +317,133 @@ TEST(Byte_Reader, read_sleb128_source_exhausted) {
     ASSERT_FALSE(ok);
     ASSERT_EQ(value, s64{});
     ASSERT_EQ(reader.current_offset, 0);
+}
+
+TEST(Byte_Reader, read_bytes) {
+    Static_Array<u8, 4> source{{1, 2, 3, 4}};
+    Byte_Reader reader(source);
+
+    auto [bytes, ok] = reader.read_bytes(2);
+    ASSERT_TRUE(ok);
+    ASSERT_EQ(bytes.size, 2);
+    ASSERT_EQ(bytes[0], 1);
+    ASSERT_EQ(bytes[1], 2);
+    ASSERT_EQ(reader.current_offset, 2);
+
+    auto [remaining, remaining_ok] = reader.read_bytes(2);
+    ASSERT_TRUE(remaining_ok);
+    ASSERT_EQ(remaining.size, 2);
+    ASSERT_EQ(remaining[0], 3);
+    ASSERT_EQ(remaining[1], 4);
+    ASSERT_EQ(reader.current_offset, 4);
+}
+
+TEST(Byte_Reader, read_bytes_zero_count) {
+    Static_Array<u8, 1> source{{1}};
+    Byte_Reader reader(source);
+
+    auto [bytes, ok] = reader.read_bytes(0);
+    ASSERT_TRUE(ok);
+    ASSERT_EQ(bytes.size, 0);
+    ASSERT_EQ(reader.current_offset, 0);
+}
+
+TEST(Byte_Reader, read_bytes_source_exhausted) {
+    Static_Array<u8, 2> source{{1, 2}};
+    Byte_Reader reader(source);
+
+    auto [bytes, ok] = reader.read_bytes(3);
+    ASSERT_FALSE(ok);
+    ASSERT_EQ(bytes.size, 0);
+    ASSERT_EQ(reader.current_offset, 0);
+}
+
+TEST(Byte_Reader, read_cstring) {
+    Static_Array<u8, 13> source{{'f', 'i', 'r', 's', 't', 0, 's', 'e', 'c', 'o', 'n', 'd', 0}};
+    Byte_Reader reader(source);
+
+    auto [first, first_ok] = reader.read_cstring();
+    ASSERT_TRUE(first_ok);
+    ASSERT_EQ(first, "first");
+    ASSERT_EQ(reader.current_offset, 6);
+
+    auto [second, second_ok] = reader.read_cstring();
+    ASSERT_TRUE(second_ok);
+    ASSERT_EQ(second, "second");
+    ASSERT_EQ(reader.current_offset, 13);
+}
+
+TEST(Byte_Reader, read_cstring_empty) {
+    Static_Array<u8, 1> source{{0}};
+    Byte_Reader reader(source);
+
+    auto [value, ok] = reader.read_cstring();
+    ASSERT_TRUE(ok);
+    ASSERT_EQ(value.size, 0);
+    ASSERT_EQ(reader.current_offset, 1);
+}
+
+TEST(Byte_Reader, read_cstring_source_exhausted) {
+    Static_Array<u8, 3> source{{'a', 'b', 'c'}};
+    Byte_Reader reader(source);
+
+    auto [value, ok] = reader.read_cstring();
+    ASSERT_FALSE(ok);
+    ASSERT_EQ(value.size, 0);
+    ASSERT_EQ(reader.current_offset, 0);
+}
+
+TEST(Byte_Reader, skip) {
+    Static_Array<u8, 4> source{{1, 2, 3, 4}};
+    Byte_Reader reader(source);
+
+    ASSERT_TRUE(reader.skip(1));
+    ASSERT_EQ(reader.current_offset, 1);
+
+    auto [byte, ok] = reader.read_u8();
+    ASSERT_TRUE(ok);
+    ASSERT_EQ(byte, 2);
+    ASSERT_EQ(reader.current_offset, 2);
+
+    ASSERT_TRUE(reader.skip(2));
+    ASSERT_EQ(reader.current_offset, 4);
+
+    ASSERT_FALSE(reader.skip(1));
+    ASSERT_EQ(reader.current_offset, 4);
+}
+
+TEST(Byte_Reader, skip_zero_count) {
+    Static_Array<u8, 1> source{{1}};
+    Byte_Reader reader(source);
+
+    ASSERT_TRUE(reader.skip(0));
+    ASSERT_EQ(reader.current_offset, 0);
+}
+
+TEST(Byte_Reader, remaining) {
+    Static_Array<u8, 4> source{{1, 2, 3, 4}};
+    Byte_Reader reader(source);
+
+    ASSERT_EQ(reader.remaining(), 4);
+
+    auto [byte, ok] = reader.read_u8();
+    ASSERT_TRUE(ok);
+    ASSERT_EQ(byte, 1);
+    ASSERT_EQ(reader.remaining(), 3);
+
+    ASSERT_TRUE(reader.skip(2));
+    ASSERT_EQ(reader.remaining(), 1);
+
+    auto [bytes, bytes_ok] = reader.read_bytes(1);
+    ASSERT_TRUE(bytes_ok);
+    ASSERT_EQ(bytes[0], 4);
+    ASSERT_EQ(reader.remaining(), 0);
+}
+
+TEST(Byte_Reader, remaining_empty_source) {
+    Byte_Reader reader(nullptr, 0);
+
+    ASSERT_EQ(reader.remaining(), 0);
 }
 
 TEST(Byte_Reader, source_empty) {
