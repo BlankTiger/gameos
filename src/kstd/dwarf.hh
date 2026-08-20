@@ -590,6 +590,63 @@ enum struct Line_Content_Type : u64 {
 
 using Entry_Formats = Array<std::pair<Line_Content_Type, Form>>;
 
+auto parse_entry_formats(Byte_Reader& debug_line) -> Entry_Formats {
+    auto [entry_format_count, entry_format_count_ok] = debug_line.read_u8();
+    kstd_assert(entry_format_count_ok);
+
+    Entry_Formats entry_formats(entry_format_count);
+    for (u8 index = 0; index < entry_format_count; ++index) {
+        auto [line_content_type_value, line_content_type_ok] = debug_line.read_uleb128();
+        auto [form_value,              form_ok]              = debug_line.read_uleb128();
+
+        kstd_assert(line_content_type_ok);
+        kstd_assert(form_ok);
+
+        entry_formats.push_back({
+            static_cast<Line_Content_Type>(line_content_type_value),
+            static_cast<Form>(form_value)
+        });
+    }
+
+    return entry_formats;
+}
+
+auto parse_directories_or_file_names(
+    Byte_Reader& debug_line,
+    usize address_size,
+    const Entry_Formats& entry_formats,
+    Array_View<const u8> debug_str_bytes,
+    Array_View<const u8> debug_line_str_bytes
+) -> Array<string> {
+    auto [count, count_ok] = debug_line.read_uleb128();
+    kstd_assert(count_ok);
+
+    Array<string> directories_or_file_names(count);
+    for (u64 index = 0; index < count; ++index) {
+        string path{};
+        bool   has_path = false;
+
+        defer({
+            kstd_assert(has_path);
+            directories_or_file_names.push_back(path);
+        });
+
+        for (const auto& [line_content_type, form] : entry_formats) {
+            auto value = read_attribute_value(debug_line, form, address_size, 0, debug_str_bytes, debug_line_str_bytes);
+
+            if (line_content_type == Line_Content_Type::PATH) {
+                kstd_assert(!has_path);
+                kstd_assert(value.kind == Attribute_Value_Kind::STRING);
+
+                has_path = true;
+                path     = value.v_string;
+            }
+        }
+    }
+
+    return directories_or_file_names;
+}
+
 struct Debug_Line_Header {
     u64  unit_length;
     u16  version;
@@ -612,7 +669,7 @@ struct Debug_Line_Header {
     Array<string> file_names;
 };
 
-auto read_debug_line_header(
+auto parse_debug_line_header(
     Byte_Reader&         debug_line,
     Array_View<const u8> debug_str_bytes,
     Array_View<const u8> debug_line_str_bytes
@@ -645,100 +702,23 @@ auto read_debug_line_header(
     auto [standard_opcode_lengths, standard_opcode_lengths_ok] = debug_line.read_bytes(opcode_base - 1);
     kstd_assert(standard_opcode_lengths_ok);
 
-    Entry_Formats directory_entry_formats{};
-    Array<string> directories{};
-    {
-        auto [directory_entry_format_count, directory_entry_format_count_ok] = debug_line.read_u8();
-        kstd_assert(directory_entry_format_count_ok);
+    auto directory_entry_formats = parse_entry_formats(debug_line);
+    auto directories = parse_directories_or_file_names(
+        debug_line,
+        address_size,
+        directory_entry_formats,
+        debug_str_bytes,
+        debug_line_str_bytes
+    );
 
-        directory_entry_formats.reserve(directory_entry_format_count);
-        for (u8 index = 0; index < directory_entry_format_count; ++index) {
-            auto [line_content_type_value, line_content_type_ok] = debug_line.read_uleb128();
-            auto [form_value,              form_ok]              = debug_line.read_uleb128();
-
-            kstd_assert(line_content_type_ok);
-            kstd_assert(form_ok);
-
-            directory_entry_formats.push_back({
-                static_cast<Line_Content_Type>(line_content_type_value),
-                static_cast<Form>(form_value)
-            });
-        }
-
-        auto [directories_count, directories_count_ok] = debug_line.read_uleb128();
-        kstd_assert(directories_count_ok);
-
-        directories.reserve(directories_count);
-        for (u64 index = 0; index < directories_count; ++index) {
-            string path{};
-            bool   has_path = false;
-
-            defer({
-                kstd_assert(has_path);
-                directories.push_back(path);
-            });
-
-            for (const auto& [line_content_type, form] : directory_entry_formats) {
-                auto value = read_attribute_value(debug_line, form, address_size, 0, debug_str_bytes, debug_line_str_bytes);
-
-                if (line_content_type == Line_Content_Type::PATH) {
-                    kstd_assert(!has_path);
-                    kstd_assert(value.kind == Attribute_Value_Kind::STRING);
-
-                    has_path = true;
-                    path     = value.v_string;
-                }
-            }
-        }
-    }
-
-    // @TODO(blanktiger): This is pretty much identical to the block above. Unify.
-    Entry_Formats file_name_entry_formats{};
-    Array<string> file_names{};
-    {
-        auto [file_name_entry_format_count, file_name_entry_format_count_ok] = debug_line.read_u8();
-        kstd_assert(file_name_entry_format_count_ok);
-
-        file_name_entry_formats.reserve(file_name_entry_format_count);
-        for (u8 index = 0; index < file_name_entry_format_count; ++index) {
-            auto [line_content_type_value, line_content_type_ok] = debug_line.read_uleb128();
-            auto [form_value,              form_ok]              = debug_line.read_uleb128();
-
-            kstd_assert(line_content_type_ok);
-            kstd_assert(form_ok);
-
-            file_name_entry_formats.push_back({
-                static_cast<Line_Content_Type>(line_content_type_value),
-                static_cast<Form>(form_value)
-            });
-        }
-
-        auto [file_names_count, file_names_count_ok] = debug_line.read_uleb128();
-        kstd_assert(file_names_count_ok);
-
-        file_names.reserve(file_names_count);
-        for (u64 index = 0; index < file_names_count; ++index) {
-            string file_name{};
-            bool   has_file_name = false;
-
-            defer({
-                kstd_assert(has_file_name);
-                file_names.push_back(file_name);
-            });
-
-            for (const auto& [line_content_type, form] : file_name_entry_formats) {
-                auto value = read_attribute_value(debug_line, form, address_size, 0, debug_str_bytes, debug_line_str_bytes);
-
-                if (line_content_type == Line_Content_Type::PATH) {
-                    kstd_assert(!has_file_name);
-                    kstd_assert(value.kind == Attribute_Value_Kind::STRING);
-
-                    has_file_name = true;
-                    file_name     = value.v_string;
-                }
-            }
-        }
-    }
+    auto file_name_entry_formats = parse_entry_formats(debug_line);
+    auto file_names = parse_directories_or_file_names(
+        debug_line,
+        address_size,
+        file_name_entry_formats,
+        debug_str_bytes,
+        debug_line_str_bytes
+    );
 
     Debug_Line_Header header{
         .unit_length                        = unit_length,
@@ -779,7 +759,7 @@ auto parse_line_table(
     auto skip_ok = debug_line.skip(normalized_offset);
     kstd_assert(skip_ok);
 
-    auto header = read_debug_line_header(debug_line, debug_str_bytes, debug_line_str_bytes);
+    auto header = parse_debug_line_header(debug_line, debug_str_bytes, debug_line_str_bytes);
     return {};
 }
 
