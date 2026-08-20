@@ -1,6 +1,7 @@
 #pragma once
 
 #include "kstd/basic.hh"
+#include "kstd/context.hh"
 #include "kstd/dwarf.hh"
 #include "kstd/pointer_utils.hh"
 #include "kstd/string.hh"
@@ -58,6 +59,7 @@ auto build_debug_info() -> void {
         debug_line_str_bytes
     );
 
+    kstd::context.formatting_config.newline_after_each_array_element = true;
     serial::println("%", subprogram_infos);
 }
 

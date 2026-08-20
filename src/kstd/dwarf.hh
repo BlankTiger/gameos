@@ -483,7 +483,7 @@ struct Subprogram_Info {
     psize  high_pc; // Exclusive, already normalized from offset-form Attribute_Type::HIGH_PC.
 
     auto format() const -> string {
-        return sprint("Subprogram_Info{ %, 0x%, 0x% }\n", name, low_pc, high_pc);
+        return sprint("Subprogram_Info{ %, 0x%, 0x% }", name, low_pc, high_pc);
     }
 };
 
