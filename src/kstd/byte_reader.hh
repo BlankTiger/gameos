@@ -23,6 +23,12 @@ struct Byte_Reader {
           size(source.size),
           current_offset(0) {}
 
+    // @TODO(blanktiger): Make source const u8*
+    Byte_Reader(Array_View<const u8> source)
+        : source(const_cast<u8*>(source.data)),
+          size(source.size),
+          current_offset(0) {}
+
     template <typename T>
     struct Read_Result {
         T    result;

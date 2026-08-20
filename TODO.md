@@ -103,6 +103,7 @@ base layer:
 - [ ] remove all the integer postfix conversions and replace them with explicit typing u32{}, u64{}, etc
 - [ ] move dragging logic to input.hh
 - [ ] get rid of passing allocators to functions and use context exclusively
+- [ ] one allocator proc, get rid of vtable
 
 
 utils:

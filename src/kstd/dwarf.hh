@@ -6,6 +6,7 @@
 #include "kstd/basic.hh"
 #include "kstd/byte_reader.hh"
 #include "kstd/hash_table.hh"
+#include "gameos/serial_format.hh"
 
 namespace dwarf {
 
@@ -224,16 +225,25 @@ struct Attribute_Value {
     };
 };
 
+inline auto normalize_section_offset(Array_View<const u8> section, u32 raw_offset) -> usize {
+    if (raw_offset <= section.size) return raw_offset;
+
+    // Linker resolves this DWARF relocation to section address when debug
+    // sections are embedded in the loaded kernel image.
+    auto section_address = reinterpret_cast<psize>(section.data);
+    kstd_assert(static_cast<psize>(raw_offset) >= section_address, "dwarf: section offset out of range");
+
+    auto offset = static_cast<psize>(raw_offset) - section_address;
+    kstd_assert(offset <= section.size, "dwarf: section offset out of range");
+    return static_cast<usize>(offset);
+}
+
 auto read_section_string(Array_View<const u8> section, u32 offset) -> string {
-    kstd_assert(static_cast<usize>(offset) < section.size);
-
-    auto* data      = section.data + offset;
-    auto  remaining = section.size - offset;
-    usize length    = 0;
-    while (length < remaining && data[length] != 0) ++length;
-
-    kstd_assert(length < remaining);
-    return { reinterpret_cast<const char*>(data), length };
+    auto section_offset = normalize_section_offset(section, offset);
+    Byte_Reader reader(const_cast<u8*>(section.data + section_offset), section.size - section_offset);
+    auto [str, ok] = reader.read_cstring();
+    kstd_assert(ok, "dwarf: unterminated string in .debug_str/.debug_line_str");
+    return str;
 };
 
 //
@@ -355,8 +365,16 @@ auto read_attribute_value(
             kstd_assert(ok);
 
             auto section = form == Form::STRP ? debug_str_bytes : debug_line_str_bytes;
-            auto value   = read_section_string(section, offset);
-            return { .kind = STRING, .v_string = value };
+            if (form == Form::STRP) {
+                auto value = read_section_string(section, offset);
+                return { .kind = STRING, .v_string = value };
+            } else {
+                return { .kind = STRING, .v_string = "" };
+            }
+            // @TODO(blanktiger): Figure out why debug_line_str_bytes is not big enough.
+            // serial::println("%", form);
+            // auto value = read_section_string(section, offset);
+            // return { .kind = STRING, .v_string = value };
         } break;
 
         case Form::SDATA: {
@@ -463,6 +481,10 @@ struct Subprogram_Info {
     string name;
     psize  low_pc;
     psize  high_pc; // Exclusive, already normalized from offset-form Attribute_Type::HIGH_PC.
+
+    auto format() const -> string {
+        return sprint("Subprogram_Info{ %, 0x%, 0x% }\n", name, low_pc, high_pc);
+    }
 };
 
 
