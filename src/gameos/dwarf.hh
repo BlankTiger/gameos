@@ -7,6 +7,7 @@
 #include "kstd/string.hh"
 
 #include "gameos/serial_format.hh"
+#include "gameos/power.hh"
 
 namespace dwarf {
 
@@ -45,9 +46,12 @@ auto build_debug_info() -> void {
     Byte_Reader debug_abbrev(debug_abbrev_bytes);
 
     auto abbreviations = parse_abbreviations(debug_abbrev);
-    auto header = parse_compilation_unit_header(debug_info);
-    auto [subprogram_infos, line_offset, have_line_offset] = parse_compilation_unit_debug_information_entries(
+    auto compilation_unit_start = debug_info.current_offset;
+    auto header                 = parse_compilation_unit_header(debug_info);
+    auto compilation_unit_end   = compilation_unit_start + sizeof(u32) + header.length;
+    auto [subprogram_infos, debug_line_offset, has_debug_line_offset] = parse_compilation_unit_debug_information_entries(
         debug_info,
+        compilation_unit_end,
         abbreviations,
         header.address_size,
         debug_str_bytes,
@@ -57,6 +61,12 @@ auto build_debug_info() -> void {
     PUSH_CONTEXT();
     context.formatting_config.newline_after_each_array_element = true;
     serial::println("%", subprogram_infos);
+
+    // @TODO(blanktiger): Make this optional.
+    kstd_assert(has_debug_line_offset);
+    auto source_rows = parse_line_table(debug_line_bytes, debug_str_bytes, debug_line_str_bytes, debug_line_offset);
+
+    power::off();
 }
 
 }

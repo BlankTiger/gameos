@@ -83,13 +83,6 @@ struct Abbreviation {
     Array<Attribute_Spec> attribute_specs;
 };
 
-struct Source_Row {
-    psize  address;
-    string file_name;
-    u32    line;
-};
-
-
 auto parse_attribute_specs(Byte_Reader& debug_abbrev) -> Array<Attribute_Spec> {
     Array<Attribute_Spec> attribute_specs;
     for (;;) {
@@ -135,9 +128,8 @@ auto parse_abbreviations(Byte_Reader& debug_abbrev) -> Abbreviations {
         kstd_assert(tag_ok);
         auto tag = static_cast<Tag>(tag_value);
 
-        auto [has_children_value, has_children_ok] = debug_abbrev.read_u8();
+        auto [has_children, has_children_ok] = debug_abbrev.read_bool();
         kstd_assert(has_children_ok);
-        auto has_children = static_cast<bool>(has_children_value);
 
         auto attribute_specs = parse_attribute_specs(debug_abbrev);
 
@@ -365,16 +357,9 @@ auto read_attribute_value(
             kstd_assert(ok);
 
             auto section = form == Form::STRP ? debug_str_bytes : debug_line_str_bytes;
-            if (form == Form::STRP) {
-                auto value = read_section_string(section, offset);
-                return { .kind = STRING, .v_string = value };
-            } else {
-                return { .kind = STRING, .v_string = "" };
-            }
-            // @TODO(blanktiger): Figure out why debug_line_str_bytes is not big enough.
-            // serial::println("%", form);
-            // auto value = read_section_string(section, offset);
-            // return { .kind = STRING, .v_string = value };
+            auto normalized_offset = normalize_section_offset(section, offset);
+            auto value = read_section_string(section, normalized_offset);
+            return { .kind = STRING, .v_string = value };
         } break;
 
         case Form::SDATA: {
@@ -490,8 +475,10 @@ struct Subprogram_Info {
 
 struct Parse_Compilation_Unit_Result {
     Array<Subprogram_Info> infos;
-    u32  line_offset;
-    bool have_line_offset;
+
+    // This is an offset into .debug_line section.
+    u32  debug_line_offset;
+    bool has_debug_line_offset;
 };
 
 //
@@ -502,23 +489,20 @@ struct Parse_Compilation_Unit_Result {
 //
 auto parse_compilation_unit_debug_information_entries(
     Byte_Reader& debug_info,
+    usize compilation_unit_end,
     const Abbreviations& abbreviations,
     u8 address_size,
     Array_View<const u8> debug_str_bytes,
     Array_View<const u8> debug_line_str_bytes
 ) -> Parse_Compilation_Unit_Result {
     Array<Subprogram_Info> infos;
-    u32  line_offset      = 0;
-    bool have_line_offset = false;
+    u32  debug_line_offset     = 0;
+    bool has_debug_line_offset = false;
 
     // Initial size chosen arbitrarily.
     Array<bool> scope_stack(8);
     for (;;) {
-        // @TODO(blanktiger): This might be a little misleading, we could end
-        // up in an infinite loop despite not having 0 remaining bytes to read
-        // because we might spin on a read that fails. Make Byte_Reader hold an
-        // indicator that says if there was a failure or something.
-        if (debug_info.remaining() == 0) break;
+        if (debug_info.current_offset >= compilation_unit_end) break;
 
         auto [abbreviation_code, code_ok] = debug_info.read_uleb128();
         kstd_assert(code_ok);
@@ -581,10 +565,10 @@ auto parse_compilation_unit_debug_information_entries(
 
             if (spec.attribute_type == Attribute_Type::STMT_LIST) {
                 kstd_assert(declaration->tag == Tag::COMPILE_UNIT);
-                kstd_assert(!have_line_offset, "Should only have one per compilation unit.");
+                kstd_assert(!has_debug_line_offset, "Should only have one per compilation unit.");
                 kstd_assert(value.kind == Attribute_Value_Kind::UNSIGNED);
-                line_offset      = value.v_unsigned;
-                have_line_offset = true;
+                debug_line_offset     = value.v_unsigned;
+                has_debug_line_offset = true;
             }
         }
 
@@ -597,8 +581,206 @@ auto parse_compilation_unit_debug_information_entries(
             scope_stack.push_back(true);
     }
 
-    return { infos, line_offset, have_line_offset };
+    return { infos, debug_line_offset, has_debug_line_offset };
 }
 
+enum struct Line_Content_Type : u64 {
+    PATH = 0x01,
+};
+
+using Entry_Formats = Array<std::pair<Line_Content_Type, Form>>;
+
+struct Debug_Line_Header {
+    u64  unit_length;
+    u16  version;
+    u8   address_size;
+    u8   segment_selector_size;
+    u64  header_length;
+    u8   minimum_instruction_length;
+    u8   maximum_operations_per_instruction;
+    bool default_value_of_is_stmt_register;
+    s8   line_base;
+    u8   line_range;
+
+    u8                   opcode_base;
+    Array_View<const u8> standard_opcode_lengths;
+
+    // Before each of those arrays .debug_line encodes their count.
+    Entry_Formats directory_entry_formats;
+    Array<string> directories;
+    Entry_Formats file_name_entry_formats;
+    Array<string> file_names;
+};
+
+auto read_debug_line_header(
+    Byte_Reader&         debug_line,
+    Array_View<const u8> debug_str_bytes,
+    Array_View<const u8> debug_line_str_bytes
+) -> Debug_Line_Header {
+    auto [unit_length,                        unit_length_ok]                        = debug_line.read_u32();
+    auto [version,                            version_ok]                            = debug_line.read_u16();
+    auto [address_size,                       address_size_ok]                       = debug_line.read_u8();
+    auto [segment_selector_size,              segment_selector_size_ok]              = debug_line.read_u8();
+    auto [header_length,                      header_length_ok]                      = debug_line.read_u32(); // 32-bit DWARF
+    auto [minimum_instruction_length,         minimum_instruction_length_ok]         = debug_line.read_u8();
+    auto [maximum_operations_per_instruction, maximum_operations_per_instruction_ok] = debug_line.read_u8();
+    auto [default_value_of_is_stmt_register,  default_value_of_is_stmt_register_ok]  = debug_line.read_bool();
+    auto [line_base,                          line_base_ok]                          = debug_line.read_s8();
+    auto [line_range,                         line_range_ok]                         = debug_line.read_u8();
+    auto [opcode_base,                        opcode_base_ok]                        = debug_line.read_u8();
+
+    kstd_assert(unit_length_ok);
+    kstd_assert(version_ok);
+    kstd_assert(version == DWARF_VERSION);
+    kstd_assert(address_size_ok);
+    kstd_assert(segment_selector_size_ok);
+    kstd_assert(header_length_ok);
+    kstd_assert(minimum_instruction_length_ok);
+    kstd_assert(maximum_operations_per_instruction_ok);
+    kstd_assert(default_value_of_is_stmt_register_ok);
+    kstd_assert(line_base_ok);
+    kstd_assert(line_range_ok);
+    kstd_assert(opcode_base_ok);
+
+    auto [standard_opcode_lengths, standard_opcode_lengths_ok] = debug_line.read_bytes(opcode_base - 1);
+    kstd_assert(standard_opcode_lengths_ok);
+
+    Entry_Formats directory_entry_formats{};
+    Array<string> directories{};
+    {
+        auto [directory_entry_format_count, directory_entry_format_count_ok] = debug_line.read_u8();
+        kstd_assert(directory_entry_format_count_ok);
+
+        directory_entry_formats.reserve(directory_entry_format_count);
+        for (u8 index = 0; index < directory_entry_format_count; ++index) {
+            auto [line_content_type_value, line_content_type_ok] = debug_line.read_uleb128();
+            auto [form_value,              form_ok]              = debug_line.read_uleb128();
+
+            kstd_assert(line_content_type_ok);
+            kstd_assert(form_ok);
+
+            directory_entry_formats.push_back({
+                static_cast<Line_Content_Type>(line_content_type_value),
+                static_cast<Form>(form_value)
+            });
+        }
+
+        auto [directories_count, directories_count_ok] = debug_line.read_uleb128();
+        kstd_assert(directories_count_ok);
+
+        directories.reserve(directories_count);
+        for (u64 index = 0; index < directories_count; ++index) {
+            string path{};
+            bool   has_path = false;
+
+            defer({
+                kstd_assert(has_path);
+                directories.push_back(path);
+            });
+
+            for (const auto& [line_content_type, form] : directory_entry_formats) {
+                auto value = read_attribute_value(debug_line, form, address_size, 0, debug_str_bytes, debug_line_str_bytes);
+
+                if (line_content_type == Line_Content_Type::PATH) {
+                    kstd_assert(!has_path);
+                    kstd_assert(value.kind == Attribute_Value_Kind::STRING);
+
+                    has_path = true;
+                    path     = value.v_string;
+                }
+            }
+        }
+    }
+
+    // @TODO(blanktiger): This is pretty much identical to the block above. Unify.
+    Entry_Formats file_name_entry_formats{};
+    Array<string> file_names{};
+    {
+        auto [file_name_entry_format_count, file_name_entry_format_count_ok] = debug_line.read_u8();
+        kstd_assert(file_name_entry_format_count_ok);
+
+        file_name_entry_formats.reserve(file_name_entry_format_count);
+        for (u8 index = 0; index < file_name_entry_format_count; ++index) {
+            auto [line_content_type_value, line_content_type_ok] = debug_line.read_uleb128();
+            auto [form_value,              form_ok]              = debug_line.read_uleb128();
+
+            kstd_assert(line_content_type_ok);
+            kstd_assert(form_ok);
+
+            file_name_entry_formats.push_back({
+                static_cast<Line_Content_Type>(line_content_type_value),
+                static_cast<Form>(form_value)
+            });
+        }
+
+        auto [file_names_count, file_names_count_ok] = debug_line.read_uleb128();
+        kstd_assert(file_names_count_ok);
+
+        file_names.reserve(file_names_count);
+        for (u64 index = 0; index < file_names_count; ++index) {
+            string file_name{};
+            bool   has_file_name = false;
+
+            defer({
+                kstd_assert(has_file_name);
+                file_names.push_back(file_name);
+            });
+
+            for (const auto& [line_content_type, form] : file_name_entry_formats) {
+                auto value = read_attribute_value(debug_line, form, address_size, 0, debug_str_bytes, debug_line_str_bytes);
+
+                if (line_content_type == Line_Content_Type::PATH) {
+                    kstd_assert(!has_file_name);
+                    kstd_assert(value.kind == Attribute_Value_Kind::STRING);
+
+                    has_file_name = true;
+                    file_name     = value.v_string;
+                }
+            }
+        }
+    }
+
+    Debug_Line_Header header{
+        .unit_length                        = unit_length,
+        .version                            = version,
+        .address_size                       = address_size,
+        .segment_selector_size              = segment_selector_size,
+        .header_length                      = header_length,
+        .minimum_instruction_length         = minimum_instruction_length,
+        .maximum_operations_per_instruction = maximum_operations_per_instruction,
+        .default_value_of_is_stmt_register  = default_value_of_is_stmt_register,
+        .line_base                          = line_base,
+        .line_range                         = line_range,
+        .opcode_base                        = opcode_base,
+        .standard_opcode_lengths            = standard_opcode_lengths,
+        .directory_entry_formats            = directory_entry_formats,
+        .directories                        = directories,
+        .file_name_entry_formats            = file_name_entry_formats,
+        .file_names                         = file_names
+    };
+
+    return header;
+}
+
+struct Source_Row {
+    psize  address;
+    string file_name;
+    u32    line;
+};
+
+auto parse_line_table(
+    Array_View<const u8> debug_line_bytes,
+    Array_View<const u8> debug_str_bytes,
+    Array_View<const u8> debug_line_str_bytes,
+    u32 debug_line_offset
+) -> Array<Source_Row> {
+    Byte_Reader debug_line(debug_line_bytes);
+    auto normalized_offset = normalize_section_offset(debug_line_bytes, debug_line_offset);
+    auto skip_ok = debug_line.skip(normalized_offset);
+    kstd_assert(skip_ok);
+
+    auto header = read_debug_line_header(debug_line, debug_str_bytes, debug_line_str_bytes);
+    return {};
+}
 
 }

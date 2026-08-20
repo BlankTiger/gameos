@@ -46,6 +46,16 @@ struct Byte_Reader {
         return result;
     }
 
+    force_inline auto read_bool() -> Read_Result<bool> {
+        auto [value, value_ok] = read_u8();
+        return { static_cast<bool>(value), value_ok };
+    }
+
+    force_inline auto read_s8() -> Read_Result<s8> {
+        auto [value, value_ok] = read_u8();
+        return { std::bit_cast<s8>(value), value_ok };
+    }
+
     auto read_u16() -> Read_Result<u16> {
         if (size - current_offset < sizeof(u16)) return { u16{}, false };
 
