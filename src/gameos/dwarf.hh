@@ -28,11 +28,6 @@ extern "C" const u8 __debug_line_str_end[];
 
 auto build_debug_info() -> void {
     serial::println("dwarf: Building debug info");
-    serial::println("%, %", __debug_info_start, __debug_info_end);
-    serial::println("%, %", __debug_abbrev_start, __debug_abbrev_end);
-    serial::println("%, %", __debug_str_start, __debug_str_end);
-    serial::println("%, %", __debug_line_start, __debug_line_end);
-    serial::println("%, %", __debug_line_str_start, __debug_line_str_end);
 
     auto debug_info_size     = ptr_addr(__debug_info_end)     - ptr_addr(__debug_info_start);
     auto debug_abbrev_size   = ptr_addr(__debug_abbrev_end)   - ptr_addr(__debug_abbrev_start);
@@ -59,7 +54,8 @@ auto build_debug_info() -> void {
         debug_line_str_bytes
     );
 
-    kstd::context.formatting_config.newline_after_each_array_element = true;
+    PUSH_CONTEXT();
+    context.formatting_config.newline_after_each_array_element = true;
     serial::println("%", subprogram_infos);
 }
 

@@ -257,8 +257,8 @@ static force_inline auto print_value(Backend& backend, T&& value) -> int {
         } else {
             backend.put_char('[');
             int written = 1;
-            const bool newline_after_each = kstd::context.formatting_config.newline_after_each_array_element;
-            const usize indent_spaces     = kstd::context.formatting_config.array_element_indent_spaces;
+            const bool newline_after_each = context.formatting_config.newline_after_each_array_element;
+            const usize indent_spaces     = context.formatting_config.array_element_indent_spaces;
             auto* data_ptr = value.elements();
             usize sz = (usize)value.size;
             if (newline_after_each && sz > 0) {
@@ -299,8 +299,8 @@ static force_inline auto print_value(Backend& backend, T&& value) -> int {
         } else {
             backend.put_char('[');
             int written = 1;
-            const bool newline_after_each = kstd::context.formatting_config.newline_after_each_array_element;
-            const usize indent_spaces     = kstd::context.formatting_config.array_element_indent_spaces;
+            const bool newline_after_each = context.formatting_config.newline_after_each_array_element;
+            const usize indent_spaces     = context.formatting_config.array_element_indent_spaces;
             auto* data_ptr = value.data;
             usize sz = (usize)value.size;
             if (newline_after_each && sz > 0) {
@@ -653,10 +653,10 @@ TEST(fmt, prints_static_array) {
 TEST(fmt, prints_array_element_newlines_from_context) {
     fmt_test::Capture_Backend backend;
     Static_Array<int, 3>      arr{{10, 20, 30}};
-    const auto previous = kstd::context.formatting_config;
-    kstd::context.formatting_config.newline_after_each_array_element = true;
-    kstd::context.formatting_config.array_element_indent_spaces = 2;
-    defer(kstd::context.formatting_config = previous);
+    const auto previous = context.formatting_config;
+    context.formatting_config.newline_after_each_array_element = true;
+    context.formatting_config.array_element_indent_spaces = 2;
+    defer(context.formatting_config = previous);
 
     fmt::print(backend, arr);
 

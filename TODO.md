@@ -118,3 +118,4 @@ utils:
 - [ ] unfuck preprocessor (tokenizer?)
 - [ ] get rid of cmake (build.cc)
 - [ ] MEMORY_DEBUGGER (codex)
+- [ ] @using that embeds a union of a struct and it's fields so you can access it's fields directly without having to go through a member name

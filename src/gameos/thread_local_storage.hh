@@ -30,7 +30,7 @@ struct Block {
     void*           allocation = nullptr;
     mem::Allocator* allocator  = nullptr;
 
-    kstd::Context            context{};
+    Context                  context{};
     void*                    temporary_storage = nullptr;
     mem::Temporary_Allocator temporary_allocator{};
 
@@ -56,7 +56,7 @@ force_inline auto base() -> void* {
     return addr_as<void*>(low_level_io::read_model_specific_register(IA32_FS_BASE));
 }
 
-auto create(const kstd::Context& inherited_context) -> Block* {
+auto create(const Context& inherited_context) -> Block* {
     auto* allocator = inherited_context.allocator;
     kstd_assert(allocator != nullptr);
     auto* block     = static_cast<Block*>(allocator->alloc(sizeof(Block), alignof(Block)));
@@ -106,17 +106,17 @@ auto activate(Block* block) -> void {
     *reinterpret_cast<Block**>(block_pointer_storage) = block;
 
     set_base(thread_pointer);
-    kstd::context = block->context;
+    context = block->context;
 }
 
 auto destroy(Block* block) -> void {
     if (block == nullptr) return;
 
     auto* previous_base    = base();
-    auto  previous_context = kstd::context;
+    auto  previous_context = context;
     defer({
         set_base(previous_base);
-        kstd::context = previous_context;
+        context = previous_context;
     });
 
     activate(block);
@@ -145,7 +145,7 @@ extern "C" auto __cxa_thread_atexit(
     return 0;
 }
 
-auto initialize_bsp(const kstd::Context& inherited_context) -> void {
+auto initialize_bsp(const Context& inherited_context) -> void {
     auto* block = create(inherited_context);
     idle_blocks[0] = block;
     activate(block);
@@ -153,7 +153,7 @@ auto initialize_bsp(const kstd::Context& inherited_context) -> void {
 
 auto initialize_application_processor(
     u32 cpu_index,
-    const kstd::Context& inherited_context
+    const Context& inherited_context
 ) -> void {
     auto* ap_block = create(inherited_context);
     idle_blocks[cpu_index] = ap_block;
