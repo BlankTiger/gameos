@@ -255,19 +255,19 @@ struct Null_Allocator final : Allocator {
 inline Null_Allocator null_allocator{};
 
 force_inline auto set_allocator(Allocator* allocator) -> void {
-    kstd::context.allocator = allocator != nullptr ? allocator : &null_allocator;
+    context.allocator = allocator != nullptr ? allocator : &null_allocator;
 }
 
 force_inline auto set_temporary_allocator(Allocator* allocator) -> void {
-    kstd::context.temporary_allocator = allocator != nullptr ? allocator : &null_allocator;
+    context.temporary_allocator = allocator != nullptr ? allocator : &null_allocator;
 }
 
 force_inline auto resolve_allocator(Allocator* allocator) -> Allocator* {
-    return allocator != nullptr ? allocator : kstd::context.allocator;
+    return allocator != nullptr ? allocator : context.allocator;
 }
 
 force_inline auto resolve_temporary_allocator() -> Allocator* {
-    return kstd::context.temporary_allocator;
+    return context.temporary_allocator;
 }
 
 force_inline auto alloc(usize size, usize alignment, Allocator* allocator) -> void* {
@@ -283,7 +283,7 @@ force_inline auto free(void* pointer, usize size, usize alignment, Allocator* al
 struct Push_Allocator {
     Allocator* previous_allocator;
 
-    Push_Allocator(Allocator* new_allocator) : previous_allocator(kstd::context.allocator) {
+    Push_Allocator(Allocator* new_allocator) : previous_allocator(context.allocator) {
         set_allocator(new_allocator);
     }
     ~Push_Allocator() {
@@ -295,7 +295,7 @@ struct Push_Temporary_Allocator {
     Allocator* previous_allocator;
 
     Push_Temporary_Allocator(Allocator* new_allocator)
-        : previous_allocator(kstd::context.temporary_allocator) {
+        : previous_allocator(context.temporary_allocator) {
         set_temporary_allocator(new_allocator);
     }
     ~Push_Temporary_Allocator() {

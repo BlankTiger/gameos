@@ -103,6 +103,7 @@ base layer:
 - [ ] remove all the integer postfix conversions and replace them with explicit typing u32{}, u64{}, etc
 - [ ] move dragging logic to input.hh
 - [ ] get rid of passing allocators to functions and use context exclusively
+- [ ] one allocator proc, get rid of vtable
 
 
 utils:
@@ -117,3 +118,4 @@ utils:
 - [ ] unfuck preprocessor (tokenizer?)
 - [ ] get rid of cmake (build.cc)
 - [ ] MEMORY_DEBUGGER (codex)
+- [ ] @using that embeds a union of a struct and it's fields so you can access it's fields directly without having to go through a member name

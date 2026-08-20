@@ -7,6 +7,7 @@
 
 #include "basic.hh"
 #include "cstring.hh"
+#include "context.hh"
 #include "enum_name.hh"
 #include "string.hh"
 #include "assert.hh"
@@ -256,15 +257,35 @@ static force_inline auto print_value(Backend& backend, T&& value) -> int {
         } else {
             backend.put_char('[');
             int written = 1;
+            const bool newline_after_each = context.formatting_config.newline_after_each_array_element;
+            const usize indent_spaces     = context.formatting_config.array_element_indent_spaces;
             auto* data_ptr = value.elements();
             usize sz = (usize)value.size;
+            if (newline_after_each && sz > 0) {
+                backend.new_line();
+                ++written;
+            }
             for (usize i = 0; i < sz; ++i) {
-                if (i > 0) {
+                if (i > 0 && !newline_after_each) {
                     backend.put_char(',');
                     backend.put_char(' ');
                     written += 2;
                 }
+                if (newline_after_each) {
+                    for (usize j = 0; j < indent_spaces; ++j) {
+                        backend.put_char(' ');
+                    }
+                    written += (int)indent_spaces;
+                }
                 written += print_value(backend, data_ptr[i]);
+                if (newline_after_each) {
+                    if (i + 1 < sz) {
+                        backend.put_char(',');
+                        ++written;
+                    }
+                    backend.new_line();
+                    ++written;
+                }
             }
             backend.put_char(']');
             return written + 1;
@@ -278,15 +299,35 @@ static force_inline auto print_value(Backend& backend, T&& value) -> int {
         } else {
             backend.put_char('[');
             int written = 1;
+            const bool newline_after_each = context.formatting_config.newline_after_each_array_element;
+            const usize indent_spaces     = context.formatting_config.array_element_indent_spaces;
             auto* data_ptr = value.data;
             usize sz = (usize)value.size;
+            if (newline_after_each && sz > 0) {
+                backend.new_line();
+                ++written;
+            }
             for (usize i = 0; i < sz; ++i) {
-                if (i > 0) {
+                if (i > 0 && !newline_after_each) {
                     backend.put_char(',');
                     backend.put_char(' ');
                     written += 2;
                 }
+                if (newline_after_each) {
+                    for (usize j = 0; j < indent_spaces; ++j) {
+                        backend.put_char(' ');
+                    }
+                    written += (int)indent_spaces;
+                }
                 written += print_value(backend, data_ptr[i]);
+                if (newline_after_each) {
+                    if (i + 1 < sz) {
+                        backend.put_char(',');
+                        ++written;
+                    }
+                    backend.new_line();
+                    ++written;
+                }
             }
             backend.put_char(']');
             return written + 1;
@@ -607,6 +648,19 @@ TEST(fmt, prints_static_array) {
     fmt::print(backend, arr);
 
     EXPECT_STREQ(backend.buffer, "[10, 20, 30]");
+}
+
+TEST(fmt, prints_array_element_newlines_from_context) {
+    fmt_test::Capture_Backend backend;
+    Static_Array<int, 3>      arr{{10, 20, 30}};
+    const auto previous = context.formatting_config;
+    context.formatting_config.newline_after_each_array_element = true;
+    context.formatting_config.array_element_indent_spaces = 2;
+    defer(context.formatting_config = previous);
+
+    fmt::print(backend, arr);
+
+    EXPECT_STREQ(backend.buffer, "[\n  10,\n  20,\n  30\n]");
 }
 
 TEST(fmt, prints_sized_array_view) {

@@ -23,6 +23,12 @@ struct Byte_Reader {
           size(source.size),
           current_offset(0) {}
 
+    // @TODO(blanktiger): Make source const u8*
+    Byte_Reader(Array_View<const u8> source)
+        : source(const_cast<u8*>(source.data)),
+          size(source.size),
+          current_offset(0) {}
+
     template <typename T>
     struct Read_Result {
         T    result;
@@ -38,6 +44,16 @@ struct Byte_Reader {
         Read_Result<u8> result(source[current_offset], true);
         current_offset += sizeof(u8);
         return result;
+    }
+
+    force_inline auto read_bool() -> Read_Result<bool> {
+        auto [value, value_ok] = read_u8();
+        return { static_cast<bool>(value), value_ok };
+    }
+
+    force_inline auto read_s8() -> Read_Result<s8> {
+        auto [value, value_ok] = read_u8();
+        return { std::bit_cast<s8>(value), value_ok };
     }
 
     auto read_u16() -> Read_Result<u16> {

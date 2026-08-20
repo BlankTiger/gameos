@@ -65,8 +65,8 @@ struct Hosted_Allocator_Init {
             linux_temporary_allocator_buffer,
             LINUX_TEMPORARY_ALLOCATOR_SIZE
         );
-        kstd::context.allocator           = &hosted_allocator;
-        kstd::context.temporary_allocator = &mem::temporary_allocator;
+        context.allocator           = &hosted_allocator;
+        context.temporary_allocator = &mem::temporary_allocator;
     }
 };
 

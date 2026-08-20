@@ -50,6 +50,10 @@ SECTIONS
 		KEEP(*(.debug_line))
 		__debug_line_end = .;
 
+	}
+
+	.debug_line_str BLOCK(1K) : ALIGN(1)
+	{
 		__debug_line_str_start = .;
 		KEEP(*(.debug_line_str))
 		__debug_line_str_end = .;
