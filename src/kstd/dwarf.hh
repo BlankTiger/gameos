@@ -925,8 +925,41 @@ auto parse_line_table(const Sections& sections, u32 debug_line_offset) -> Array<
 
             using enum Line_Number_Extended_Opcode;
             switch (static_cast<Line_Number_Extended_Opcode>(extended_opcode)) {
-                case END_SEQUENCE: {} break;
-                case SET_ADDRESS: {} break;
+                case END_SEQUENCE: {
+                    //
+                    // This might appear like it has no effect whatsoever, but
+                    // that's only because our Source_Row doesn't retain that
+                    // information. Documentation on DWARF5 says that this is
+                    // important so.. don't remove it.
+                    //
+                    state.end_sequence = true;
+
+                    rows.push_back({ state.address, header.file_names[state.file_index], state.line });
+                    state = Debug_Line_State{header.default_value_of_is_stmt_register};
+                } break;
+
+                case SET_ADDRESS: {
+                    psize new_address;
+                    if (header.address_size == 4) {
+                        auto [address, address_ok] = debug_line.read_u32();
+                        kstd_assert(address_ok);
+
+                        new_address = address;
+                    }
+                    else if (header.address_size == 8) {
+                        auto [address, address_ok] = debug_line.read_u64();
+                        kstd_assert(address_ok);
+
+                        new_address = address;
+                    }
+                    else {
+                        [[unlikely]]
+                        unreachable();
+                    }
+
+                    state.address  = new_address;
+                    state.op_index = 0;
+                } break;
             }
         }
         else if (opcode < header.opcode_base) {

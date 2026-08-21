@@ -51,7 +51,10 @@ auto build_debug_info() -> void {
         .debug_str_bytes         = { debug_str_size,         __debug_str_start         },
         .debug_line_str_bytes    = { debug_line_str_size,    __debug_line_str_start    },
         .debug_str_offsets_bytes = { debug_str_offsets_size, __debug_str_offsets_start },
-        .debug_addr_bytes        = { debug_addr_size,        __debug_addr_start        }
+        .debug_addr_bytes        = { debug_addr_size,        __debug_addr_start        },
+        // These two fields will get set while parsing.
+        .debug_str_offsets_base  = 0,
+        .debug_addr_base         = 0,
     };
 
     Byte_Reader debug_info(sections.debug_info_bytes);
