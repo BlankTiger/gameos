@@ -1,12 +1,11 @@
 #pragma once
 
-#include "enum_name.hh"
+#include "kstd/enum_name.hh"
 #include "kstd/array.hh"
 #include "kstd/assert.hh"
 #include "kstd/basic.hh"
 #include "kstd/byte_reader.hh"
 #include "kstd/hash_table.hh"
-#include "gameos/serial_format.hh"
 
 namespace dwarf {
 
@@ -18,6 +17,8 @@ struct Sections {
     Array_View<const u8> debug_line_str_bytes;
     Array_View<const u8> debug_str_offsets_bytes;
     Array_View<const u8> debug_addr_bytes;
+    u64                  debug_str_offsets_base;
+    u64                  debug_addr_base;
 };
 
 enum struct Tag : u64 {
@@ -27,10 +28,12 @@ enum struct Tag : u64 {
 @enum_to_string(Tag);
 
 enum struct Attribute_Type : u64 {
-    NAME      = 0x03,
-    STMT_LIST = 0x10,
-    LOW_PC    = 0x11,
-    HIGH_PC   = 0x12,
+    NAME             = 0x03,
+    STMT_LIST        = 0x10,
+    LOW_PC           = 0x11,
+    HIGH_PC          = 0x12,
+    STR_OFFSETS_BASE = 0x72,
+    ADDR_BASE        = 0x73,
 };
 @enum_to_string(Attribute_Type);
 
@@ -254,8 +257,9 @@ auto resolve_strx(
     u64 str_offsets_base,
     u64 index
 ) -> string {
+    auto section_offset = normalize_section_offset(debug_str_offsets_bytes, str_offsets_base);
     Byte_Reader reader(debug_str_offsets_bytes);
-    auto skip_ok = reader.skip(str_offsets_base + index * sizeof(u32));
+    auto skip_ok = reader.skip(section_offset + index * sizeof(u32));
     kstd_assert(skip_ok, "dwarf: strx index out of range");
 
     auto [str_offset, str_offset_ok] = reader.read_u32();
@@ -270,8 +274,9 @@ auto resolve_addrx(
     u64 addr_base,
     u64 index
 ) -> u64 {
+    auto section_offset = normalize_section_offset(debug_addr_bytes, addr_base);
     Byte_Reader reader(debug_addr_bytes);
-    auto skip_ok = reader.skip(addr_base + index * address_size);
+    auto skip_ok = reader.skip(section_offset + index * address_size);
     kstd_assert(skip_ok, "dwarf: addrx index out of range");
 
     if (address_size == 8) {
@@ -434,13 +439,13 @@ auto read_attribute_value(
         case Form::STRX: {
             auto [index, ok] = debug_info.read_uleb128();
             kstd_assert(ok);
-            return { .kind = STRING, .v_string = resolve_strx(sections.debug_str_offsets_bytes, sections.debug_str_bytes, str_offsets_base, index) };
+            return { .kind = STRING, .v_string = resolve_strx(sections.debug_str_offsets_bytes, sections.debug_str_bytes, sections.debug_str_offsets_base, index) };
         } break;
 
         case Form::ADDRX: {
             auto [index, ok] = debug_info.read_uleb128();
             kstd_assert(ok);
-            return { .kind = UNSIGNED, resolve_addrx(sections.debug_addr_bytes, address_size, addr_base, index) };
+            return { UNSIGNED, resolve_addrx(sections.debug_addr_bytes, address_size, sections.debug_addr_base, index) };
         } break;
 
         case Form::LOCLISTX:
@@ -454,49 +459,51 @@ auto read_attribute_value(
         case Form::STRX1: {
             auto [index, ok] = debug_info.read_u8();
             kstd_assert(ok);
-            return { .kind = STRING, .v_string = resolve_strx(sections.debug_str_offsets_bytes, sections.debug_str_bytes, str_offsets_base, index) };
+            return { .kind = STRING, .v_string = resolve_strx(sections.debug_str_offsets_bytes, sections.debug_str_bytes, sections.debug_str_offsets_base, index) };
         } break;
 
         case Form::STRX2: {
             auto [index, ok] = debug_info.read_u16();
             kstd_assert(ok);
-            return { .kind = STRING, .v_string = resolve_strx(sections.debug_str_offsets_bytes, sections.debug_str_bytes, str_offsets_base, index) };
+            return { .kind = STRING, .v_string = resolve_strx(sections.debug_str_offsets_bytes, sections.debug_str_bytes, sections.debug_str_offsets_base, index) };
         } break;
 
         case Form::STRX3: {
-            auto [index, ok] = debug_info.read_u32();
+            auto [bytes, ok] = debug_info.read_bytes(3);
             kstd_assert(ok);
-            return { .kind = STRING, .v_string = resolve_strx(sections.debug_str_offsets_bytes, sections.debug_str_bytes, str_offsets_base, index) };
+            u32 index = bytes[0] | (bytes[1] << 8) | (bytes[2] << 16);
+            return { .kind = STRING, .v_string = resolve_strx(sections.debug_str_offsets_bytes, sections.debug_str_bytes, sections.debug_str_offsets_base, index) };
         } break;
 
         case Form::STRX4: {
-            auto [index, ok] = debug_info.read_u64();
+            auto [index, ok] = debug_info.read_u32();
             kstd_assert(ok);
-            return { .kind = STRING, .v_string = resolve_strx(sections.debug_str_offsets_bytes, sections.debug_str_bytes, str_offsets_base, index) };
+            return { .kind = STRING, .v_string = resolve_strx(sections.debug_str_offsets_bytes, sections.debug_str_bytes, sections.debug_str_offsets_base, index) };
         } break;
 
         case Form::ADDRX1: {
             auto [index, ok] = debug_info.read_u8();
             kstd_assert(ok);
-            return { .kind = UNSIGNED, resolve_addrx(sections.debug_addr_bytes, address_size, addr_base, index) };
+            return { UNSIGNED, resolve_addrx(sections.debug_addr_bytes, address_size, sections.debug_addr_base, index) };
         } break;
 
         case Form::ADDRX2: {
             auto [index, ok] = debug_info.read_u16();
             kstd_assert(ok);
-            return { .kind = UNSIGNED, resolve_addrx(sections.debug_addr_bytes, address_size, addr_base, index) };
+            return { UNSIGNED, resolve_addrx(sections.debug_addr_bytes, address_size, sections.debug_addr_base, index) };
         } break;
 
         case Form::ADDRX3: {
-            auto [index, ok] = debug_info.read_u32();
+            auto [bytes, ok] = debug_info.read_bytes(3);
             kstd_assert(ok);
-            return { .kind = UNSIGNED, resolve_addrx(sections.debug_addr_bytes, address_size, addr_base, index) };
+            u32 index = bytes[0] | (bytes[1] << 8) | (bytes[2] << 16);
+            return { UNSIGNED, resolve_addrx(sections.debug_addr_bytes, address_size, sections.debug_addr_base, index) };
         } break;
 
         case Form::ADDRX4: {
-            auto [index, ok] = debug_info.read_u64();
+            auto [index, ok] = debug_info.read_u32();
             kstd_assert(ok);
-            return { .kind = UNSIGNED, resolve_addrx(sections.debug_addr_bytes, address_size, addr_base, index) };
+            return { UNSIGNED, resolve_addrx(sections.debug_addr_bytes, address_size, sections.debug_addr_base, index) };
         } break;
 
         case Form::REF_SUP4:
@@ -549,12 +556,6 @@ struct Parse_Compilation_Unit_Result {
 
     u32  debug_line_offset;
     bool has_debug_line_offset;
-
-    u64  debug_str_offsets_base;
-    bool has_debug_str_offsets_base;
-
-    u64  debug_addr_base;
-    bool has_debug_addr_base;
 };
 
 //
@@ -568,17 +569,14 @@ auto parse_compilation_unit_debug_information_entries(
     usize compilation_unit_end,
     const Abbreviations& abbreviations,
     u8 address_size,
-    const Sections& sections
+    Sections& sections
 ) -> Parse_Compilation_Unit_Result {
     Array<Subprogram_Info> infos;
     u32  debug_line_offset     = 0;
     bool has_debug_line_offset = false;
 
-    u64  debug_str_offsets_base     = 0;
     bool has_debug_str_offsets_base = false;
-
-    u64  debug_addr_base     = 0;
-    bool has_debug_addr_base = false;
+    bool has_debug_addr_base        = false;
 
     // Initial size chosen arbitrarily.
     Array<bool> scope_stack(8);
@@ -608,7 +606,7 @@ auto parse_compilation_unit_debug_information_entries(
         psize  high_pc_raw{};
         bool   high_pc_is_offset = false;
 
-        for (const auto& spec: declaration->attribute_specs) {
+        for (const auto& spec : declaration->attribute_specs) {
             auto value = read_attribute_value(
                 debug_info,
                 spec.form,
@@ -655,16 +653,16 @@ auto parse_compilation_unit_debug_information_entries(
                 kstd_assert(declaration->tag == Tag::COMPILE_UNIT);
                 kstd_assert(!has_debug_str_offsets_base, "Should only have one per compilation unit.");
                 kstd_assert(value.kind == Attribute_Value_Kind::UNSIGNED);
-                debug_str_offsets_base     = value.v_unsigned;
-                has_debug_str_offsets_base = true;
+                sections.debug_str_offsets_base = value.v_unsigned;
+                has_debug_str_offsets_base      = true;
             }
 
             if (spec.attribute_type == Attribute_Type::ADDR_BASE) {
                 kstd_assert(declaration->tag == Tag::COMPILE_UNIT);
                 kstd_assert(!has_debug_addr_base, "Should only have one per compilation unit.");
                 kstd_assert(value.kind == Attribute_Value_Kind::UNSIGNED);
-                debug_addr_base     = value.v_unsigned;
-                has_debug_addr_base = true;
+                sections.debug_addr_base = value.v_unsigned;
+                has_debug_addr_base      = true;
             }
         }
 
