@@ -842,15 +842,18 @@ auto parse_debug_line_header(Byte_Reader& debug_line, const Sections& sections) 
 }
 
 enum struct Line_Number_Standard_Opcode : u64 {
-    COPY             = 0x01,
-    ADVANCE_PC       = 0x02,
-    ADVANCE_LINE     = 0x03,
-    SET_FILE         = 0x04,
-    SET_COLUMN       = 0x05,
-    NEGATE_STMT      = 0x06,
-    SET_BASIC_BLOCK  = 0x07,
-    CONST_ADD_PC     = 0x08,
-    FIXED_ADVANCE_PC = 0x09,
+    COPY               = 0x01,
+    ADVANCE_PC         = 0x02,
+    ADVANCE_LINE       = 0x03,
+    SET_FILE           = 0x04,
+    SET_COLUMN         = 0x05,
+    NEGATE_STMT        = 0x06,
+    SET_BASIC_BLOCK    = 0x07,
+    CONST_ADD_PC       = 0x08,
+    FIXED_ADVANCE_PC   = 0x09,
+    SET_PROLOGUE_END   = 0x0a,
+    SET_PROLOGUE_BEGIN = 0x0b,
+    SET_ISA            = 0x0c,
 };
 @enum_to_string(Line_Number_Standard_Opcode);
 
@@ -885,8 +888,17 @@ struct Debug_Line_State {
 
     Debug_Line_State() = delete;
 
-    explicit Debug_Line_State(bool is_stmt) : is_stmt(is_stmt) {}
+    explicit Debug_Line_State(bool default_is_stmt) : is_stmt(default_is_stmt) {}
 };
+
+auto handle_special_opcode(Debug_Line_State& state, const Debug_Line_Header& header, u8 opcode) -> void {
+    auto adjusted_opcode   = opcode - header.opcode_base;
+    auto operation_advance = adjusted_opcode / header.line_range;
+    auto line_advance      = header.line_base + (adjusted_opcode % header.line_range);
+
+    state.address += operation_advance * header.minimum_instruction_length;
+    state.line    += line_advance;
+}
 
 auto parse_line_table(const Sections& sections, u32 debug_line_offset) -> Array<Source_Row> {
     Byte_Reader debug_line(sections.debug_line_bytes);
@@ -920,25 +932,84 @@ auto parse_line_table(const Sections& sections, u32 debug_line_offset) -> Array<
         else if (opcode < header.opcode_base) {
             using enum Line_Number_Standard_Opcode;
             switch (static_cast<Line_Number_Standard_Opcode>(opcode)) {
-                case COPY: {} break;
-                case ADVANCE_PC: {} break;
-                case ADVANCE_LINE: {} break;
-                case SET_FILE: {} break;
-                case SET_COLUMN: {} break;
-                case NEGATE_STMT: {} break;
-                case SET_BASIC_BLOCK: {} break;
-                case CONST_ADD_PC: {} break;
-                case FIXED_ADVANCE_PC: {} break;
+                case COPY: {
+                    state.basic_block    = false;
+                    state.prologue_end   = false;
+                    state.epilogue_begin = false;
+                    state.discriminator  = 0;
+
+                    rows.push_back({ state.address, header.file_names[state.file_index], state.line });
+                } break;
+
+                case ADVANCE_PC: {
+                    auto [op_advance, op_advance_ok] = debug_line.read_uleb128();
+                    kstd_assert(op_advance_ok);
+
+                    state.address += header.minimum_instruction_length * ((state.op_index + op_advance) / header.maximum_operations_per_instruction);
+                    state.op_index = (state.op_index + op_advance) % header.maximum_operations_per_instruction;
+                } break;
+
+                case ADVANCE_LINE: {
+                    auto [line_advance, line_advance_ok] = debug_line.read_sleb128();
+                    kstd_assert(line_advance_ok);
+
+                    state.line += line_advance;
+                } break;
+
+                case SET_FILE: {
+                    auto [new_file_index, new_file_index_ok] = debug_line.read_uleb128();
+                    kstd_assert(new_file_index_ok);
+
+                    state.file_index = new_file_index;
+                } break;
+
+                case SET_COLUMN: {
+                    auto [new_column, new_column_ok] = debug_line.read_uleb128();
+                    kstd_assert(new_column_ok);
+
+                    state.column = new_column;
+                } break;
+
+                case NEGATE_STMT: {
+                    state.is_stmt = !state.is_stmt;
+                } break;
+
+                case SET_BASIC_BLOCK: {
+                    state.basic_block = true;
+                } break;
+
+                case CONST_ADD_PC: {
+                    // Do what a special opcode 255 would do.
+                    handle_special_opcode(state, header, 255);
+                } break;
+
+                case FIXED_ADVANCE_PC: {
+                    auto [op_advance, op_advance_ok] = debug_line.read_u16();
+                    kstd_assert(op_advance_ok);
+
+                    state.address += op_advance;
+                    state.op_index = 0;
+                } break;
+
+                case SET_PROLOGUE_END: {
+                    state.prologue_end = true;
+                } break;
+
+                case SET_PROLOGUE_BEGIN: {
+                    state.epilogue_begin = true;
+                } break;
+
+                case SET_ISA: {
+                    auto [new_isa, new_isa_ok] = debug_line.read_uleb128();
+                    kstd_assert(new_isa_ok);
+
+                    state.isa = new_isa;
+                } break;
             }
         }
         else {
             // Special opcode handling.
-            auto adjusted_opcode   = opcode - header.opcode_base;
-            auto operation_advance = adjusted_opcode / header.line_range;
-            auto line_advance      = header.line_base + (adjusted_opcode % header.line_range);
-
-            state.address += operation_advance * header.minimum_instruction_length;
-            state.line    += line_advance;
+            handle_special_opcode(state, header, opcode);
 
             rows.push_back({ state.address, header.file_names[state.file_index], state.line });
         }
