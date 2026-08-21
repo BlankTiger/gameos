@@ -156,6 +156,7 @@ auto parse_abbreviations(Byte_Reader& debug_abbrev) -> Abbreviations {
 enum struct Unit_Type : u8 {
     COMPILE = 0x01,
 };
+@enum_to_string(Unit_Type);
 
 struct Compilation_Unit_Header {
     u64       length;
@@ -679,10 +680,20 @@ auto parse_compilation_unit_debug_information_entries(
 }
 
 enum struct Line_Content_Type : u64 {
-    PATH = 0x01,
+    PATH      = 0x01,
+    DIRECTORY = 0x02,
 };
+@enum_to_string(Line_Content_Type);
 
-using Entry_Formats = Array<std::pair<Line_Content_Type, Form>>;
+struct Entry_Format {
+    Line_Content_Type type;
+    Form              form;
+
+    auto format() const -> string {
+        return sprint("Entry_Format{ %, % }", type, form);
+    }
+};
+using Entry_Formats = Array<Entry_Format>;
 
 auto parse_entry_formats(Byte_Reader& debug_line) -> Entry_Formats {
     auto [entry_format_count, entry_format_count_ok] = debug_line.read_u8();
@@ -800,6 +811,7 @@ auto parse_debug_line_header(Byte_Reader& debug_line, const Sections& sections) 
     );
 
     auto file_name_entry_formats = parse_entry_formats(debug_line);
+    // @TODO(blanktiger): Join directory paths and file paths if file_name_entry_formats contain DIRECTORY.
     auto file_names = parse_directories_or_file_names(
         debug_line,
         address_size,
@@ -829,10 +841,51 @@ auto parse_debug_line_header(Byte_Reader& debug_line, const Sections& sections) 
     return header;
 }
 
+enum struct Line_Number_Standard_Opcode : u64 {
+    COPY             = 0x01,
+    ADVANCE_PC       = 0x02,
+    ADVANCE_LINE     = 0x03,
+    SET_FILE         = 0x04,
+    SET_COLUMN       = 0x05,
+    NEGATE_STMT      = 0x06,
+    SET_BASIC_BLOCK  = 0x07,
+    CONST_ADD_PC     = 0x08,
+    FIXED_ADVANCE_PC = 0x09,
+};
+@enum_to_string(Line_Number_Standard_Opcode);
+
+
+constexpr auto EXTENDED_OPCODE_MARKER = 0;
+
+enum struct Line_Number_Extended_Opcode : u64 {
+    END_SEQUENCE = 0x01,
+    SET_ADDRESS  = 0x02,
+};
+@enum_to_string(Line_Number_Extended_Opcode);
+
 struct Source_Row {
     psize  address;
     string file_name;
     u32    line;
+};
+
+struct Debug_Line_State {
+    psize address        = 0;
+    u64   op_index       = 0;
+    u32   file_index     = 1;
+    u32   line           = 1;
+    u32   column         = 0;
+    bool  is_stmt;
+    bool  basic_block    = false;
+    bool  end_sequence   = false;
+    bool  prologue_end   = false;
+    bool  epilogue_begin = false;
+    u32   isa            = 0;
+    u32   discriminator  = 0;
+
+    Debug_Line_State() = delete;
+
+    explicit Debug_Line_State(bool is_stmt) : is_stmt(is_stmt) {}
 };
 
 auto parse_line_table(const Sections& sections, u32 debug_line_offset) -> Array<Source_Row> {
@@ -841,8 +894,57 @@ auto parse_line_table(const Sections& sections, u32 debug_line_offset) -> Array<
     auto skip_ok = debug_line.skip(normalized_offset);
     kstd_assert(skip_ok);
 
-    auto header = parse_debug_line_header(debug_line, sections);
-    return {};
+    const auto header = parse_debug_line_header(debug_line, sections);
+
+    Debug_Line_State state(header.default_value_of_is_stmt_register);
+
+    Array<Source_Row> rows;
+    while (debug_line.remaining() > 0) {
+        auto [opcode, ok] = debug_line.read_u8();
+        kstd_assert(ok);
+
+        if (opcode == EXTENDED_OPCODE_MARKER) {
+            // length includes extended_opcode value, so payload is length - 1
+            auto [length,          length_ok]          = debug_line.read_uleb128();
+            auto [extended_opcode, extended_opcode_ok] = debug_line.read_u8();
+
+            kstd_assert(length_ok);
+            kstd_assert(extended_opcode_ok);
+
+            using enum Line_Number_Extended_Opcode;
+            switch (static_cast<Line_Number_Extended_Opcode>(extended_opcode)) {
+                case END_SEQUENCE: {} break;
+                case SET_ADDRESS: {} break;
+            }
+        }
+        else if (opcode < header.opcode_base) {
+            using enum Line_Number_Standard_Opcode;
+            switch (static_cast<Line_Number_Standard_Opcode>(opcode)) {
+                case COPY: {} break;
+                case ADVANCE_PC: {} break;
+                case ADVANCE_LINE: {} break;
+                case SET_FILE: {} break;
+                case SET_COLUMN: {} break;
+                case NEGATE_STMT: {} break;
+                case SET_BASIC_BLOCK: {} break;
+                case CONST_ADD_PC: {} break;
+                case FIXED_ADVANCE_PC: {} break;
+            }
+        }
+        else {
+            // Special opcode handling.
+            auto adjusted_opcode   = opcode - header.opcode_base;
+            auto operation_advance = adjusted_opcode / header.line_range;
+            auto line_advance      = header.line_base + (adjusted_opcode % header.line_range);
+
+            state.address += operation_advance * header.minimum_instruction_length;
+            state.line    += line_advance;
+
+            rows.push_back({ state.address, header.file_names[state.file_index], state.line });
+        }
+    }
+
+    return rows;
 }
 
 }
