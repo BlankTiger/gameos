@@ -50,6 +50,14 @@ SECTIONS
 		KEEP(*(.debug_line))
 		__debug_line_end = .;
 
+		__debug_str_offsets_start = .;
+		KEEP(*(.debug_str_offsets))
+		__debug_str_offsets_end = .;
+
+		__debug_addr_start = .;
+		KEEP(*(.debug_addr))
+		__debug_addr_end = .;
+
 	}
 
 	.debug_line_str BLOCK(1K) : ALIGN(1)

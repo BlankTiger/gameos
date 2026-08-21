@@ -10,6 +10,16 @@
 
 namespace dwarf {
 
+struct Sections {
+    Array_View<const u8> debug_info_bytes;
+    Array_View<const u8> debug_abbrev_bytes;
+    Array_View<const u8> debug_line_bytes;
+    Array_View<const u8> debug_str_bytes;
+    Array_View<const u8> debug_line_str_bytes;
+    Array_View<const u8> debug_str_offsets_bytes;
+    Array_View<const u8> debug_addr_bytes;
+};
+
 enum struct Tag : u64 {
     COMPILE_UNIT = 0x11,
     SUBPROGRAM   = 0x2e,
@@ -244,12 +254,11 @@ auto read_section_string(Array_View<const u8> section, u32 offset) -> string {
 // into a table this parser doesn't build, e.g. strx/addrx), returns it.
 //
 auto read_attribute_value(
-    Byte_Reader&         debug_info,
-    Form                 form,
-    u8                   address_size,
-    s64                  implicit_const,
-    Array_View<const u8> debug_str_bytes,
-    Array_View<const u8> debug_line_str_bytes
+    Byte_Reader&    debug_info,
+    Form            form,
+    u8              address_size,
+    s64             implicit_const,
+    const Sections& sections
 ) -> Attribute_Value {
     using enum Attribute_Value_Kind;
 
@@ -356,7 +365,7 @@ auto read_attribute_value(
             auto [offset, ok] = debug_info.read_u32();
             kstd_assert(ok);
 
-            auto section = form == Form::STRP ? debug_str_bytes : debug_line_str_bytes;
+            auto section = form == Form::STRP ? sections.debug_str_bytes : sections.debug_line_str_bytes;
             auto normalized_offset = normalize_section_offset(section, offset);
             auto value = read_section_string(section, normalized_offset);
             return { .kind = STRING, .v_string = value };
@@ -450,8 +459,7 @@ auto read_attribute_value(
                 static_cast<Form>(actual_form),
                 address_size,
                 implicit_const,
-                debug_str_bytes,
-                debug_line_str_bytes
+                sections
             );
         } break;
 
@@ -492,8 +500,7 @@ auto parse_compilation_unit_debug_information_entries(
     usize compilation_unit_end,
     const Abbreviations& abbreviations,
     u8 address_size,
-    Array_View<const u8> debug_str_bytes,
-    Array_View<const u8> debug_line_str_bytes
+    const Sections& sections
 ) -> Parse_Compilation_Unit_Result {
     Array<Subprogram_Info> infos;
     u32  debug_line_offset     = 0;
@@ -533,8 +540,7 @@ auto parse_compilation_unit_debug_information_entries(
                 spec.form,
                 address_size,
                 spec.implicit_const,
-                debug_str_bytes,
-                debug_line_str_bytes
+                sections
             );
 
             if (is_subprogram) {
@@ -615,8 +621,7 @@ auto parse_directories_or_file_names(
     Byte_Reader& debug_line,
     usize address_size,
     const Entry_Formats& entry_formats,
-    Array_View<const u8> debug_str_bytes,
-    Array_View<const u8> debug_line_str_bytes
+    const Sections& sections
 ) -> Array<string> {
     auto [count, count_ok] = debug_line.read_uleb128();
     kstd_assert(count_ok);
@@ -632,7 +637,7 @@ auto parse_directories_or_file_names(
         });
 
         for (const auto& [line_content_type, form] : entry_formats) {
-            auto value = read_attribute_value(debug_line, form, address_size, 0, debug_str_bytes, debug_line_str_bytes);
+            auto value = read_attribute_value(debug_line, form, address_size, 0, sections);
 
             if (line_content_type == Line_Content_Type::PATH) {
                 kstd_assert(!has_path);
@@ -669,11 +674,7 @@ struct Debug_Line_Header {
     Array<string> file_names;
 };
 
-auto parse_debug_line_header(
-    Byte_Reader&         debug_line,
-    Array_View<const u8> debug_str_bytes,
-    Array_View<const u8> debug_line_str_bytes
-) -> Debug_Line_Header {
+auto parse_debug_line_header(Byte_Reader& debug_line, const Sections& sections) -> Debug_Line_Header {
     auto [unit_length,                        unit_length_ok]                        = debug_line.read_u32();
     auto [version,                            version_ok]                            = debug_line.read_u16();
     auto [address_size,                       address_size_ok]                       = debug_line.read_u8();
@@ -707,8 +708,7 @@ auto parse_debug_line_header(
         debug_line,
         address_size,
         directory_entry_formats,
-        debug_str_bytes,
-        debug_line_str_bytes
+        sections
     );
 
     auto file_name_entry_formats = parse_entry_formats(debug_line);
@@ -716,8 +716,7 @@ auto parse_debug_line_header(
         debug_line,
         address_size,
         file_name_entry_formats,
-        debug_str_bytes,
-        debug_line_str_bytes
+        sections
     );
 
     Debug_Line_Header header{
@@ -748,18 +747,13 @@ struct Source_Row {
     u32    line;
 };
 
-auto parse_line_table(
-    Array_View<const u8> debug_line_bytes,
-    Array_View<const u8> debug_str_bytes,
-    Array_View<const u8> debug_line_str_bytes,
-    u32 debug_line_offset
-) -> Array<Source_Row> {
-    Byte_Reader debug_line(debug_line_bytes);
-    auto normalized_offset = normalize_section_offset(debug_line_bytes, debug_line_offset);
+auto parse_line_table(const Sections& sections, u32 debug_line_offset) -> Array<Source_Row> {
+    Byte_Reader debug_line(sections.debug_line_bytes);
+    auto normalized_offset = normalize_section_offset(sections.debug_line_bytes, debug_line_offset);
     auto skip_ok = debug_line.skip(normalized_offset);
     kstd_assert(skip_ok);
 
-    auto header = parse_debug_line_header(debug_line, debug_str_bytes, debug_line_str_bytes);
+    auto header = parse_debug_line_header(debug_line, sections);
     return {};
 }
 
