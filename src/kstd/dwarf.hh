@@ -680,8 +680,8 @@ auto parse_compilation_unit_debug_information_entries(
 }
 
 enum struct Line_Content_Type : u64 {
-    PATH      = 0x01,
-    DIRECTORY = 0x02,
+    PATH            = 0x01,
+    DIRECTORY_INDEX = 0x02,
 };
 @enum_to_string(Line_Content_Type);
 
@@ -869,14 +869,14 @@ enum struct Line_Number_Extended_Opcode : u64 {
 struct Source_Row {
     psize  address;
     string file_name;
-    u32    line;
+    s32    line;
 };
 
 struct Debug_Line_State {
     psize address        = 0;
     u64   op_index       = 0;
-    u32   file_index     = 1;
-    u32   line           = 1;
+    u32   file_index     = 0;
+    s32   line           = 1;
     u32   column         = 0;
     bool  is_stmt;
     bool  basic_block    = false;
@@ -891,27 +891,25 @@ struct Debug_Line_State {
     explicit Debug_Line_State(bool default_is_stmt) : is_stmt(default_is_stmt) {}
 };
 
-auto handle_special_opcode(Debug_Line_State& state, const Debug_Line_Header& header, u8 opcode) -> void {
-    auto adjusted_opcode   = opcode - header.opcode_base;
-    auto operation_advance = adjusted_opcode / header.line_range;
-    auto line_advance      = header.line_base + (adjusted_opcode % header.line_range);
-
-    state.address += operation_advance * header.minimum_instruction_length;
-    state.line    += line_advance;
-}
-
 auto parse_line_table(const Sections& sections, u32 debug_line_offset) -> Array<Source_Row> {
     Byte_Reader debug_line(sections.debug_line_bytes);
     auto normalized_offset = normalize_section_offset(sections.debug_line_bytes, debug_line_offset);
     auto skip_ok = debug_line.skip(normalized_offset);
     kstd_assert(skip_ok);
 
-    const auto header = parse_debug_line_header(debug_line, sections);
+    const auto unit_start = debug_line.current_offset;
+    const auto header     = parse_debug_line_header(debug_line, sections);
+
+    auto payload_start = unit_start + sizeof(u32);
+    kstd_assert(payload_start <= debug_line.size);
+    kstd_assert(header.unit_length <= static_cast<u64>(debug_line.size - payload_start));
+
+    auto unit_end = payload_start + static_cast<usize>(header.unit_length);
 
     Debug_Line_State state(header.default_value_of_is_stmt_register);
 
     Array<Source_Row> rows;
-    while (debug_line.remaining() > 0) {
+    while (debug_line.current_offset < unit_end) {
         auto [opcode, ok] = debug_line.read_u8();
         kstd_assert(ok);
 
@@ -926,6 +924,7 @@ auto parse_line_table(const Sections& sections, u32 debug_line_offset) -> Array<
             using enum Line_Number_Extended_Opcode;
             switch (static_cast<Line_Number_Extended_Opcode>(extended_opcode)) {
                 case END_SEQUENCE: {
+                    kstd_assert(length == 1);
                     //
                     // This might appear like it has no effect whatsoever, but
                     // that's only because our Source_Row doesn't retain that
@@ -957,8 +956,17 @@ auto parse_line_table(const Sections& sections, u32 debug_line_offset) -> Array<
                         unreachable();
                     }
 
+                    auto skip_ok = debug_line.skip(length - header.address_size - 1);
+                    kstd_assert(skip_ok);
+
                     state.address  = new_address;
                     state.op_index = 0;
+                } break;
+
+                default: {
+                    // For now we just consume those bytes without doing anything with them.
+                    auto skip_ok = debug_line.skip(length - 1);
+                    kstd_assert(skip_ok);
                 } break;
             }
         }
@@ -1012,8 +1020,11 @@ auto parse_line_table(const Sections& sections, u32 debug_line_offset) -> Array<
                 } break;
 
                 case CONST_ADD_PC: {
-                    // Do what a special opcode 255 would do.
-                    handle_special_opcode(state, header, 255);
+                    // Do what a special opcode 255 would do to the address.
+                    auto adjusted_opcode = 255 - header.opcode_base;
+                    auto op_advance      = adjusted_opcode / header.line_range;
+
+                    state.address += op_advance * header.minimum_instruction_length;
                 } break;
 
                 case FIXED_ADVANCE_PC: {
@@ -1042,11 +1053,18 @@ auto parse_line_table(const Sections& sections, u32 debug_line_offset) -> Array<
         }
         else {
             // Special opcode handling.
-            handle_special_opcode(state, header, opcode);
+            auto adjusted_opcode = opcode - header.opcode_base;
+            auto op_advance      = adjusted_opcode / header.line_range;
+            auto line_advance    = header.line_base + (adjusted_opcode % header.line_range);
+
+            state.address += op_advance * header.minimum_instruction_length;
+            state.line    += line_advance;
+            state.op_index = (state.op_index + op_advance) % header.maximum_operations_per_instruction;
 
             rows.push_back({ state.address, header.file_names[state.file_index], state.line });
         }
     }
+    kstd_assert(debug_line.current_offset == unit_end);
 
     return rows;
 }
