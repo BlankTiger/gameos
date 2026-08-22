@@ -271,8 +271,8 @@ force_inline auto set_allocator(Allocator* allocator) -> void {
     context.allocator = allocator != nullptr ? allocator : &null_allocator;
 }
 
-force_inline auto set_temporary_allocator(Allocator* allocator) -> void {
-    context.temporary_allocator = allocator != nullptr ? allocator : &null_allocator;
+force_inline auto set_temporary_allocator(Temporary_Allocator* allocator) -> void {
+    context.temporary_allocator = allocator;
 }
 
 force_inline auto resolve_allocator(Allocator* allocator) -> Allocator* {
@@ -305,9 +305,9 @@ struct Push_Allocator {
 };
 
 struct Push_Temporary_Allocator {
-    Allocator* previous_allocator;
+    Temporary_Allocator* previous_allocator;
 
-    Push_Temporary_Allocator(Allocator* new_allocator)
+    Push_Temporary_Allocator(Temporary_Allocator* new_allocator)
         : previous_allocator(context.temporary_allocator) {
         set_temporary_allocator(new_allocator);
     }

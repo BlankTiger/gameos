@@ -581,12 +581,15 @@ struct Pending_Subprogram {
 //
 auto parse_compilation_unit_debug_information_entries(
     Byte_Reader& debug_info,
+    usize compilation_unit_start,
     usize compilation_unit_end,
     const Abbreviations& abbreviations,
     u8 address_size,
     Sections& sections
 ) -> Parse_Compilation_Unit_Result {
     Array<Subprogram_Info> infos;
+    Hash_Table<usize, string> names;
+    Array<Pending_Subprogram> pending_subprograms;
     u32  debug_line_offset     = 0;
     bool has_debug_line_offset = false;
 
@@ -726,6 +729,45 @@ auto parse_compilation_unit_debug_information_entries(
 
     return { infos, debug_line_offset, has_debug_line_offset };
 }
+
+auto parse_subprograms(Byte_Reader& debug_info, Sections& sections) -> Parse_Compilation_Unit_Result {
+    Array<Subprogram_Info> infos;
+    u32  debug_line_offset     = 0;
+    bool has_debug_line_offset = false;
+
+    while (debug_info.remaining() > 0) {
+        auto compilation_unit_start = debug_info.current_offset;
+        auto header                 = parse_compilation_unit_header(debug_info);
+        auto compilation_unit_end   = compilation_unit_start + sizeof(u32) + header.length;
+
+        auto abbreviation_offset = normalize_section_offset(
+            sections.debug_abbrev_bytes,
+            static_cast<u32>(header.abbreviation_offset)
+        );
+        Byte_Reader abbreviation_reader(
+            const_cast<u8*>(sections.debug_abbrev_bytes.data + abbreviation_offset),
+            sections.debug_abbrev_bytes.size - abbreviation_offset
+        );
+        auto abbreviations = parse_abbreviations(abbreviation_reader, 400);
+
+        auto result = parse_compilation_unit_debug_information_entries(
+            debug_info,
+            compilation_unit_start,
+            compilation_unit_end,
+            abbreviations,
+            header.address_size,
+            sections
+        );
+
+        infos.extend(result.infos);
+
+        if (!has_debug_line_offset && result.has_debug_line_offset) {
+            debug_line_offset     = result.debug_line_offset;
+            has_debug_line_offset = true;
+        }
+
+        debug_info.current_offset = compilation_unit_end;
+    }
 
     return { infos, debug_line_offset, has_debug_line_offset };
 }

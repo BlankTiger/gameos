@@ -40,6 +40,8 @@ struct Hash_Table {
         kstd_assert(entries.data    != nullptr);
     }
 
+    explicit Hash_Table(mem::Allocator* backing_allocator) : Hash_Table(MIN_SIZE, backing_allocator) {}
+
     ~Hash_Table() {
         _destroy_entries(entries);
     }

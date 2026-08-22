@@ -394,7 +394,7 @@ struct Bounded_Array {
         );
     }
 
-    auto extend(Array_View<const T> from) -> void {
+    auto extend(const Array_View<T> from) -> void {
         const usize source_size = from.size;
         ensure_space_for(source_size);
         for (usize i = 0; i < source_size; ++i)
@@ -476,7 +476,7 @@ TEST(Bounded_Array, extend_appends_another_array) {
     other.push_back(2);
     other.push_back(3);
 
-    arr.extend(Array_View<const int>{other.size, other.elements()});
+    arr.extend(other);
 
     EXPECT_EQ(arr.size, 3);
     EXPECT_EQ(arr[0], 1);
@@ -692,12 +692,10 @@ struct Array {
         ++size;
     }
 
-    auto extend(Array_View<const T> from) -> void {
+    auto extend(const Array_View<T> from) -> void {
         const usize source_size = from.size;
         const bool source_is_self = from.data == data;
         ensure_space_for(source_size);
-        if (source_is_self)
-            from.data = data;
         for (usize i = 0; i < source_size; ++i)
             push_back(from[i]);
     }
