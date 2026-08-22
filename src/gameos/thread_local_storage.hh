@@ -89,7 +89,11 @@ auto create(const Context& inherited_context) -> Block* {
         .destructors         = {},
     };
     if (temporary_storage != nullptr) {
-        block->temporary_allocator.init(temporary_storage, mem::TEMPORARY_STORAGE_SIZE);
+        block->temporary_allocator.~Temporary_Allocator();
+        new (&block->temporary_allocator) mem::Temporary_Allocator{
+            temporary_storage,
+            mem::TEMPORARY_STORAGE_SIZE,
+        };
         block->context.temporary_allocator = &block->temporary_allocator;
     }
     return block;

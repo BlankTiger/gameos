@@ -46,6 +46,8 @@ struct Temporary_Allocator final : Allocator {
 
     Temporary_Allocator() = default;
 
+    explicit Temporary_Allocator(usize size) : Temporary_Allocator(context.allocator, size) {}
+
     Temporary_Allocator(void* memory, usize size) {
         kstd_assert(memory != nullptr);
         kstd_assert(size > 0);

@@ -40,6 +40,37 @@ struct Hash_Table {
         kstd_assert(entries.data    != nullptr);
     }
 
+    Hash_Table(const Hash_Table&) = delete;
+
+    Hash_Table(Hash_Table&& from) noexcept
+        : count(from.count),
+          slots_filled(from.slots_filled),
+          allocator(from.allocator),
+          entries(from.entries) {
+        from.count        = 0;
+        from.slots_filled = 0;
+        from.allocator    = nullptr;
+        from.entries      = {};
+    }
+
+    auto operator = (Hash_Table&& from) noexcept -> Hash_Table& {
+        if (this == &from) return *this;
+
+        _destroy_entries(entries);
+
+        count        = from.count;
+        slots_filled = from.slots_filled;
+        allocator    = from.allocator;
+        entries      = from.entries;
+
+        from.count        = 0;
+        from.slots_filled = 0;
+        from.allocator    = nullptr;
+        from.entries      = {};
+
+        return *this;
+    }
+
     explicit Hash_Table(mem::Allocator* backing_allocator) : Hash_Table(MIN_SIZE, backing_allocator) {}
 
     ~Hash_Table() {

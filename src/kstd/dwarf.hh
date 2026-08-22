@@ -587,12 +587,11 @@ auto parse_compilation_unit_debug_information_entries(
     u8 address_size,
     Sections& sections
 ) -> Parse_Compilation_Unit_Result {
-    // @TODO(blanktiger): Figure out why we can't just use
-    // context.temporary_allocator. Some assert is firing in Hash_Table even
-    // when I make the temporary storage bigger.
-    // mem::Arena_Allocator temp(2 * 1024 * 1024);
-    Hash_Table<usize, string> names(context.temporary_allocator);
-    Array<Pending_Subprogram> pending_subprograms(context.temporary_allocator);
+    const auto* temporary_allocator_mark = context.temporary_allocator->mark();
+    defer(context.temporary_allocator->rewind(temporary_allocator_mark));
+
+    Hash_Table<usize, string> names(temporary_allocator);
+    Array<Pending_Subprogram> pending_subprograms(temporary_allocator);
 
     Array<Subprogram_Info> infos;
 

@@ -50,6 +50,9 @@ namespace hidden {
 auto build_debug_info() -> void {
     serial::println("dwarf: Building debug info");
 
+    mem::Temporary_Allocator dwarf_temp(2 * 1024 * 1024);
+    PUSH_TEMPORARY_ALLOCATOR(&dwarf_temp);
+
     using namespace hidden;
     PUSH_ALLOCATOR(&debug_info_building_allocator);
     defer(serial::println("DWARF parsing uses: % MB", static_cast<f32>(debug_info_building_allocator.bytes_used()) / 1024 / 1024));
