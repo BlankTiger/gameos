@@ -401,6 +401,13 @@ struct Bounded_Array {
             push_back(from[i]);
     }
 
+    auto extend(const Array_View<const T> from) -> void {
+        const usize source_size = from.size;
+        ensure_space_for(source_size);
+        for (usize i = 0; i < source_size; ++i)
+            push_back(from[i]);
+    }
+
     auto pop_back() -> T {
         kstd_assert(size > 0, "pop_back on empty Bounded_Array");
         auto element = std::move(*slot(size - 1));
@@ -697,7 +704,15 @@ struct Array {
         const bool source_is_self = from.data == data;
         ensure_space_for(source_size);
         for (usize i = 0; i < source_size; ++i)
-            push_back(from[i]);
+            push_back(source_is_self ? data[i] : from[i]);
+    }
+
+    auto extend(const Array_View<const T> from) -> void {
+        const usize source_size = from.size;
+        const bool source_is_self = from.data == data;
+        ensure_space_for(source_size);
+        for (usize i = 0; i < source_size; ++i)
+            push_back(source_is_self ? data[i] : from[i]);
     }
 
     auto pop_back() -> T {
