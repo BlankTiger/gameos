@@ -547,7 +547,7 @@ struct Subprogram_Info {
     psize  high_pc; // Exclusive, already normalized from offset-form Attribute_Type::HIGH_PC.
 
     auto format() const -> string {
-        return sprint("Subprogram_Info{ %, 0x%, 0x% }", name, low_pc, high_pc);
+        return sprint("Subprogram_Info{ %, %, % }", name, reinterpret_cast<void*>(low_pc), reinterpret_cast<void*>(high_pc));
     }
 };
 
@@ -871,6 +871,10 @@ struct Source_Row {
     string file_name;
     s32    line;
     bool   is_end_of_sequence;
+
+    auto format() const -> string {
+        return sprint("Source_Row{ %, %, %, % }", address, file_name, line, is_end_of_sequence);
+    }
 };
 
 struct Debug_Line_State {
@@ -1071,6 +1075,64 @@ auto parse_line_table(const Sections& sections, u32 debug_line_offset, usize pre
     kstd_assert(debug_line.current_offset == unit_end);
 
     return rows;
+}
+
+auto function_name_for_address(const Array_View<Subprogram_Info>& infos, psize address) -> string {
+    for (const auto& info : infos) {
+        if (info.low_pc <= address && address < info.high_pc) {
+            return info.name;
+        }
+    }
+
+    return "<unknown>";
+}
+
+struct Source_Lookup_Result {
+    Source_Row row;
+    bool       found;
+
+    auto format() const -> string {
+        return sprint("Result{ %, % }", row, found);
+    }
+};
+
+auto source_for_address(const Array_View<Source_Row>& rows, psize address) -> Source_Lookup_Result {
+    Source_Row result{};
+    bool       found = false;
+
+    Source_Row sequence_result{};
+    bool       sequence_found = false;
+    bool       in_sequence    = false;
+
+    for (const auto& row : rows) {
+        if (row.is_end_of_sequence) {
+            if (in_sequence && sequence_found && address < row.address) {
+                result = sequence_result;
+                found  = true;
+            }
+
+            in_sequence    = false;
+            sequence_found = false;
+            continue;
+        }
+
+        if (!in_sequence) {
+            in_sequence    = true;
+            sequence_found = false;
+        }
+
+        if (row.address <= address && (!sequence_found || row.address > sequence_result.address)) {
+            sequence_result = row;
+            sequence_found  = true;
+        }
+    }
+
+    if (in_sequence && sequence_found) {
+        result = sequence_result;
+        found  = true;
+    }
+
+    return { result, found };
 }
 
 }

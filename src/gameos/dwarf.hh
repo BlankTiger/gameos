@@ -24,8 +24,8 @@ extern "C" const u8 __debug_str_end[];
 extern "C" const u8 __debug_line_start[];
 extern "C" const u8 __debug_line_end[];
 
-extern "C" const u8 __debug_line_str_start[];
-extern "C" const u8 __debug_line_str_end[];
+extern "C" const u8 __rodata_start[];
+extern "C" const u8 __rodata_end[];
 
 extern "C" const u8 __debug_str_offsets_start[];
 extern "C" const u8 __debug_str_offsets_end[];
@@ -42,6 +42,8 @@ namespace hidden {
     //
     // @TODO(blanktiger): Actually do it.
     mem::Arena_Allocator debug_info_allocator(0);
+
+    
 }
 
 auto build_debug_info() -> void {
@@ -59,7 +61,8 @@ auto build_debug_info() -> void {
     auto debug_abbrev_size      = ptr_addr(__debug_abbrev_end)      - ptr_addr(__debug_abbrev_start);
     auto debug_line_size        = ptr_addr(__debug_line_end)        - ptr_addr(__debug_line_start);
     auto debug_str_size         = ptr_addr(__debug_str_end)         - ptr_addr(__debug_str_start);
-    auto debug_line_str_size    = ptr_addr(__debug_line_str_end)    - ptr_addr(__debug_line_str_start);
+    // Linker merges .debug_line_str strings into .rodata. Use full loaded range.
+    auto rodata_size            = ptr_addr(__rodata_end)             - ptr_addr(__rodata_start);
     auto debug_str_offsets_size = ptr_addr(__debug_str_offsets_end) - ptr_addr(__debug_str_offsets_start);
     auto debug_addr_size        = ptr_addr(__debug_addr_end)        - ptr_addr(__debug_addr_start);
 
@@ -68,7 +71,7 @@ auto build_debug_info() -> void {
         .debug_abbrev_bytes      = { debug_abbrev_size,      __debug_abbrev_start      },
         .debug_line_bytes        = { debug_line_size,        __debug_line_start        },
         .debug_str_bytes         = { debug_str_size,         __debug_str_start         },
-        .debug_line_str_bytes    = { debug_line_str_size,    __debug_line_str_start    },
+        .debug_line_str_bytes    = { rodata_size,            __rodata_start            },
         .debug_str_offsets_bytes = { debug_str_offsets_size, __debug_str_offsets_start },
         .debug_addr_bytes        = { debug_addr_size,        __debug_addr_start        },
         // These two fields will get set while parsing.
@@ -101,6 +104,11 @@ auto build_debug_info() -> void {
 
     // Currently we get around 32k rows, so preallocate a little more than that.
     auto source_rows = parse_line_table(sections, debug_line_offset, 34'000);
+
+    auto free_string_address = reinterpret_cast<psize>(&free_string);
+    auto name                = function_name_for_address(subprogram_infos, free_string_address);
+    auto row                 = source_for_address(source_rows, free_string_address);
+    serial::println("%, %", name, row);
 }
 
 }
