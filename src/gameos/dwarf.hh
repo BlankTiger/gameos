@@ -5,6 +5,7 @@
 #include "kstd/dwarf.hh"
 #include "kstd/pointer_utils.hh"
 #include "kstd/string.hh"
+#include "kstd/allocator.hh"
 
 #include "gameos/serial_format.hh"
 #include "gameos/power.hh"
@@ -32,9 +33,27 @@ extern "C" const u8 __debug_str_offsets_end[];
 extern "C" const u8 __debug_addr_start[];
 extern "C" const u8 __debug_addr_end[];
 
+namespace hidden {
+    //
+    // This is the arena where everything built will be copied into to make it
+    // compact. The building arena will be completely deallocated after that. To
+    // start with it gets initialized with size 0 and then it's gonna be resized once we
+    // know how much stuff it needs to hold.
+    //
+    // @TODO(blanktiger): Actually do it.
+    mem::Arena_Allocator debug_info_allocator(0);
+}
 
 auto build_debug_info() -> void {
     serial::println("dwarf: Building debug info");
+
+    defer(power::off());
+
+    mem::Arena_Allocator debug_info_building_allocator(5 * 1024 * 1024);
+
+    using namespace hidden;
+    PUSH_ALLOCATOR(&debug_info_building_allocator);
+    defer(serial::println("DWARF parsing uses: % MB", static_cast<f32>(debug_info_building_allocator.bytes_used()) / 1024 / 1024));
 
     auto debug_info_size        = ptr_addr(__debug_info_end)        - ptr_addr(__debug_info_start);
     auto debug_abbrev_size      = ptr_addr(__debug_abbrev_end)      - ptr_addr(__debug_abbrev_start);
@@ -60,7 +79,8 @@ auto build_debug_info() -> void {
     Byte_Reader debug_info(sections.debug_info_bytes);
     Byte_Reader debug_abbrev(sections.debug_abbrev_bytes);
 
-    auto abbreviations = parse_abbreviations(debug_abbrev);
+    // Currently we get around 260 abbreviations, so preallocate a little bit more than that.
+    auto abbreviations = parse_abbreviations(debug_abbrev, 400);
     auto compilation_unit_start = debug_info.current_offset;
     auto header                 = parse_compilation_unit_header(debug_info);
     auto compilation_unit_end   = compilation_unit_start + sizeof(u32) + header.length;
@@ -78,9 +98,9 @@ auto build_debug_info() -> void {
 
     // @TODO(blanktiger): Make this optional.
     kstd_assert(has_debug_line_offset);
-    auto source_rows = parse_line_table(sections, debug_line_offset);
 
-    power::off();
+    // Currently we get around 32k rows, so preallocate a little more than that.
+    auto source_rows = parse_line_table(sections, debug_line_offset, 34'000);
 }
 
 }

@@ -128,8 +128,8 @@ using Abbreviations = Hash_Table<u64, Abbreviation>;
 // `debug_abbrev` must be initialized with memory of the .debug_abbrev section.
 // It's stopped at the (0, 0, 0) terminator that ends the abbreviations table.
 //
-auto parse_abbreviations(Byte_Reader& debug_abbrev) -> Abbreviations {
-    Abbreviations abbreviations;
+auto parse_abbreviations(Byte_Reader& debug_abbrev, usize preallocate_abbreviation_count = 0) -> Abbreviations {
+    Abbreviations abbreviations(preallocate_abbreviation_count);
 
     for (;;) {
         auto [abbreviation_code, code_ok] = debug_abbrev.read_uleb128();
@@ -892,7 +892,7 @@ struct Debug_Line_State {
     explicit Debug_Line_State(bool default_is_stmt) : is_stmt(default_is_stmt) {}
 };
 
-auto parse_line_table(const Sections& sections, u32 debug_line_offset) -> Array<Source_Row> {
+auto parse_line_table(const Sections& sections, u32 debug_line_offset, usize preallocate_row_count = 0) -> Array<Source_Row> {
     Byte_Reader debug_line(sections.debug_line_bytes);
     auto normalized_offset = normalize_section_offset(sections.debug_line_bytes, debug_line_offset);
     auto skip_ok = debug_line.skip(normalized_offset);
@@ -909,7 +909,7 @@ auto parse_line_table(const Sections& sections, u32 debug_line_offset) -> Array<
 
     Debug_Line_State state(header.default_value_of_is_stmt_register);
 
-    Array<Source_Row> rows;
+    Array<Source_Row> rows(preallocate_row_count);
     while (debug_line.current_offset < unit_end) {
         auto [opcode, ok] = debug_line.read_u8();
         kstd_assert(ok);

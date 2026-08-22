@@ -136,6 +136,15 @@ struct Arena_Allocator final : Allocator {
         }
     }
 
+    auto resize_and_dont_copy_old_memory(usize reserve) {
+        allocated = align_up(reserve, mem::PAGE_SIZE);
+        memory_base = static_cast<u8*>(backing_allocator->alloc(allocated));
+        kstd_assert(memory_base != nullptr);
+
+        current_point = memory_base;
+        address_limit = memory_base + allocated;
+    }
+
     auto reset() -> void {
         if constexpr (DEBUG) {
             const auto STAMP = 0xCC;
@@ -146,6 +155,10 @@ struct Arena_Allocator final : Allocator {
 
     auto bytes_left() -> usize {
         return address_limit - current_point;
+    }
+
+    auto bytes_used() -> usize {
+        return current_point - memory_base;
     }
 
     auto alloc(usize size, usize alignment = alignof(std::max_align_t)) -> void* override {
