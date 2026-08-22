@@ -587,11 +587,8 @@ auto parse_compilation_unit_debug_information_entries(
     u8 address_size,
     Sections& sections
 ) -> Parse_Compilation_Unit_Result {
-    const auto* temporary_allocator_mark = context.temporary_allocator->mark();
-    defer(context.temporary_allocator->rewind(temporary_allocator_mark));
-
-    Hash_Table<usize, string> names(temporary_allocator);
-    Array<Pending_Subprogram> pending_subprograms(temporary_allocator);
+    Hash_Table<usize, string> names;
+    Array<Pending_Subprogram> pending_subprograms;
 
     Array<Subprogram_Info> infos;
 
@@ -741,6 +738,11 @@ auto parse_subprograms(Byte_Reader& debug_info, Sections& sections) -> Parse_Com
     bool has_debug_line_offset = false;
 
     while (debug_info.remaining() > 0) {
+        auto* temp_mark = context.temporary_allocator->mark();
+        defer(context.temporary_allocator->rewind(temp_mark));
+
+        PUSH_ALLOCATOR(context.temporary_allocator);
+
         auto compilation_unit_start = debug_info.current_offset;
         auto header                 = parse_compilation_unit_header(debug_info);
         auto compilation_unit_end   = compilation_unit_start + sizeof(u32) + header.length;
