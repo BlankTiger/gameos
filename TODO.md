@@ -104,6 +104,10 @@ base layer:
 - [ ] move dragging logic to input.hh
 - [ ] get rid of passing allocators to functions and use context exclusively
 - [ ] one allocator proc, get rid of vtable
+- [ ] return Receipt values from functions that you have to pass to other functions that expect those previous functions to be called before them
+- [ ] also when expecting that a lock is held while doing something require the lock itself to be passed in
+- [ ] reorder generated debug information in memory for faster lookups
+
 
 
 utils:

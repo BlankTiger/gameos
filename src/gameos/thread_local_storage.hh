@@ -62,15 +62,14 @@ auto create(const Context& inherited_context) -> Block* {
     auto* block     = static_cast<Block*>(allocator->alloc(sizeof(Block), alignof(Block)));
     auto* image     = static_cast<u8*>(allocator->alloc(allocation_size(), TLS_ALIGNMENT));
     void* temporary_storage = nullptr;
-    if (inherited_context.temporary_allocator != nullptr && inherited_context.temporary_allocator != &mem::null_allocator) {
+    if (inherited_context.temporary_allocator != nullptr) {
         temporary_storage = allocator->alloc(mem::TEMPORARY_STORAGE_SIZE, TLS_ALIGNMENT);
     }
     kstd_assert(
         block != nullptr &&
         image != nullptr &&
         (
-            inherited_context.temporary_allocator == nullptr              ||
-            inherited_context.temporary_allocator == &mem::null_allocator ||
+            inherited_context.temporary_allocator == nullptr ||
             temporary_storage != nullptr
         ),
         "TLS allocation failed"
@@ -90,7 +89,11 @@ auto create(const Context& inherited_context) -> Block* {
         .destructors         = {},
     };
     if (temporary_storage != nullptr) {
-        block->temporary_allocator.init(temporary_storage, mem::TEMPORARY_STORAGE_SIZE);
+        block->temporary_allocator.~Temporary_Allocator();
+        new (&block->temporary_allocator) mem::Temporary_Allocator{
+            temporary_storage,
+            mem::TEMPORARY_STORAGE_SIZE,
+        };
         block->context.temporary_allocator = &block->temporary_allocator;
     }
     return block;

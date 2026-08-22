@@ -42,12 +42,35 @@ struct Temporary_Allocator final : Allocator {
     u8* current = nullptr;
     u8* end     = nullptr;
 
-    auto init(void* memory, usize size) -> void {
+    Allocator* backing_allocator = nullptr;
+
+    Temporary_Allocator() = default;
+
+    explicit Temporary_Allocator(usize size) : Temporary_Allocator(context.allocator, size) {}
+
+    Temporary_Allocator(void* memory, usize size) {
         kstd_assert(memory != nullptr);
         kstd_assert(size > 0);
         base    = static_cast<u8*>(memory);
         current = base;
         end     = base + size;
+    }
+
+    Temporary_Allocator(Allocator* backing_allocator, usize size)
+        : backing_allocator(resolve_allocator(backing_allocator)) {
+        kstd_assert(this->backing_allocator != nullptr);
+        kstd_assert(size > 0);
+        auto* backing_memory = this->backing_allocator->alloc(size);
+        kstd_assert(backing_memory != nullptr);
+        base    = static_cast<u8*>(backing_memory);
+        current = base;
+        end     = base + size;
+    }
+
+    ~Temporary_Allocator() {
+        if (backing_allocator != nullptr && base != nullptr) {
+            backing_allocator->free(base, static_cast<usize>(end - base));
+        }
     }
 
     auto reset() -> void {
@@ -136,6 +159,15 @@ struct Arena_Allocator final : Allocator {
         }
     }
 
+    auto resize_and_dont_copy_old_memory(usize reserve) {
+        allocated = align_up(reserve, mem::PAGE_SIZE);
+        memory_base = static_cast<u8*>(backing_allocator->alloc(allocated));
+        kstd_assert(memory_base != nullptr);
+
+        current_point = memory_base;
+        address_limit = memory_base + allocated;
+    }
+
     auto reset() -> void {
         if constexpr (DEBUG) {
             const auto STAMP = 0xCC;
@@ -146,6 +178,10 @@ struct Arena_Allocator final : Allocator {
 
     auto bytes_left() -> usize {
         return address_limit - current_point;
+    }
+
+    auto bytes_used() -> usize {
+        return current_point - memory_base;
     }
 
     auto alloc(usize size, usize alignment = alignof(std::max_align_t)) -> void* override {
@@ -258,8 +294,8 @@ force_inline auto set_allocator(Allocator* allocator) -> void {
     context.allocator = allocator != nullptr ? allocator : &null_allocator;
 }
 
-force_inline auto set_temporary_allocator(Allocator* allocator) -> void {
-    context.temporary_allocator = allocator != nullptr ? allocator : &null_allocator;
+force_inline auto set_temporary_allocator(Temporary_Allocator* allocator) -> void {
+    context.temporary_allocator = allocator;
 }
 
 force_inline auto resolve_allocator(Allocator* allocator) -> Allocator* {
@@ -292,9 +328,9 @@ struct Push_Allocator {
 };
 
 struct Push_Temporary_Allocator {
-    Allocator* previous_allocator;
+    Temporary_Allocator* previous_allocator;
 
-    Push_Temporary_Allocator(Allocator* new_allocator)
+    Push_Temporary_Allocator(Temporary_Allocator* new_allocator)
         : previous_allocator(context.temporary_allocator) {
         set_temporary_allocator(new_allocator);
     }

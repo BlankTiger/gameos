@@ -32,6 +32,7 @@ SECTIONS
 	/* Read-only data. */
 	.rodata BLOCK(4K) : ALIGN(4K)
 	{
+		__rodata_start = .;
 		*(.rodata)
 
 		__debug_info_start = .;
@@ -58,13 +59,8 @@ SECTIONS
 		KEEP(*(.debug_addr))
 		__debug_addr_end = .;
 
-	}
-
-	.debug_line_str BLOCK(1K) : ALIGN(1)
-	{
-		__debug_line_str_start = .;
 		KEEP(*(.debug_line_str))
-		__debug_line_str_end = .;
+		__rodata_end = .;
 	}
 
 	.init_array BLOCK(4K) : ALIGN(4K)
