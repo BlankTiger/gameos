@@ -42,12 +42,33 @@ struct Temporary_Allocator final : Allocator {
     u8* current = nullptr;
     u8* end     = nullptr;
 
-    auto init(void* memory, usize size) -> void {
+    Allocator* backing_allocator = nullptr;
+
+    Temporary_Allocator() = default;
+
+    Temporary_Allocator(void* memory, usize size) {
         kstd_assert(memory != nullptr);
         kstd_assert(size > 0);
         base    = static_cast<u8*>(memory);
         current = base;
         end     = base + size;
+    }
+
+    Temporary_Allocator(Allocator* backing_allocator, usize size)
+        : backing_allocator(resolve_allocator(backing_allocator)) {
+        kstd_assert(this->backing_allocator != nullptr);
+        kstd_assert(size > 0);
+        auto* backing_memory = this->backing_allocator->alloc(size);
+        kstd_assert(backing_memory != nullptr);
+        base    = static_cast<u8*>(backing_memory);
+        current = base;
+        end     = base + size;
+    }
+
+    ~Temporary_Allocator() {
+        if (backing_allocator != nullptr && base != nullptr) {
+            backing_allocator->free(base, static_cast<usize>(end - base));
+        }
     }
 
     auto reset() -> void {
