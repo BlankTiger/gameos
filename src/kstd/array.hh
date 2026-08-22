@@ -387,6 +387,20 @@ struct Bounded_Array {
         ++size;
     }
 
+    auto ensure_space_for(usize new_elements_count) -> void {
+        kstd_assert(
+            new_elements_count <= MAX_SIZE - size,
+            "not enough space in Bounded_Array"
+        );
+    }
+
+    auto extend(Array_View<const T> from) -> void {
+        const usize source_size = from.size;
+        ensure_space_for(source_size);
+        for (usize i = 0; i < source_size; ++i)
+            push_back(from[i]);
+    }
+
     auto pop_back() -> T {
         kstd_assert(size > 0, "pop_back on empty Bounded_Array");
         auto element = std::move(*slot(size - 1));
@@ -446,6 +460,28 @@ TEST(Bounded_Array, push_back_past_max_size_asserts) {
     arr.push_back(2);
 
     EXPECT_DEATH(arr.push_back(3), "push_back on full Bounded_Array");
+}
+
+TEST(Bounded_Array, ensure_space_for_rejects_too_many_elements) {
+    Bounded_Array<int, 2> arr;
+    arr.push_back(1);
+
+    EXPECT_DEATH(arr.ensure_space_for(2), "not enough space in Bounded_Array");
+}
+
+TEST(Bounded_Array, extend_appends_another_array) {
+    Bounded_Array<int, 4> arr;
+    Bounded_Array<int, 2> other;
+    arr.push_back(1);
+    other.push_back(2);
+    other.push_back(3);
+
+    arr.extend(Array_View<const int>{other.size, other.elements()});
+
+    EXPECT_EQ(arr.size, 3);
+    EXPECT_EQ(arr[0], 1);
+    EXPECT_EQ(arr[1], 2);
+    EXPECT_EQ(arr[2], 3);
 }
 
 TEST(Bounded_Array, pop_back_returns_last_element_and_shrinks_size) {
@@ -639,6 +675,11 @@ struct Array {
         capacity = new_capacity;
     }
 
+    auto ensure_space_for(usize new_elements_count) -> void {
+        kstd_assert(new_elements_count <= static_cast<usize>(-1) - size, "Array size overflow");
+        reserve(size + new_elements_count);
+    }
+
     auto push_back(T&& element) -> void {
         reserve(size + 1);
         ::new (data + size) T(std::move(element));
@@ -649,6 +690,16 @@ struct Array {
         reserve(size + 1);
         ::new (data + size) T(element);
         ++size;
+    }
+
+    auto extend(Array_View<const T> from) -> void {
+        const usize source_size = from.size;
+        const bool source_is_self = from.data == data;
+        ensure_space_for(source_size);
+        if (source_is_self)
+            from.data = data;
+        for (usize i = 0; i < source_size; ++i)
+            push_back(from[i]);
     }
 
     auto pop_back() -> T {
@@ -821,6 +872,46 @@ TEST(Array, reserve_increases_capacity) {
 
     EXPECT_TRUE(arr.capacity >= 100);
     EXPECT_TRUE(arr.capacity > old_capacity);
+}
+
+TEST(Array, ensure_space_for_reserves_space_for_new_elements) {
+    Array<int> arr;
+    arr.push_back(1);
+    auto old_capacity = arr.capacity;
+
+    arr.ensure_space_for(10);
+
+    EXPECT_TRUE(arr.capacity >= arr.size + 10);
+    EXPECT_TRUE(arr.capacity > old_capacity);
+    EXPECT_EQ(arr[0], 1);
+}
+
+TEST(Array, extend_appends_another_array) {
+    Array<int> arr;
+    Static_Array other{{2, 3, 4}};
+    arr.push_back(1);
+
+    arr.extend(Array_View<const int>{other.size, other.elements()});
+
+    EXPECT_EQ(arr.size, 4);
+    EXPECT_EQ(arr[0], 1);
+    EXPECT_EQ(arr[1], 2);
+    EXPECT_EQ(arr[2], 3);
+    EXPECT_EQ(arr[3], 4);
+}
+
+TEST(Array, extend_supports_self_extension) {
+    Array<int> arr;
+    arr.push_back(1);
+    arr.push_back(2);
+
+    arr.extend(Array_View<const int>{arr.size, arr.data});
+
+    EXPECT_EQ(arr.size, 4);
+    EXPECT_EQ(arr[0], 1);
+    EXPECT_EQ(arr[1], 2);
+    EXPECT_EQ(arr[2], 1);
+    EXPECT_EQ(arr[3], 2);
 }
 
 TEST(Array, pop_front_removes_first_element) {
