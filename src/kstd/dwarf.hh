@@ -852,7 +852,7 @@ enum struct Line_Number_Standard_Opcode : u64 {
     CONST_ADD_PC       = 0x08,
     FIXED_ADVANCE_PC   = 0x09,
     SET_PROLOGUE_END   = 0x0a,
-    SET_PROLOGUE_BEGIN = 0x0b,
+    SET_EPILOGUE_BEGIN = 0x0b,
     SET_ISA            = 0x0c,
 };
 @enum_to_string(Line_Number_Standard_Opcode);
@@ -870,12 +870,13 @@ struct Source_Row {
     psize  address;
     string file_name;
     s32    line;
+    bool   is_end_of_sequence;
 };
 
 struct Debug_Line_State {
     psize address        = 0;
     u64   op_index       = 0;
-    u32   file_index     = 0;
+    u32   file_index     = 1;
     s32   line           = 1;
     u32   column         = 0;
     bool  is_stmt;
@@ -925,15 +926,9 @@ auto parse_line_table(const Sections& sections, u32 debug_line_offset) -> Array<
             switch (static_cast<Line_Number_Extended_Opcode>(extended_opcode)) {
                 case END_SEQUENCE: {
                     kstd_assert(length == 1);
-                    //
-                    // This might appear like it has no effect whatsoever, but
-                    // that's only because our Source_Row doesn't retain that
-                    // information. Documentation on DWARF5 says that this is
-                    // important so.. don't remove it.
-                    //
                     state.end_sequence = true;
 
-                    rows.push_back({ state.address, header.file_names[state.file_index], state.line });
+                    rows.push_back({ state.address, header.file_names[state.file_index], state.line, state.end_sequence });
                     state = Debug_Line_State{header.default_value_of_is_stmt_register};
                 } break;
 
@@ -979,7 +974,7 @@ auto parse_line_table(const Sections& sections, u32 debug_line_offset) -> Array<
                     state.epilogue_begin = false;
                     state.discriminator  = 0;
 
-                    rows.push_back({ state.address, header.file_names[state.file_index], state.line });
+                    rows.push_back({ state.address, header.file_names[state.file_index], state.line, false });
                 } break;
 
                 case ADVANCE_PC: {
@@ -1039,7 +1034,7 @@ auto parse_line_table(const Sections& sections, u32 debug_line_offset) -> Array<
                     state.prologue_end = true;
                 } break;
 
-                case SET_PROLOGUE_BEGIN: {
+                case SET_EPILOGUE_BEGIN: {
                     state.epilogue_begin = true;
                 } break;
 
@@ -1048,6 +1043,15 @@ auto parse_line_table(const Sections& sections, u32 debug_line_offset) -> Array<
                     kstd_assert(new_isa_ok);
 
                     state.isa = new_isa;
+                } break;
+
+                default: {
+                    // Handle all non-standard standard opcodes by skipping over them.
+                    auto operand_count = header.standard_opcode_lengths[opcode - 1];
+                    for (u8 index = 0; index < operand_count; ++index) {
+                        auto [_, ok] = debug_line.read_uleb128();
+                        kstd_assert(ok);
+                    }
                 } break;
             }
         }
@@ -1061,7 +1065,7 @@ auto parse_line_table(const Sections& sections, u32 debug_line_offset) -> Array<
             state.line    += line_advance;
             state.op_index = (state.op_index + op_advance) % header.maximum_operations_per_instruction;
 
-            rows.push_back({ state.address, header.file_names[state.file_index], state.line });
+            rows.push_back({ state.address, header.file_names[state.file_index], state.line, false });
         }
     }
     kstd_assert(debug_line.current_offset == unit_end);
