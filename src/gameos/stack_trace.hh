@@ -39,7 +39,7 @@ struct Stack_Frame {
 };
 
 struct Trace {
-    psize  function_address;
+    void*  function_address;
     string function_name;
     string file_name;
     s32    line_number;
@@ -69,7 +69,7 @@ auto get_stack_trace_from(Stack_Frame* start_frame, u32 max_frame_count = DEFAUL
         if (frame_index >= skip_frame_count) {
             auto function_name = dwarf::function_name_for_address(frame->rip);
             auto row_result    = dwarf::source_for_address(frame->rip);
-            traces.push_back({ frame->rip, function_name, row_result.row.file_name, row_result.row.line });
+            traces.push_back({ reinterpret_cast<void*>(frame->rip), function_name, row_result.row.file_name, row_result.row.line });
         }
         frame = frame->rbp;
     }
@@ -87,7 +87,7 @@ auto print_stack_trace_from(Stack_Frame* start_frame, u32 max_frame_count = DEFA
     halt::println("Stack trace:");
     auto stack_trace = get_stack_trace_from(start_frame, max_frame_count, skip_frame_count);
     for (const auto& trace : stack_trace) {
-        halt::println("%:% % (%)", trace.file_name, trace.line_number, trace.function_name, reinterpret_cast<void*>(trace.function_address));
+        halt::println("%:% % (%)", trace.file_name, trace.line_number, trace.function_name, trace.function_address);
     }
 }
 

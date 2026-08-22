@@ -50,7 +50,7 @@ namespace hidden {
 auto build_debug_info() -> void {
     serial::println("dwarf: Building debug info");
 
-    mem::Temporary_Allocator dwarf_temp(2 * 1024 * 1024);
+    mem::Temporary_Allocator dwarf_temp(5 * 1024 * 1024);
     PUSH_TEMPORARY_ALLOCATOR(&dwarf_temp);
 
     using namespace hidden;
