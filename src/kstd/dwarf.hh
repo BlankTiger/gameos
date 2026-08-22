@@ -6,6 +6,8 @@
 #include "kstd/basic.hh"
 #include "kstd/byte_reader.hh"
 #include "kstd/hash_table.hh"
+#include "kstd/path.hh"
+
 
 namespace dwarf {
 
@@ -596,6 +598,7 @@ auto parse_compilation_unit_debug_information_entries(
     for (;;) {
         if (debug_info.current_offset >= compilation_unit_end) break;
 
+        auto debug_information_entry_offset = debug_info.current_offset;
         auto [abbreviation_code, code_ok] = debug_info.read_uleb128();
         kstd_assert(code_ok);
 
@@ -617,6 +620,7 @@ auto parse_compilation_unit_debug_information_entries(
         string name{};
         psize  low_pc{};
         psize  high_pc_raw{};
+        usize  specification_offset{};
         bool   high_pc_is_offset = false;
 
         for (const auto& spec : declaration->attribute_specs) {
@@ -649,6 +653,11 @@ auto parse_compilation_unit_debug_information_entries(
                         has_high_pc       = true;
                     } break;
 
+                    case Attribute_Type::SPECIFICATION: {
+                        kstd_assert(value.kind == Attribute_Value_Kind::UNSIGNED);
+                        specification_offset = compilation_unit_start + value.v_unsigned;
+                    } break;
+
                     // Nothing else interests us here for now.
                     default: break;
                 }
@@ -679,14 +688,44 @@ auto parse_compilation_unit_debug_information_entries(
             }
         }
 
-        if (is_subprogram && has_name && has_low_pc && has_high_pc) {
-            psize high_pc = high_pc_is_offset ? low_pc + high_pc_raw : high_pc_raw;
-            infos.push_back({ name, low_pc, high_pc });
+        if (is_subprogram) {
+            if (has_name)
+                names.set(debug_information_entry_offset, name);
+
+            if (has_low_pc && has_high_pc) {
+                pending_subprograms.push_back({
+                    specification_offset,
+                    name,
+                    low_pc,
+                    high_pc_raw,
+                    has_name,
+                    true,
+                    true,
+                    high_pc_is_offset
+                });
+            }
+
         }
 
         if (declaration->has_children)
             scope_stack.push_back(true);
     }
+
+    for (const auto& pending : pending_subprograms) {
+        auto name = pending.name;
+        if (!pending.has_name && pending.specification_offset != 0) {
+            auto* specification_name = names.find(pending.specification_offset);
+            if (specification_name == nullptr) continue;
+            name = *specification_name;
+        }
+
+        if (name.size == 0) continue;
+        auto high_pc = pending.high_pc_is_offset ? pending.low_pc + pending.high_pc : pending.high_pc;
+        infos.push_back({ name, pending.low_pc, high_pc });
+    }
+
+    return { infos, debug_line_offset, has_debug_line_offset };
+}
 
     return { infos, debug_line_offset, has_debug_line_offset };
 }
@@ -728,23 +767,32 @@ auto parse_entry_formats(Byte_Reader& debug_line) -> Entry_Formats {
     return entry_formats;
 }
 
+struct Paths_And_Indices {
+    Array<string> paths;
+    Array<u32>    indices;
+};
+
 auto parse_directories_or_file_names(
     Byte_Reader& debug_line,
     usize address_size,
     const Entry_Formats& entry_formats,
     const Sections& sections
-) -> Array<string> {
+) -> Paths_And_Indices {
     auto [count, count_ok] = debug_line.read_uleb128();
     kstd_assert(count_ok);
 
     Array<string> directories_or_file_names(count);
+    Array<u32>    directory_indices{};
     for (u64 index = 0; index < count; ++index) {
         string path{};
         bool   has_path = false;
+        s64    directory_index = -1;
 
         defer({
             kstd_assert(has_path);
             directories_or_file_names.push_back(path);
+            if (directory_index != -1)
+                directory_indices.push_back(static_cast<u32>(directory_index));
         });
 
         for (const auto& [line_content_type, form] : entry_formats) {
@@ -757,10 +805,16 @@ auto parse_directories_or_file_names(
                 has_path = true;
                 path     = value.v_string;
             }
+
+            if (line_content_type == Line_Content_Type::DIRECTORY_INDEX) {
+                kstd_assert(value.kind == Attribute_Value_Kind::UNSIGNED);
+                kstd_assert(value.v_unsigned <= 0xffffffff);
+                directory_index = static_cast<s64>(value.v_unsigned);
+            }
         }
     }
 
-    return directories_or_file_names;
+    return { directories_or_file_names, directory_indices };
 }
 
 struct Debug_Line_Header {
@@ -815,7 +869,7 @@ auto parse_debug_line_header(Byte_Reader& debug_line, const Sections& sections) 
     kstd_assert(standard_opcode_lengths_ok);
 
     auto directory_entry_formats = parse_entry_formats(debug_line);
-    auto directories = parse_directories_or_file_names(
+    auto [directories, _] = parse_directories_or_file_names(
         debug_line,
         address_size,
         directory_entry_formats,
@@ -823,13 +877,20 @@ auto parse_debug_line_header(Byte_Reader& debug_line, const Sections& sections) 
     );
 
     auto file_name_entry_formats = parse_entry_formats(debug_line);
-    // @TODO(blanktiger): Join directory paths and file paths if file_name_entry_formats contain DIRECTORY.
-    auto file_names = parse_directories_or_file_names(
+    auto [file_names, file_directory_indices] = parse_directories_or_file_names(
         debug_line,
         address_size,
         file_name_entry_formats,
         sections
     );
+
+    for (usize index = 0; index < file_names.size; ++index) {
+        auto directory_index = file_directory_indices[index];
+        if (file_names[index].size == 0 || file_names[index][0] == path::SEPARATOR)
+            continue;
+
+        file_names[index] = path::join(directories[directory_index], file_names[index]);
+    }
 
     Debug_Line_Header header{
         .unit_length                        = unit_length,
@@ -1148,3 +1209,9 @@ auto source_for_address(const Array_View<Source_Row>& rows, psize address) -> So
 }
 
 }
+
+#if OS == GAMEOS
+#include "gameos/dwarf.hh"
+#else
+#error "Unsupported OS"
+#endif

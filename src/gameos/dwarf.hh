@@ -59,7 +59,7 @@ auto build_debug_info() -> void {
     auto debug_line_size        = ptr_addr(__debug_line_end)        - ptr_addr(__debug_line_start);
     auto debug_str_size         = ptr_addr(__debug_str_end)         - ptr_addr(__debug_str_start);
     // Linker merges .debug_line_str strings into .rodata. Use full loaded range.
-    auto rodata_size            = ptr_addr(__rodata_end)             - ptr_addr(__rodata_start);
+    auto rodata_size            = ptr_addr(__rodata_end)            - ptr_addr(__rodata_start);
     auto debug_str_offsets_size = ptr_addr(__debug_str_offsets_end) - ptr_addr(__debug_str_offsets_start);
     auto debug_addr_size        = ptr_addr(__debug_addr_end)        - ptr_addr(__debug_addr_start);
 
