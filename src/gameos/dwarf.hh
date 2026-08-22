@@ -8,7 +8,6 @@
 #include "kstd/allocator.hh"
 
 #include "gameos/serial_format.hh"
-#include "gameos/power.hh"
 
 namespace dwarf {
 
@@ -41,17 +40,15 @@ namespace hidden {
     // know how much stuff it needs to hold.
     //
     // @TODO(blanktiger): Actually do it.
-    mem::Arena_Allocator debug_info_allocator(0);
+    // mem::Arena_Allocator debug_info_allocator(0);
 
-    
+    mem::Arena_Allocator debug_info_building_allocator(10 * 1024 * 1024);
+    Array<Subprogram_Info> infos;
+    Array<Source_Row>      rows;
 }
 
 auto build_debug_info() -> void {
     serial::println("dwarf: Building debug info");
-
-    defer(power::off());
-
-    mem::Arena_Allocator debug_info_building_allocator(5 * 1024 * 1024);
 
     using namespace hidden;
     PUSH_ALLOCATOR(&debug_info_building_allocator);
@@ -80,24 +77,7 @@ auto build_debug_info() -> void {
     };
 
     Byte_Reader debug_info(sections.debug_info_bytes);
-    Byte_Reader debug_abbrev(sections.debug_abbrev_bytes);
-
-    // Currently we get around 260 abbreviations, so preallocate a little bit more than that.
-    auto abbreviations = parse_abbreviations(debug_abbrev, 400);
-    auto compilation_unit_start = debug_info.current_offset;
-    auto header                 = parse_compilation_unit_header(debug_info);
-    auto compilation_unit_end   = compilation_unit_start + sizeof(u32) + header.length;
-    auto [subprogram_infos, debug_line_offset, has_debug_line_offset] = parse_compilation_unit_debug_information_entries(
-        debug_info,
-        compilation_unit_end,
-        abbreviations,
-        header.address_size,
-        sections
-    );
-
-    PUSH_CONTEXT();
-    context.formatting_config.newline_after_each_array_element = true;
-    serial::println("%", subprogram_infos);
+    auto [subprogram_infos, debug_line_offset, has_debug_line_offset] = parse_subprograms(debug_info, sections);
 
     // @TODO(blanktiger): Make this optional.
     kstd_assert(has_debug_line_offset);
@@ -105,10 +85,16 @@ auto build_debug_info() -> void {
     // Currently we get around 32k rows, so preallocate a little more than that.
     auto source_rows = parse_line_table(sections, debug_line_offset, 34'000);
 
-    auto free_string_address = reinterpret_cast<psize>(&free_string);
-    auto name                = function_name_for_address(subprogram_infos, free_string_address);
-    auto row                 = source_for_address(source_rows, free_string_address);
-    serial::println("%, %", name, row);
+    infos = std::move(subprogram_infos);
+    rows  = std::move(source_rows);
+}
+
+force_inline auto function_name_for_address(psize address) -> string {
+    return function_name_for_address(hidden::infos, address);
+}
+
+force_inline auto source_for_address(psize address) -> Source_Lookup_Result {
+    return source_for_address(hidden::rows, address);
 }
 
 }

@@ -32,6 +32,7 @@ enum struct Attribute_Type : u64 {
     STMT_LIST        = 0x10,
     LOW_PC           = 0x11,
     HIGH_PC          = 0x12,
+    SPECIFICATION    = 0x47,
     STR_OFFSETS_BASE = 0x72,
     ADDR_BASE        = 0x73,
 };
@@ -557,6 +558,17 @@ struct Parse_Compilation_Unit_Result {
 
     u32  debug_line_offset;
     bool has_debug_line_offset;
+};
+
+struct Pending_Subprogram {
+    usize  specification_offset;
+    string name;
+    psize  low_pc;
+    psize  high_pc;
+    bool   has_name;
+    bool   has_low_pc;
+    bool   has_high_pc;
+    bool   high_pc_is_offset;
 };
 
 //

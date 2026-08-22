@@ -6,6 +6,7 @@
 #include "kstd/string.hh"
 #include "kstd/pointer_utils.hh"
 #include "kstd/assert.hh"
+#include "kstd/dwarf.hh"
 
 #include "gameos/halt_format.hh"
 
@@ -41,13 +42,12 @@ struct Trace {
     psize  function_address;
     string function_name;
     string file_name;
-    u32    line_number;
-};
+    s32    line_number;
 
-auto get_function_name(psize address) -> string {
-    (void)address;
-    return "implement me!";
-}
+    auto format() const -> string {
+        return sprint("Trace{ %, %, %, % }", function_address, function_name, file_name, line_number);
+    }
+};
 
 // Skip this many traces to get rid of the assert/halt traces.
 constexpr auto SKIP_FRAME_COUNT = 0;
@@ -62,8 +62,9 @@ auto get_stack_trace(u32 max_frame_count = DEFAULT_FRAME_COUNT, u32 skip_frame_c
     asm volatile("movq %%rbp,%0" : "=r"(frame) ::);
     for (u32 frame_index = 0; frame && frame_index < max_frame_count; ++frame_index) {
         if (frame_index >= skip_frame_count) {
-            auto function_name = get_function_name(frame->rip);
-            traces.push_back({frame->rip, function_name, 0});
+            auto function_name = dwarf::function_name_for_address(frame->rip);
+            auto row_result    = dwarf::source_for_address(frame->rip);
+            traces.push_back({ frame->rip, function_name, row_result.row.file_name, row_result.row.line });
         }
         frame = frame->rbp;
     }
@@ -82,7 +83,7 @@ auto print_stack_trace_from(Stack_Frame* start_frame, u32 max_frame_count = DEFA
     Stack_Frame* previous = nullptr;
     for (u32 frame_index = 0; frame && frame_index < max_frame_count; ++frame_index) {
         if (frame_index >= skip_frame_count) {
-            auto function_name = get_function_name(frame->rip);
+            auto function_name = dwarf::function_name_for_address(frame->rip);
             halt::println("  % (0x%)", function_name, frame->rip);
         }
         frame = frame->rbp;
