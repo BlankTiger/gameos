@@ -47,7 +47,7 @@ auto cubes_main() -> void {
     gfx::Mesh_Instance* dragged_cube = nullptr;
 
     u64 last_tick = get_ticks();
-    const auto* temporary_allocator_mark = context.temporary_allocator->mark();
+    const auto* temporary_allocator_mark = mem::temporary_allocator_mark();
     while (true) {
         input::begin_frame();
         if (input::key_pressed(Key::ESCAPE)) break;
@@ -119,7 +119,7 @@ auto cubes_main() -> void {
         gfx::draw_sprite_scaled(cursor, static_cast<u32>(cursor_x), static_cast<u32>(cursor_y), cursor_width, cursor_height);
         gfx::draw_frame();
 
-        context.temporary_allocator->rewind(temporary_allocator_mark);
+        mem::temporary_allocator_rewind(temporary_allocator_mark);
 
         const u64 frame_ticks = get_ticks() - frame_start;
         if (frame_ticks < TARGET_TICKS) sleep_ticks(TARGET_TICKS - frame_ticks);

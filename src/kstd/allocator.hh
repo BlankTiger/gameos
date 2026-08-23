@@ -273,12 +273,27 @@ struct Temporary_Allocator_State {
     }
 };
 
-inline Temporary_Allocator_State temporary_allocator{};
+inline Temporary_Allocator_State temporary_allocator_state{};
+
+// @Important: Don't use the global temporary_allocator_state directly in the
+// functions below. They are meant to work with the one set in the context.
 
 force_inline auto talloc(usize size, usize alignment = alignof(std::max_align_t)) -> void* {
     auto allocation = alloc(size, alignment, context.temporary_allocator);
     kstd_assert(allocation.memory != nullptr, "Temporary allocator exhausted.");
     return allocation.memory;
+}
+
+force_inline auto reset_temporary_allocator() -> void {
+    context.temporary_state->reset();
+}
+
+force_inline auto temporary_allocator_mark() -> void* {
+    return context.temporary_state->mark();
+}
+
+force_inline auto temporary_allocator_rewind(const void* mark) -> void {
+    context.temporary_state->rewind(mark);
 }
 
 constexpr usize DEFAULT_ARENA_RESERVE_SIZE = 1 * 1024 * 1024;
