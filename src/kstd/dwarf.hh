@@ -6,6 +6,8 @@
 #include "kstd/basic.hh"
 #include "kstd/byte_reader.hh"
 #include "kstd/hash_table.hh"
+#include "kstd/path.hh"
+
 
 namespace dwarf {
 
@@ -32,6 +34,7 @@ enum struct Attribute_Type : u64 {
     STMT_LIST        = 0x10,
     LOW_PC           = 0x11,
     HIGH_PC          = 0x12,
+    SPECIFICATION    = 0x47,
     STR_OFFSETS_BASE = 0x72,
     ADDR_BASE        = 0x73,
 };
@@ -128,8 +131,8 @@ using Abbreviations = Hash_Table<u64, Abbreviation>;
 // `debug_abbrev` must be initialized with memory of the .debug_abbrev section.
 // It's stopped at the (0, 0, 0) terminator that ends the abbreviations table.
 //
-auto parse_abbreviations(Byte_Reader& debug_abbrev) -> Abbreviations {
-    Abbreviations abbreviations;
+auto parse_abbreviations(Byte_Reader& debug_abbrev, usize preallocate_abbreviation_count = 0) -> Abbreviations {
+    Abbreviations abbreviations(preallocate_abbreviation_count);
 
     for (;;) {
         auto [abbreviation_code, code_ok] = debug_abbrev.read_uleb128();
@@ -547,7 +550,7 @@ struct Subprogram_Info {
     psize  high_pc; // Exclusive, already normalized from offset-form Attribute_Type::HIGH_PC.
 
     auto format() const -> string {
-        return sprint("Subprogram_Info{ %, 0x%, 0x% }", name, low_pc, high_pc);
+        return sprint("Subprogram_Info{ %, %, % }", name, reinterpret_cast<void*>(low_pc), reinterpret_cast<void*>(high_pc));
     }
 };
 
@@ -559,6 +562,17 @@ struct Parse_Compilation_Unit_Result {
     bool has_debug_line_offset;
 };
 
+struct Pending_Subprogram {
+    usize  specification_offset;
+    string name;
+    psize  low_pc;
+    psize  high_pc;
+    bool   has_name;
+    bool   has_low_pc;
+    bool   has_high_pc;
+    bool   high_pc_is_offset;
+};
+
 //
 // Walks every Debug Info Entry (DIE) in one Compilation Unit's .debug_info
 // slice, collecting subprograms that have both a name and an address range.
@@ -567,12 +581,17 @@ struct Parse_Compilation_Unit_Result {
 //
 auto parse_compilation_unit_debug_information_entries(
     Byte_Reader& debug_info,
+    usize compilation_unit_start,
     usize compilation_unit_end,
     const Abbreviations& abbreviations,
     u8 address_size,
     Sections& sections
 ) -> Parse_Compilation_Unit_Result {
+    Hash_Table<usize, string> names;
+    Array<Pending_Subprogram> pending_subprograms;
+
     Array<Subprogram_Info> infos;
+
     u32  debug_line_offset     = 0;
     bool has_debug_line_offset = false;
 
@@ -584,6 +603,7 @@ auto parse_compilation_unit_debug_information_entries(
     for (;;) {
         if (debug_info.current_offset >= compilation_unit_end) break;
 
+        auto debug_information_entry_offset = debug_info.current_offset;
         auto [abbreviation_code, code_ok] = debug_info.read_uleb128();
         kstd_assert(code_ok);
 
@@ -605,6 +625,7 @@ auto parse_compilation_unit_debug_information_entries(
         string name{};
         psize  low_pc{};
         psize  high_pc_raw{};
+        usize  specification_offset{};
         bool   high_pc_is_offset = false;
 
         for (const auto& spec : declaration->attribute_specs) {
@@ -637,6 +658,11 @@ auto parse_compilation_unit_debug_information_entries(
                         has_high_pc       = true;
                     } break;
 
+                    case Attribute_Type::SPECIFICATION: {
+                        kstd_assert(value.kind == Attribute_Value_Kind::UNSIGNED);
+                        specification_offset = compilation_unit_start + value.v_unsigned;
+                    } break;
+
                     // Nothing else interests us here for now.
                     default: break;
                 }
@@ -667,13 +693,87 @@ auto parse_compilation_unit_debug_information_entries(
             }
         }
 
-        if (is_subprogram && has_name && has_low_pc && has_high_pc) {
-            psize high_pc = high_pc_is_offset ? low_pc + high_pc_raw : high_pc_raw;
-            infos.push_back({ name, low_pc, high_pc });
+        if (is_subprogram) {
+            if (has_name)
+                names.set(debug_information_entry_offset, name);
+
+            if (has_low_pc && has_high_pc) {
+                pending_subprograms.push_back({
+                    specification_offset,
+                    name,
+                    low_pc,
+                    high_pc_raw,
+                    has_name,
+                    true,
+                    true,
+                    high_pc_is_offset
+                });
+            }
+
         }
 
         if (declaration->has_children)
             scope_stack.push_back(true);
+    }
+
+    for (const auto& pending : pending_subprograms) {
+        auto name = pending.name;
+        if (!pending.has_name && pending.specification_offset != 0) {
+            auto* specification_name = names.find(pending.specification_offset);
+            if (specification_name == nullptr) continue;
+            name = *specification_name;
+        }
+
+        if (name.size == 0) continue;
+        auto high_pc = pending.high_pc_is_offset ? pending.low_pc + pending.high_pc : pending.high_pc;
+        infos.push_back({ name, pending.low_pc, high_pc });
+    }
+
+    return { infos, debug_line_offset, has_debug_line_offset };
+}
+
+auto parse_subprograms(Byte_Reader& debug_info, Sections& sections) -> Parse_Compilation_Unit_Result {
+    Array<Subprogram_Info> infos;
+    u32  debug_line_offset     = 0;
+    bool has_debug_line_offset = false;
+
+    while (debug_info.remaining() > 0) {
+        auto* temp_mark = context.temporary_allocator->mark();
+        defer(context.temporary_allocator->rewind(temp_mark));
+
+        PUSH_ALLOCATOR(context.temporary_allocator);
+
+        auto compilation_unit_start = debug_info.current_offset;
+        auto header                 = parse_compilation_unit_header(debug_info);
+        auto compilation_unit_end   = compilation_unit_start + sizeof(u32) + header.length;
+
+        auto abbreviation_offset = normalize_section_offset(
+            sections.debug_abbrev_bytes,
+            static_cast<u32>(header.abbreviation_offset)
+        );
+        Byte_Reader abbreviation_reader(
+            const_cast<u8*>(sections.debug_abbrev_bytes.data + abbreviation_offset),
+            sections.debug_abbrev_bytes.size - abbreviation_offset
+        );
+        auto abbreviations = parse_abbreviations(abbreviation_reader, 400);
+
+        auto result = parse_compilation_unit_debug_information_entries(
+            debug_info,
+            compilation_unit_start,
+            compilation_unit_end,
+            abbreviations,
+            header.address_size,
+            sections
+        );
+
+        infos.extend(result.infos);
+
+        if (!has_debug_line_offset && result.has_debug_line_offset) {
+            debug_line_offset     = result.debug_line_offset;
+            has_debug_line_offset = true;
+        }
+
+        debug_info.current_offset = compilation_unit_end;
     }
 
     return { infos, debug_line_offset, has_debug_line_offset };
@@ -716,23 +816,32 @@ auto parse_entry_formats(Byte_Reader& debug_line) -> Entry_Formats {
     return entry_formats;
 }
 
+struct Paths_And_Indices {
+    Array<string> paths;
+    Array<u32>    indices;
+};
+
 auto parse_directories_or_file_names(
     Byte_Reader& debug_line,
     usize address_size,
     const Entry_Formats& entry_formats,
     const Sections& sections
-) -> Array<string> {
+) -> Paths_And_Indices {
     auto [count, count_ok] = debug_line.read_uleb128();
     kstd_assert(count_ok);
 
     Array<string> directories_or_file_names(count);
+    Array<u32>    directory_indices{};
     for (u64 index = 0; index < count; ++index) {
         string path{};
         bool   has_path = false;
+        s64    directory_index = -1;
 
         defer({
             kstd_assert(has_path);
             directories_or_file_names.push_back(path);
+            if (directory_index != -1)
+                directory_indices.push_back(static_cast<u32>(directory_index));
         });
 
         for (const auto& [line_content_type, form] : entry_formats) {
@@ -745,10 +854,16 @@ auto parse_directories_or_file_names(
                 has_path = true;
                 path     = value.v_string;
             }
+
+            if (line_content_type == Line_Content_Type::DIRECTORY_INDEX) {
+                kstd_assert(value.kind == Attribute_Value_Kind::UNSIGNED);
+                kstd_assert(value.v_unsigned <= 0xffffffff);
+                directory_index = static_cast<s64>(value.v_unsigned);
+            }
         }
     }
 
-    return directories_or_file_names;
+    return { directories_or_file_names, directory_indices };
 }
 
 struct Debug_Line_Header {
@@ -803,7 +918,7 @@ auto parse_debug_line_header(Byte_Reader& debug_line, const Sections& sections) 
     kstd_assert(standard_opcode_lengths_ok);
 
     auto directory_entry_formats = parse_entry_formats(debug_line);
-    auto directories = parse_directories_or_file_names(
+    auto [directories, _] = parse_directories_or_file_names(
         debug_line,
         address_size,
         directory_entry_formats,
@@ -811,13 +926,20 @@ auto parse_debug_line_header(Byte_Reader& debug_line, const Sections& sections) 
     );
 
     auto file_name_entry_formats = parse_entry_formats(debug_line);
-    // @TODO(blanktiger): Join directory paths and file paths if file_name_entry_formats contain DIRECTORY.
-    auto file_names = parse_directories_or_file_names(
+    auto [file_names, file_directory_indices] = parse_directories_or_file_names(
         debug_line,
         address_size,
         file_name_entry_formats,
         sections
     );
+
+    for (usize index = 0; index < file_names.size; ++index) {
+        auto directory_index = file_directory_indices[index];
+        if (file_names[index].size == 0 || file_names[index][0] == path::SEPARATOR)
+            continue;
+
+        file_names[index] = path::join(directories[directory_index], file_names[index]);
+    }
 
     Debug_Line_Header header{
         .unit_length                        = unit_length,
@@ -852,7 +974,7 @@ enum struct Line_Number_Standard_Opcode : u64 {
     CONST_ADD_PC       = 0x08,
     FIXED_ADVANCE_PC   = 0x09,
     SET_PROLOGUE_END   = 0x0a,
-    SET_PROLOGUE_BEGIN = 0x0b,
+    SET_EPILOGUE_BEGIN = 0x0b,
     SET_ISA            = 0x0c,
 };
 @enum_to_string(Line_Number_Standard_Opcode);
@@ -870,12 +992,17 @@ struct Source_Row {
     psize  address;
     string file_name;
     s32    line;
+    bool   is_end_of_sequence;
+
+    auto format() const -> string {
+        return sprint("Source_Row{ %, %, %, % }", address, file_name, line, is_end_of_sequence);
+    }
 };
 
 struct Debug_Line_State {
     psize address        = 0;
     u64   op_index       = 0;
-    u32   file_index     = 0;
+    u32   file_index     = 1;
     s32   line           = 1;
     u32   column         = 0;
     bool  is_stmt;
@@ -891,7 +1018,7 @@ struct Debug_Line_State {
     explicit Debug_Line_State(bool default_is_stmt) : is_stmt(default_is_stmt) {}
 };
 
-auto parse_line_table(const Sections& sections, u32 debug_line_offset) -> Array<Source_Row> {
+auto parse_line_table(const Sections& sections, u32 debug_line_offset, usize preallocate_row_count = 0) -> Array<Source_Row> {
     Byte_Reader debug_line(sections.debug_line_bytes);
     auto normalized_offset = normalize_section_offset(sections.debug_line_bytes, debug_line_offset);
     auto skip_ok = debug_line.skip(normalized_offset);
@@ -908,7 +1035,7 @@ auto parse_line_table(const Sections& sections, u32 debug_line_offset) -> Array<
 
     Debug_Line_State state(header.default_value_of_is_stmt_register);
 
-    Array<Source_Row> rows;
+    Array<Source_Row> rows(preallocate_row_count);
     while (debug_line.current_offset < unit_end) {
         auto [opcode, ok] = debug_line.read_u8();
         kstd_assert(ok);
@@ -925,15 +1052,9 @@ auto parse_line_table(const Sections& sections, u32 debug_line_offset) -> Array<
             switch (static_cast<Line_Number_Extended_Opcode>(extended_opcode)) {
                 case END_SEQUENCE: {
                     kstd_assert(length == 1);
-                    //
-                    // This might appear like it has no effect whatsoever, but
-                    // that's only because our Source_Row doesn't retain that
-                    // information. Documentation on DWARF5 says that this is
-                    // important so.. don't remove it.
-                    //
                     state.end_sequence = true;
 
-                    rows.push_back({ state.address, header.file_names[state.file_index], state.line });
+                    rows.push_back({ state.address, header.file_names[state.file_index], state.line, state.end_sequence });
                     state = Debug_Line_State{header.default_value_of_is_stmt_register};
                 } break;
 
@@ -979,7 +1100,7 @@ auto parse_line_table(const Sections& sections, u32 debug_line_offset) -> Array<
                     state.epilogue_begin = false;
                     state.discriminator  = 0;
 
-                    rows.push_back({ state.address, header.file_names[state.file_index], state.line });
+                    rows.push_back({ state.address, header.file_names[state.file_index], state.line, false });
                 } break;
 
                 case ADVANCE_PC: {
@@ -1039,7 +1160,7 @@ auto parse_line_table(const Sections& sections, u32 debug_line_offset) -> Array<
                     state.prologue_end = true;
                 } break;
 
-                case SET_PROLOGUE_BEGIN: {
+                case SET_EPILOGUE_BEGIN: {
                     state.epilogue_begin = true;
                 } break;
 
@@ -1048,6 +1169,15 @@ auto parse_line_table(const Sections& sections, u32 debug_line_offset) -> Array<
                     kstd_assert(new_isa_ok);
 
                     state.isa = new_isa;
+                } break;
+
+                default: {
+                    // Handle all non-standard standard opcodes by skipping over them.
+                    auto operand_count = header.standard_opcode_lengths[opcode - 1];
+                    for (u8 index = 0; index < operand_count; ++index) {
+                        auto [_, ok] = debug_line.read_uleb128();
+                        kstd_assert(ok);
+                    }
                 } break;
             }
         }
@@ -1061,7 +1191,7 @@ auto parse_line_table(const Sections& sections, u32 debug_line_offset) -> Array<
             state.line    += line_advance;
             state.op_index = (state.op_index + op_advance) % header.maximum_operations_per_instruction;
 
-            rows.push_back({ state.address, header.file_names[state.file_index], state.line });
+            rows.push_back({ state.address, header.file_names[state.file_index], state.line, false });
         }
     }
     kstd_assert(debug_line.current_offset == unit_end);
@@ -1069,4 +1199,68 @@ auto parse_line_table(const Sections& sections, u32 debug_line_offset) -> Array<
     return rows;
 }
 
+auto function_name_for_address(const Array_View<Subprogram_Info>& infos, psize address) -> string {
+    for (const auto& info : infos) {
+        if (info.low_pc <= address && address < info.high_pc) {
+            return info.name;
+        }
+    }
+
+    return "<unknown>";
 }
+
+struct Source_Lookup_Result {
+    Source_Row row;
+    bool       found;
+
+    auto format() const -> string {
+        return sprint("Result{ %, % }", row, found);
+    }
+};
+
+auto source_for_address(const Array_View<Source_Row>& rows, psize address) -> Source_Lookup_Result {
+    Source_Row result{};
+    bool       found = false;
+
+    Source_Row sequence_result{};
+    bool       sequence_found = false;
+    bool       in_sequence    = false;
+
+    for (const auto& row : rows) {
+        if (row.is_end_of_sequence) {
+            if (in_sequence && sequence_found && address < row.address) {
+                result = sequence_result;
+                found  = true;
+            }
+
+            in_sequence    = false;
+            sequence_found = false;
+            continue;
+        }
+
+        if (!in_sequence) {
+            in_sequence    = true;
+            sequence_found = false;
+        }
+
+        if (row.address <= address && (!sequence_found || row.address > sequence_result.address)) {
+            sequence_result = row;
+            sequence_found  = true;
+        }
+    }
+
+    if (in_sequence && sequence_found) {
+        result = sequence_result;
+        found  = true;
+    }
+
+    return { result, found };
+}
+
+}
+
+#if OS == GAMEOS
+#include "gameos/dwarf.hh"
+#else
+#error "Unsupported OS"
+#endif

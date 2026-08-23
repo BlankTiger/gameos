@@ -40,7 +40,11 @@ inline auto create_thread_temporary_allocator(mem::Allocator* allocator, mem::Al
 
     new (storage) Hosted_Thread_Temporary_Storage{};
     storage->backing = allocator;
-    storage->temporary_allocator.init(storage->memory, mem::TEMPORARY_STORAGE_SIZE);
+    storage->temporary_allocator.~Temporary_Allocator();
+    new (&storage->temporary_allocator) mem::Temporary_Allocator{
+        storage->memory,
+        mem::TEMPORARY_STORAGE_SIZE,
+    };
     return storage;
 }
 
@@ -61,10 +65,11 @@ namespace hidden {
 
 struct Hosted_Allocator_Init {
     Hosted_Allocator_Init() {
-        mem::temporary_allocator.init(
+        mem::temporary_allocator.~Temporary_Allocator();
+        new (&mem::temporary_allocator) mem::Temporary_Allocator{
             linux_temporary_allocator_buffer,
             LINUX_TEMPORARY_ALLOCATOR_SIZE
-        );
+        };
         context.allocator           = &hosted_allocator;
         context.temporary_allocator = &mem::temporary_allocator;
     }

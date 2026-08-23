@@ -4,6 +4,7 @@
 
 namespace mem {
 struct Allocator;
+struct Temporary_Allocator;
 }
 
 namespace ctx {
@@ -16,9 +17,10 @@ struct Formatting_Config {
 } // namespace context
 
 struct Context {
-    mem::Allocator*        allocator;
-    mem::Allocator*        temporary_allocator;
-    ctx::Formatting_Config formatting_config;
+    mem::Allocator*           allocator;
+    mem::Temporary_Allocator* temporary_allocator;
+
+    ctx::Formatting_Config    formatting_config;
 };
 
 inline thread_local Context context{};
