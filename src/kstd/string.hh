@@ -3,9 +3,9 @@
 #include <source_location>
 #include <type_traits>
 
-#include "basic.hh"
-#include "cstring.hh"
-#include "allocator.hh"
+#include "kstd/basic.hh"
+#include "kstd/cstring.hh"
+#include "kstd/allocator.hh"
 
 //
 // Forward declare instead of including array.hh.

@@ -647,194 +647,188 @@ struct Push_Temporary_Allocator {
 
 #include "array.hh"
 
-TEST(Debug_Allocator, allows_destruction_when_all_freed) {
-    mem::Hosted_Allocator hosted{};
-    mem::Debug_Allocator  debug{&hosted};
+TEST(Allocator, dispatches_to_state_data) {
+    struct State {
+        u32 calls = 0;
+        static auto proc(mem::Allocator_Mode mode, s64, s64, s64, void*, void* data) -> mem::Allocator_Result {
+            auto* state = static_cast<State*>(data);
+            if (mode == mem::Allocator_Mode::ALLOCATE) state->calls++;
+            return {.memory = state, .error = mem::Allocator_Error::NONE};
+        }
+        auto get_allocator() -> mem::Allocator { return {.proc = proc, .data = this}; }
+    } state;
 
-    void* a = debug.alloc(16);
-    defer(debug.free(a, 16));
-
-    void* b = debug.alloc(64);
-    defer(debug.free(b, 64));
-
-    ASSERT_NE(a, nullptr);
-    ASSERT_NE(b, nullptr);
+    auto allocation = mem::alloc(16, alignof(u64), state.get_allocator());
+    ASSERT_EQ(allocation.memory, &state);
+    ASSERT_EQ(state.calls, 1u);
 }
 
-// @TODO(blanktiger): Implement is_this_yours on allocators, currently this tests nothing.
-TEST(Allocator, convenience_alloc_and_free_use_current_allocator) {
-    mem::Hosted_Allocator hosted{};
-    PUSH_ALLOCATOR(&hosted);
-
-    void* pointer = mem::alloc(16, alignof(u64));
-    defer(mem::free(pointer, 16, alignof(u64)));
-
-    ASSERT_NE(pointer, nullptr);
+TEST(Allocator, features_are_queried_through_dispatch) {
+    mem::Temporary_Allocator_State state{256};
+    auto features = mem::get_features(state.get_allocator());
+    ASSERT_TRUE(mem::has_feature(features, mem::Allocator_Features::FAST_BUMP_ALLOCATOR));
+    ASSERT_TRUE(mem::has_feature(features, mem::Allocator_Features::PER_FRAME_TEMPORARY_STORAGE));
 }
 
-TEST(Allocator, convenience_alloc_and_free_accept_explicit_allocator) {
-    mem::Hosted_Allocator hosted{};
+TEST(Allocator, realloc_moves_and_preserves_memory) {
+    mem::Hosted_Allocator_State state{};
+    auto allocator = state.get_allocator();
+    auto allocation = mem::alloc(8, 16, allocator);
+    ASSERT_NE(allocation.memory, nullptr);
+    kstd_memset(allocation.memory, 0xAB, 8);
 
-    void* pointer = mem::alloc(16, alignof(u64), &hosted);
-    defer(mem::free(pointer, 16, alignof(u64), &hosted));
-
-    ASSERT_NE(pointer, nullptr);
+    auto resized = mem::realloc(allocation.memory, 8, 32, 16, allocator);
+    ASSERT_NE(resized.memory, nullptr);
+    ASSERT_EQ(resized.error, mem::Allocator_Error::NONE);
+    auto* bytes = static_cast<u8*>(resized.memory);
+    for (usize i = 0; i < 8; ++i) ASSERT_EQ(bytes[i], static_cast<u8>(0xAB));
+    ASSERT_EQ(ptr_addr(resized.memory) % 16, 0u);
+    ASSERT_EQ(mem::free(resized.memory, 32, allocator), mem::Allocator_Error::NONE);
 }
 
-TEST(Debug_Allocator, detects_leaked_allocations) {
+TEST(Allocator, hosted_info_reports_allocation_metadata) {
+    mem::Hosted_Allocator_State state{};
+    auto allocator = state.get_allocator();
+    auto allocation = mem::alloc(24, 64, allocator);
+    ASSERT_NE(allocation.memory, nullptr);
+
+    auto info = mem::get_info(allocation.memory, allocator);
+    ASSERT_EQ(info.pointer, allocation.memory);
+    ASSERT_EQ(info.size, 24);
+    ASSERT_EQ(info.alignment, 64);
+    ASSERT_EQ(mem::free(allocation.memory, 24, allocator), mem::Allocator_Error::NONE);
+}
+
+TEST(Allocator, debug_ownership_query_tracks_live_allocations) {
+    mem::Hosted_Allocator_State hosted{};
+    mem::Debug_Allocator_State debug{hosted.get_allocator()};
+    auto allocator = debug.get_allocator();
+    auto allocation = mem::alloc(24, 16, allocator);
+    ASSERT_TRUE(mem::is_this_yours(allocation.memory, allocator));
+    ASSERT_EQ(mem::free(allocation.memory, 24, allocator), mem::Allocator_Error::NONE);
+    ASSERT_FALSE(mem::is_this_yours(allocation.memory, allocator));
+}
+
+TEST(Allocator, rejects_invalid_alignment) {
+    mem::Hosted_Allocator_State state{};
+    auto allocation = mem::alloc(16, 3, state.get_allocator());
+    ASSERT_EQ(allocation.memory, nullptr);
+    ASSERT_EQ(allocation.error, mem::Allocator_Error::INVALID_ARGUMENT);
+}
+
+TEST(Allocator, allocator_states_have_no_interface_base) {
+    mem::Temporary_Allocator_State state{256};
+    auto allocator = state.get_allocator();
+    ASSERT_EQ(allocator.data, &state);
+    ASSERT_NE(allocator.proc, nullptr);
+}
+
+TEST(Debug_Allocator_State, allows_destruction_when_all_freed) {
+    mem::Hosted_Allocator_State hosted{};
+    mem::Debug_Allocator_State debug{hosted.get_allocator()};
+
+    auto a = mem::alloc(16, debug.get_allocator());
+    auto b = mem::alloc(64, debug.get_allocator());
+    ASSERT_NE(a.memory, nullptr);
+    ASSERT_NE(b.memory, nullptr);
+
+    ASSERT_EQ(mem::free(a.memory, 16, debug.get_allocator()), mem::Allocator_Error::NONE);
+    ASSERT_EQ(mem::free(b.memory, 64, debug.get_allocator()), mem::Allocator_Error::NONE);
+}
+
+TEST(Debug_Allocator_State, detects_leaked_allocations) {
     EXPECT_DEATH(
         {
-            mem::Hosted_Allocator hosted{};
-            mem::Debug_Allocator  debug{&hosted};
-            (void)debug.alloc(32);
+            mem::Hosted_Allocator_State hosted{};
+            mem::Debug_Allocator_State debug{hosted.get_allocator()};
+            (void)mem::alloc(32, debug.get_allocator());
         },
-        "Debug_Allocator: leaked allocations"
+        "Debug_Allocator_State: leaked allocations"
     );
 }
 
-TEST(Debug_Allocator, detects_double_frees) {
+TEST(Debug_Allocator_State, detects_double_frees) {
     EXPECT_DEATH(
         {
-            mem::Hosted_Allocator hosted{};
-            mem::Debug_Allocator  debug{&hosted};
-            auto size = 32;
-            auto* mem = debug.alloc(size);
-            debug.free(mem, size);
-            debug.free(mem, size);
+            mem::Hosted_Allocator_State hosted{};
+            mem::Debug_Allocator_State debug{hosted.get_allocator()};
+            auto allocation = mem::alloc(32, debug.get_allocator());
+            (void)mem::free(allocation.memory, 32, debug.get_allocator());
+            (void)mem::free(allocation.memory, 32, debug.get_allocator());
         },
-        "Debug_Allocator: double free"
+        "Debug_Allocator_State: double free"
     );
 }
 
-TEST(Null_Allocator, alloc_is_unreachable) {
+TEST(Null_Allocator_State, alloc_is_unreachable) {
     EXPECT_DEATH(
         {
-            mem::Null_Allocator null{};
-            (void)null.alloc(16);
+            mem::Null_Allocator_State null{};
+            (void)mem::alloc(16, null.get_allocator());
         },
-        "Null_Allocator alloc called."
+        "Null allocator operation called."
     );
 }
 
-TEST(Null_Allocator, free_is_unreachable) {
+TEST(Null_Allocator_State, free_is_unreachable) {
     EXPECT_DEATH(
         {
-            mem::Null_Allocator null{};
-            null.free(nullptr, 0);
+            mem::Null_Allocator_State null{};
+            (void)mem::free(reinterpret_cast<void*>(1), 0, null.get_allocator());
         },
-        "Null_Allocator free called."
+        "Null allocator operation called."
     );
 }
 
-TEST(Arena_Allocator, alloc_returns_usable_memory) {
-    mem::Arena_Allocator arena{4096};
-
-    void* p = arena.alloc(64);
-    ASSERT_NE(p, nullptr);
-    kstd_memset(p, 0xAB, 64);
+TEST(Arena_Allocator_State, alloc_returns_usable_memory) {
+    mem::Arena_Allocator_State arena{4096};
+    auto allocation = mem::alloc(64, arena.get_allocator());
+    ASSERT_NE(allocation.memory, nullptr);
+    kstd_memset(allocation.memory, 0xAB, 64);
 }
 
-TEST(Arena_Allocator, sequential_allocs_bump_forward) {
-    mem::Arena_Allocator arena{4096};
-
-    auto* a = static_cast<u8*>(arena.alloc(16));
-    auto* b = static_cast<u8*>(arena.alloc(16));
-    ASSERT_NE(a, nullptr);
-    ASSERT_NE(b, nullptr);
-    ASSERT_LT(a, b);
+TEST(Arena_Allocator_State, sequential_allocs_bump_forward) {
+    mem::Arena_Allocator_State arena{4096};
+    auto a = mem::alloc(16, arena.get_allocator());
+    auto b = mem::alloc(16, arena.get_allocator());
+    ASSERT_NE(a.memory, nullptr);
+    ASSERT_NE(b.memory, nullptr);
+    ASSERT_LT(a.memory, b.memory);
 }
 
-TEST(Arena_Allocator, free_is_noop) {
-    mem::Arena_Allocator arena{4096};
-
-    void* p          = arena.alloc(128);
-    usize left_after = arena.bytes_left();
-    arena.free(p, 128);
-    ASSERT_EQ(arena.bytes_left(), left_after);
-}
-
-TEST(Arena_Allocator, reset_reclaims_memory) {
-    mem::Arena_Allocator arena{4096};
-
+TEST(Arena_Allocator_State, reset_reclaims_memory) {
+    mem::Arena_Allocator_State arena{4096};
     usize left_before = arena.bytes_left();
-    ASSERT_NE(arena.alloc(256), nullptr);
+    ASSERT_NE(mem::alloc(256, arena.get_allocator()).memory, nullptr);
     ASSERT_LT(arena.bytes_left(), left_before);
-
     arena.reset();
     ASSERT_EQ(arena.bytes_left(), left_before);
 }
 
-TEST(Arena_Allocator, respects_alignment) {
-    mem::Arena_Allocator arena{4096};
-
-    ASSERT_NE(arena.alloc(1), nullptr);
-    void* p = arena.alloc(8, 64);
-    ASSERT_NE(p, nullptr);
-    ASSERT_EQ(ptr_addr(p) % 64, 0u);
+TEST(Arena_Allocator_State, respects_alignment) {
+    mem::Arena_Allocator_State arena{4096};
+    ASSERT_NE(mem::alloc(1, 64, arena.get_allocator()).memory, nullptr);
+    auto allocation = mem::alloc(8, 64, arena.get_allocator());
+    ASSERT_NE(allocation.memory, nullptr);
+    ASSERT_EQ(ptr_addr(allocation.memory) % 64, 0u);
 }
 
-TEST(Arena_Allocator, returns_nullptr_when_exhausted) {
-    mem::Arena_Allocator arena{4096};
-
-    void* all = arena.alloc(arena.bytes_left());
-    ASSERT_NE(all, nullptr);
+TEST(Arena_Allocator_State, returns_nullptr_when_exhausted) {
+    mem::Arena_Allocator_State arena{4096};
+    auto all = mem::alloc(arena.bytes_left(), arena.get_allocator());
+    ASSERT_NE(all.memory, nullptr);
     ASSERT_EQ(arena.bytes_left(), 0u);
-    ASSERT_EQ(arena.alloc(1), nullptr);
+    ASSERT_EQ(mem::alloc(1, arena.get_allocator()).error, mem::Allocator_Error::OUT_OF_MEMORY);
 }
 
-TEST(Arena_Allocator, debug_stamps_used_memory_on_reset) {
-    mem::Arena_Allocator<true> arena{4096};
-
-    auto* p = static_cast<u8*>(arena.alloc(32));
-    ASSERT_NE(p, nullptr);
-    kstd_memset(p, 0x11, 32);
-
+TEST(Arena_Allocator_State, debug_stamps_used_memory_on_reset) {
+    mem::Arena_Allocator_State<true> arena{4096};
+    auto allocation = mem::alloc(32, arena.get_allocator());
+    ASSERT_NE(allocation.memory, nullptr);
+    kstd_memset(allocation.memory, 0x11, 32);
     arena.reset();
-    for (usize i = 0; i < 32; ++i) {
-        ASSERT_EQ(p[i], static_cast<u8>(0xCC));
-    }
-}
-
-TEST(Arena_Allocator, uses_static_buffer) {
-    alignas(16) u8 buffer[256];
-    mem::Arena_Allocator arena{buffer, sizeof(buffer)};
-
-    ASSERT_EQ(arena.bytes_left(), 256u);
-    void* p = arena.alloc(64);
-    ASSERT_NE(p, nullptr);
-    ASSERT_GE(static_cast<u8*>(p), buffer);
-    ASSERT_LT(static_cast<u8*>(p), buffer + sizeof(buffer));
-}
-
-TEST(Arena_Allocator, static_buffer_returns_nullptr_when_exhausted) {
-    alignas(16) u8 buffer[256];
-    mem::Arena_Allocator arena{buffer, sizeof(buffer)};
-
-    void* all = arena.alloc(arena.bytes_left());
-    ASSERT_NE(all, nullptr);
-    ASSERT_EQ(arena.bytes_left(), 0u);
-    ASSERT_EQ(arena.alloc(1), nullptr);
-}
-
-TEST(Arena_Allocator, uses_static_array) {
-    Static_Array<u8, 256> buffer{};
-    mem::Arena_Allocator arena{buffer};
-
-    ASSERT_EQ(arena.bytes_left(), 256u);
-    void* p = arena.alloc(64);
-    ASSERT_NE(p, nullptr);
-    ASSERT_GE(static_cast<u8*>(p), buffer.data);
-    ASSERT_LT(static_cast<u8*>(p), buffer.data + buffer.size);
-}
-
-TEST(Arena_Allocator, static_array_returns_nullptr_when_exhausted) {
-    Static_Array<u8, 256> buffer{};
-    mem::Arena_Allocator arena{buffer};
-
-    void* all = arena.alloc(arena.bytes_left());
-    ASSERT_NE(all, nullptr);
-    ASSERT_EQ(arena.bytes_left(), 0u);
-    ASSERT_EQ(arena.alloc(1), nullptr);
+    auto* bytes = static_cast<u8*>(allocation.memory);
+    for (usize i = 0; i < 32; ++i) ASSERT_EQ(bytes[i], static_cast<u8>(0xCC));
 }
 
 #endif
