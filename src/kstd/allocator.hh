@@ -20,7 +20,7 @@ namespace mem {
 constexpr usize TEMPORARY_STORAGE_SIZE = 16 * 1024;
 
 
-force_inline auto resolve_allocator(Allocator allocator) -> Allocator;
+force_inline auto resolve_allocator(Allocator allocator = {}) -> Allocator;
 
 force_inline constexpr auto result(void* memory, Allocator_Error error = Allocator_Error::NONE) -> Allocator_Result {
     return { .memory = memory, .error = error };
@@ -104,7 +104,9 @@ force_inline auto realloc(void* pointer, usize old_size, usize new_size, usize a
 
     auto error = free(pointer, old_size, allocator);
     if (error != Allocator_Error::NONE) {
-        // @TODO(blanktiger): Transform Allocator_Error into enum_flags an then OR the flags here.
+        // @TODO(blanktiger): Transform Allocator_Error into enum_flags an then
+        // OR the flags here. Think of how to make it intuitive, cause then you
+        // can't just switch on the error to check what happened.
         (void)free(allocation.memory, new_size, allocator);
         return result(nullptr, error);
     }
@@ -409,13 +411,11 @@ struct Arena_Allocator_State {
     }
 };
 
-//
-// Thin leak-checking wrapper. Forwards alloc/free to a backing allocator.
-// Currently checks for:
-// - leaked allocations,
-// - double frees.
-//
-struct Debug_Allocator final : Allocator {
+// Thin leak-checking wrapper. Forwards allocation requests to a backing allocator.
+struct Debug_Allocator_State {
+    using enum Allocator_Features;
+    static constexpr Allocator_Features FEATURES = IS_THIS_YOURS | INFO | DEBUG_ALLOCATOR;
+
     struct Allocation_Record {
         void*              pointer;
         usize              size;
@@ -423,65 +423,119 @@ struct Debug_Allocator final : Allocator {
         Allocation_Record* next;
     };
 
-    Allocator*         backing    = nullptr;
+    Allocator          backing{};
     Allocation_Record* live_head  = nullptr;
     usize              live_count = 0;
 
-    Debug_Allocator() : Debug_Allocator(mem::resolve_allocator()) {}
+    Debug_Allocator_State() : Debug_Allocator_State(mem::resolve_allocator()) {}
 
-    explicit Debug_Allocator(Allocator* backing_allocator)
+    explicit Debug_Allocator_State(Allocator backing_allocator)
         : backing(backing_allocator),
           live_head(nullptr),
           live_count(0) {
-        kstd_assert(backing_allocator != nullptr);
+        kstd_assert(backing.valid());
     }
 
-    ~Debug_Allocator() {
-        kstd_assert(live_count == 0, "Debug_Allocator: leaked allocations");
-        kstd_assert(live_head == nullptr, "Debug_Allocator: leaked allocations");
+    ~Debug_Allocator_State() {
+        kstd_assert(live_count == 0, "Debug_Allocator_State: leaked allocations");
+        kstd_assert(live_head == nullptr, "Debug_Allocator_State: leaked allocations");
     }
 
-    auto alloc(usize size, usize alignment = alignof(std::max_align_t)) -> void* override {
-        void* pointer = backing->alloc(size, alignment);
-        if (pointer == nullptr) return nullptr;
+    auto get_allocator() -> Allocator { return {.proc = proc, .data = this}; }
 
-        auto* record = static_cast<Allocation_Record*>(
-            backing->alloc(sizeof(Allocation_Record), alignof(Allocation_Record))
-        );
-        kstd_assert(record != nullptr, "Debug_Allocator: failed to allocate tracking record");
+    static auto proc(Allocator_Mode mode, s64 size, s64 alignment, s64 old_size, void* old_memory, void* debug_state) -> Allocator_Result {
+        auto* state = static_cast<Debug_Allocator_State*>(debug_state);
 
-        record->pointer   = pointer;
-        record->size      = size;
-        record->alignment = alignment;
-        record->next      = live_head;
-        live_head         = record;
-        live_count++;
-        return pointer;
-    }
+        switch (mode) {
+            case Allocator_Mode::ALLOCATE: {
+                auto allocation = call_allocator(state->backing, mode, size, alignment, old_size, old_memory);
+                if (allocation.error != Allocator_Error::NONE || allocation.memory == nullptr)
+                    return allocation;
 
-    auto free(void* pointer, usize size, usize alignment = alignof(std::max_align_t)) -> void override {
-        if (pointer == nullptr) return;
-
-        Allocation_Record** link = &live_head;
-        while (*link != nullptr) {
-            Allocation_Record* record = *link;
-            if (record->pointer == pointer) {
-                if (size != 0) {
-                    kstd_assert(record->size == size, "Debug_Allocator: free size mismatch");
+                // @TODO(blanktiger): Merge this with the original allocation.
+                auto record_allocation = alloc(sizeof(Allocation_Record), alignof(Allocation_Record), state->backing);
+                if (record_allocation.memory == nullptr) {
+                    // @TODO(blanktiger): Merge errors once they are enum_flags.
+                    auto error = free(allocation.memory, size, state->backing);
+                    (void)error;
+                    return result(nullptr, Allocator_Error::OUT_OF_MEMORY);
                 }
-                kstd_assert(record->alignment == alignment, "Debug_Allocator: free alignment mismatch");
 
-                *link = record->next;
-                live_count--;
+                new(record_allocation.memory) Allocation_Record {
+                    .pointer = allocation.memory,
+                    .size = static_cast<usize>(size),
+                    .alignment = static_cast<usize>(alignment),
+                    .next = state->live_head
+                };
 
-                backing->free(pointer, record->size, record->alignment);
-                backing->free(record, sizeof(Allocation_Record), alignof(Allocation_Record));
-                return;
-            }
-            link = &record->next;
+                state->live_head = record_allocation.memory;
+                state->live_count++;
+                return allocation;
+            } break;
+
+            case Allocator_Mode::FREE: {
+                if (old_memory == nullptr) return result(nullptr);
+
+                Allocation_Record** link = &state->live_head;
+                while (*link != nullptr) {
+                    auto* record = *link;
+                    if (record->pointer == old_memory) {
+                        if (old_size != 0)
+                            kstd_assert(record->size == static_cast<usize>(old_size), "Debug allocator free size mismatch");
+
+                        *link = record->next;
+                        state->live_count--;
+
+                        auto free_result        = free(record->pointer, record->size, state->backing);
+                        auto record_free_result = free(record, sizeof(Allocation_Record), state->backing);
+                        (void)record_free_result;
+                        return free_result;
+                    }
+
+                    link = &record->next;
+                }
+
+                unreachable("Debug_Allocator_State: double free");
+            } break;
+
+            case Allocator_Mode::FEATURES: {
+                auto* features = static_cast<Allocator_Features*>(old_memory);
+                if (features == nullptr)
+                    return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
+
+                auto feature_result = get_features(state->backing);
+                if (feature_result.error != Allocator_Error::NONE) return feature_result;
+                *features = *features | FEATURES;
+                return result(nullptr);
+            } break;
+
+            case Allocator_Mode::IS_THIS_YOURS: {
+                for (auto* record = state->live_head; record != nullptr; record = record->next)
+                    if (record->pointer == old_memory)
+                        return result(old_memory);
+                return result(nullptr);
+            } break;
+
+            case Allocator_Mode::INFO: {
+                auto* info = static_cast<Allocator_Info*>(old_memory);
+                if (info == nullptr)
+                    return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
+
+                for (auto* record = state->live_head; record != nullptr; record = record->next) {
+                    if (record->pointer == info->pointer) {
+                        info->size      = static_cast<s64>(record->size);
+                        info->alignment = static_cast<s64>(record->alignment);
+                        return result(nullptr);
+                    }
+                }
+
+                return result(nullptr, Allocator_Error::INVALID_POINTER);
+            } break;
+
+            default: return call_allocator(state->backing, mode, size, alignment, old_size, old_memory);
         }
 
-        unreachable("Debug_Allocator: double free");
+        unreachable();
     }
 };
 
