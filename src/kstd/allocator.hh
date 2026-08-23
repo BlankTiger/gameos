@@ -539,21 +539,38 @@ struct Debug_Allocator_State {
     }
 };
 
-struct Null_Allocator final : Allocator {
-    auto alloc(usize, usize = alignof(std::max_align_t)) -> void* override {
-        unreachable("Null_Allocator alloc called.");
-        return nullptr;
+struct Null_Allocator_State {
+    static constexpr auto FEATURES = Allocator_Features::NONE;
+
+    auto get_allocator() -> Allocator {
+        return { .proc = proc, .data = nullptr };
     }
 
-    auto free(void*, usize, usize = alignof(std::max_align_t)) -> void override {
-        unreachable("Null_Allocator free called.");
+    static auto proc(Allocator_Mode mode, s64 size, s64, s64, void* old_memory, void*) -> Allocator_Result {
+        switch (mode) {
+            case Allocator_Mode::FEATURES: {
+                auto* features = static_cast<Allocator_Features*>(old_memory);
+                if (features != nullptr) *features = FEATURES;
+                else                     return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
+
+                return result(nullptr);
+            } break;
+
+            case Allocator_Mode::FREE: {
+                if (old_memory == nullptr) return result(nullptr);
+            } break;
+
+            case Allocator_Mode::ALLOCATE:
+            case Allocator_Mode::RESIZE: {
+                if (size == 0) return result(nullptr);
+            } break;
+
+            default: return result(nullptr, Allocator_Error::MODE_NOT_IMPLEMENTED);
+        }
+
+        unreachable("Null allocator operation called.");
     }
 };
-
-inline Null_Allocator null_allocator{};
-
-
-
 
 inline Null_Allocator_State null_allocator_state{};
 inline Allocator null_allocator = null_allocator_state.get_allocator();
