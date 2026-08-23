@@ -75,8 +75,8 @@ base layer:
 - [ ] Debug_Allocator try to match as much of the zigs debug allocator as possible
 - [ ] MarkAndRestore for temporary allocations?
 - [ ] realloc on Allocator
-- [ ] query_capabilities on Allocator
-- [ ] set_temporary_allocator (also make it wrappable with Debug_Allocator)
+- [x] query_features on Allocator
+- [x] set_temporary_allocator
 - [ ] extract programmable_interval_timer.hh from time.hh
 - [x] extract interrupts.hh vector ids to a constants.hh type of file (currently they are duplicated throughout the file)
 - [ ] somehow deduplicate all the declarations that are made per an interrupt vector in interrupts.hh
