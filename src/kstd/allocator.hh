@@ -26,6 +26,11 @@ force_inline constexpr auto result(void* memory, Allocator_Error error = Allocat
     return { .memory = memory, .error = error };
 }
 
+template <typename T>
+force_inline constexpr auto query_result(T&& value, Allocator_Query_Error error = Allocator_Query_Error::NONE) -> Allocator_Query_Error<T> {
+    return { .value = value, .error = error };
+}
+
 force_inline auto call_allocator(Allocator allocator, Allocator_Mode mode, s64 size, s64 alignment, s64 old_size, void* old_memory) -> Allocator_Result {
     //
     // @NOTE: We don't resolve the allocator here, because we assume that what
@@ -56,6 +61,39 @@ force_inline auto free(void* pointer, usize size = 0, Allocator allocator = {}) 
     allocator = resolve_allocator(allocator);
     auto result = call_allocator(allocator, Allocator_Mode::FREE, 0, 0, static_cast<s64>(size), pointer);
     return result.error;
+}
+
+
+force_inline auto get_features(Allocator allocator) -> Allocator_Features {
+    auto features = Allocator_Features::NONE;
+    auto query = call_allocator(allocator, Allocator_Mode::FEATURES, 0, 0, 0, &features);
+
+    // Allocator_Mode::FEATURES must be implemented by all allocators.
+    kstd_assert(query.error == Allocator_Error::NONE, "Allocator features query failed");
+
+    return features;
+}
+
+force_inline auto is_this_yours(void* pointer, Allocator allocator) -> Allocator_Query_Result<bool> {
+    auto query = call_allocator(allocator, Allocator_Mode::IS_THIS_YOURS, 0, 0, 0, pointer);
+
+    using enum Allocator_Ownership;
+    if (query.error == Allocator_Error::MODE_NOT_IMPLEMENTED) {
+        return query_result(false, Allocator_Query_Error::QUERY_NOT_IMPLEMENTED);
+    }
+
+    kstd_assert(query.error == Allocator_Error::NONE, "Allocator ownership query failed");
+    return query_result(query.memory != nullptr);
+}
+
+force_inline auto get_info(void* pointer, Allocator allocator) -> Allocator_Query_Result<Allocator_Info> {
+    Allocator_Info info{ .pointer = pointer };
+    auto query = call_allocator(allocator, Allocator_Mode::INFO, 0, 0, 0, &info);
+    if (query.error == Allocator_Error::MODE_NOT_IMPLEMENTED) {
+        return query_result(info, Allocator_Query_Error::QUERY_NOT_IMPLEMENTED);
+    }
+    kstd_assert(query.error == Allocator_Error::NONE, "Allocator info query failed");
+    return query_result(info);
 }
 
 template <typename T>
