@@ -135,7 +135,7 @@ namespace hidden {
     inline Memory_Regions regions{};
 }
 
-auto initialize(const boot::Multiboot2_Info* mbi) -> void {
+auto initialize(const boot::Multiboot2_Info* mbi) -> Context {
     using namespace hidden;
 
     parse_multiboot2_memory_map(regions, mbi);
@@ -145,17 +145,24 @@ auto initialize(const boot::Multiboot2_Info* mbi) -> void {
     for (const auto& region : regions) {
         buddy.add_region(region.base, region.size);
     }
-    set_allocator(buddy.get_allocator());
+
+    auto allocator = buddy.get_allocator();
 
     constexpr usize TEMPORARY_ALLOCATOR_SIZE = 1 * 1024 * 1024;
-    auto temporary_allocation = mem::alloc(TEMPORARY_ALLOCATOR_SIZE, context.allocator);
+    auto temporary_allocation = mem::alloc(TEMPORARY_ALLOCATOR_SIZE, allocator);
     void* temporary_memory = temporary_allocation.memory;
     kstd_assert(temporary_memory != nullptr, "Failed to allocate temporary allocator backing memory.");
     new (&temporary_allocator_state) Temporary_Allocator_State{
         temporary_memory,
         TEMPORARY_ALLOCATOR_SIZE
     };
-    set_temporary_allocator(&temporary_allocator_state);
+
+    return Context{
+        .allocator           = allocator,
+        .temporary_state     = &temporary_allocator_state,
+        .temporary_allocator = temporary_allocator_state.get_allocator(),
+        .formatting_config   = {},
+    };
 }
 
 }  // namespace mem
