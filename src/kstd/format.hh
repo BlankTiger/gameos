@@ -631,14 +631,14 @@ struct Owned_Format {
 }
 
 TEST(fmt, frees_string_from_user_format) {
-    mem::Hosted_Allocator hosted{};
-    mem::Debug_Allocator  debug{&hosted};
-    PUSH_ALLOCATOR(&debug);
+    mem::Hosted_Allocator_State hosted{};
+    mem::Debug_Allocator_State  debug{hosted.get_allocator()};
+    PUSH_ALLOCATOR(debug.get_allocator());
 
     fmt_test::Capture_Backend backend;
     fmt::print(backend, "%", fmt_test::Owned_Format{});
     EXPECT_STREQ(backend.buffer, "owned");
-    // Debug_Allocator destructor asserts if format() result leaked.
+    // Debug_Allocator_State destructor asserts if format() result leaked.
 }
 
 TEST(fmt, prints_static_array) {

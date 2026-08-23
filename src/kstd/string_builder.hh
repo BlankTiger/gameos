@@ -286,26 +286,26 @@ TEST(String_Builder, grows_past_initial_buffer) {
 }
 
 TEST(String_Builder, to_string_uses_current_global) {
-    mem::Hosted_Allocator allocator_a;
-    mem::Hosted_Allocator allocator_b;
+    mem::Hosted_Allocator_State allocator_a;
+    mem::Hosted_Allocator_State allocator_b;
 
-    mem::Allocator* previous = mem::resolve_allocator();
+    mem::Allocator previous = context.allocator;
     defer(mem::set_allocator(previous));
 
-    mem::set_allocator(&allocator_a);
+    mem::set_allocator(allocator_a.get_allocator());
     String_Builder builder;
     builder.append("stable");
 
-    mem::set_allocator(&allocator_b);
+    mem::set_allocator(allocator_b.get_allocator());
     string s = builder.to_string();
-    defer(free_string(s, &allocator_b));
+    defer(free_string(s, allocator_b.get_allocator()));
     EXPECT_EQ(s, "stable");
 }
 
 TEST(String_Builder, on_temp_survives_until_reset) {
-    mem::temporary_allocator.reset();
-    defer(mem::temporary_allocator.reset());
-    PUSH_ALLOCATOR(&mem::temporary_allocator);
+    mem::temporary_allocator_reset();
+    defer(mem::temporary_allocator_reset(););
+    PUSH_ALLOCATOR(context.temporary_allocator->get_allocator());
 
     String_Builder builder;
     builder.append("frame");
@@ -334,26 +334,26 @@ TEST(sprint, numbered_args) {
 }
 
 TEST(sprint, can_target_explicit_allocator) {
-    mem::Hosted_Allocator hosted;
-    mem::Debug_Allocator  allocator{&hosted};
+    mem::Hosted_Allocator_State hosted;
+    mem::Debug_Allocator_State  debug{hosted.get_allocator()};
 
-    auto formatted = sprint(&allocator, "%, %!", "hello", "world");
+    auto formatted = sprint(debug.get_allocator(), "%, %!", "hello", "world");
     EXPECT_EQ(formatted, "hello, world!");
-    free_string(formatted, &allocator);
-    // Debug_Allocator destructor asserts no leaks -> alloc + free both hit this heap.
+    free_string(formatted, debug.get_allocator());
+    // Debug_Allocator_State destructor asserts no leaks -> alloc + free both hit this heap.
 }
 
 TEST(sprint, explicit_allocator_grows_past_inline_buffer) {
-    mem::Hosted_Allocator hosted;
-    mem::Debug_Allocator  allocator{&hosted};
+    mem::Hosted_Allocator_State hosted;
+    mem::Debug_Allocator_State  debug{hosted.get_allocator()};
 
     char payload[STRING_BUILDER_BUFFER_SIZE * 2];
     kstd_memset(payload, 'x', sizeof(payload));
-    auto formatted = sprint(&allocator, "%", string(payload, sizeof(payload)));
+    auto formatted = sprint(debug.get_allocator(), "%", string(payload, sizeof(payload)));
     EXPECT_EQ(formatted.size, sizeof(payload));
     for (usize i = 0; i < formatted.size; ++i)
         EXPECT_EQ(formatted.data[i], 'x');
-    free_string(formatted, &allocator);
+    free_string(formatted, debug.get_allocator());
 }
 
 TEST(csprint, can_format_values_into_a_c_string) {
@@ -369,26 +369,26 @@ TEST(csprint, numbered_args) {
 }
 
 TEST(csprint, can_target_explicit_allocator) {
-    mem::Hosted_Allocator hosted;
-    mem::Debug_Allocator  allocator{&hosted};
+    mem::Hosted_Allocator_State hosted;
+    mem::Debug_Allocator_State  debug{hosted.get_allocator()};
 
-    auto* formatted = csprint(&allocator, "%, %!", "hello", "world");
-    defer(free_c_string(formatted, &allocator));
+    auto* formatted = csprint(debug.get_allocator(), "%, %!", "hello", "world");
+    defer(free_c_string(formatted, debug.get_allocator()));
     EXPECT_STREQ(formatted, "hello, world!");
 }
 
 TEST(csprint, explicit_allocator_grows_past_inline_buffer) {
-    mem::Hosted_Allocator hosted;
-    mem::Debug_Allocator  allocator{&hosted};
+    mem::Hosted_Allocator_State hosted;
+    mem::Debug_Allocator_State  debug{hosted.get_allocator()};
 
     char payload[STRING_BUILDER_BUFFER_SIZE * 2];
     kstd_memset(payload, 'x', sizeof(payload));
-    auto* formatted = csprint(&allocator, "%", string(payload, sizeof(payload)));
+    auto* formatted = csprint(debug.get_allocator(), "%", string(payload, sizeof(payload)));
     EXPECT_EQ(kstd_strlen(formatted), sizeof(payload));
     for (usize i = 0; i < sizeof(payload); ++i)
         EXPECT_EQ(formatted[i], 'x');
     EXPECT_EQ(formatted[sizeof(payload)], '\0');
-    free_c_string(formatted, &allocator);
+    free_c_string(formatted, debug.get_allocator());
 }
 
 TEST(csprint, empty_is_null_terminated) {
@@ -399,7 +399,7 @@ TEST(csprint, empty_is_null_terminated) {
 }
 
 TEST(ctprint, formats_into_temporary_allocator) {
-    defer(mem::temporary_allocator.reset());
+    defer(mem::temporary_allocator_reset());
 
     auto* a = ctprint("%, %!", "hello", "world");
     EXPECT_STREQ(a, "hello, world!");
@@ -420,7 +420,7 @@ TEST(String_Builder, to_c_string_null_terminates) {
 }
 
 TEST(tprint, formats_into_temporary_allocator) {
-    defer(mem::temporary_allocator.reset());
+    defer(mem::temporary_allocator_reset());
 
     auto a = tprint("%, %!", "hello", "world");
     EXPECT_EQ(a, "hello, world!");
@@ -431,17 +431,17 @@ TEST(tprint, formats_into_temporary_allocator) {
 }
 
 TEST(tprint, reset_invalidates_previous_views_memory_reuse) {
-    defer(mem::temporary_allocator.reset());
+    defer(mem::temporary_allocator_reset());
     auto first = tprint("first");
     EXPECT_EQ(first, "first");
 
-    mem::temporary_allocator.reset();
+    mem::temporary_allocator_reset();
     auto second = tprint("second-longer");
     EXPECT_EQ(second, "second-longer");
 }
 
 TEST(tcopy, copies_into_temp) {
-    defer(mem::temporary_allocator.reset());
+    defer(mem::temporary_allocator_reset());
     const char* literal = "abc";
     auto copied = tcopy(string(literal));
     EXPECT_EQ(copied, "abc");
@@ -449,7 +449,7 @@ TEST(tcopy, copies_into_temp) {
 }
 
 TEST(temp_c_string, null_terminates) {
-    defer(mem::temporary_allocator.reset());
+    defer(mem::temporary_allocator_reset());
     auto* cstr = temp_c_string("hi");
     EXPECT_EQ(cstr[0], 'h');
     EXPECT_EQ(cstr[1], 'i');
@@ -457,9 +457,9 @@ TEST(temp_c_string, null_terminates) {
 }
 
 TEST(copy_string, can_target_explicit_allocator) {
-    mem::Hosted_Allocator allocator;
-    auto copied = copy_string("xy", &allocator);
-    defer(free_string(copied, &allocator));
+    mem::Hosted_Allocator_State allocator;
+    auto copied = copy_string("xy", allocator.get_allocator());
+    defer(free_string(copied, allocator.get_allocator()));
     EXPECT_EQ(copied, "xy");
 }
 

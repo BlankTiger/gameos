@@ -793,14 +793,14 @@ TEST(Array, default_is_empty) {
 
     EXPECT_EQ(arr.size, 0);
     EXPECT_EQ(arr.capacity, 1);
-    EXPECT_NE(arr.allocator, nullptr);
+    EXPECT_TRUE(arr.allocator.valid());
 }
 
 TEST(Array, remembers_explicit_allocator) {
-    mem::Hosted_Allocator allocator;
-    Array<int> arr(&allocator);
+    mem::Hosted_Allocator_State allocator;
+    Array<int> arr(allocator.get_allocator());
 
-    EXPECT_EQ(arr.allocator, &allocator);
+    EXPECT_EQ(arr.allocator, allocator.get_allocator());
 
     arr.push_back(1);
     arr.push_back(2);
@@ -808,31 +808,31 @@ TEST(Array, remembers_explicit_allocator) {
     EXPECT_EQ(arr.size, 2);
     EXPECT_EQ(arr[0], 1);
     EXPECT_EQ(arr[1], 2);
-    EXPECT_EQ(arr.allocator, &allocator);
+    EXPECT_EQ(arr.allocator, allocator.get_allocator());
 }
 
 TEST(Array, copy_keeps_source_allocator) {
-    mem::Hosted_Allocator allocator;
-    Array<int> first(&allocator);
+    mem::Hosted_Allocator_State allocator;
+    Array<int> first(allocator.get_allocator());
     first.push_back(7);
 
     Array<int> second = first;
 
-    EXPECT_EQ(second.allocator, &allocator);
+    EXPECT_EQ(second.allocator, allocator.get_allocator());
     EXPECT_EQ(second.size, 1);
     EXPECT_EQ(second[0], 7);
 }
 
 TEST(Array, move_transfers_allocator) {
-    mem::Hosted_Allocator allocator;
-    Array<int> first(&allocator);
+    mem::Hosted_Allocator_State allocator;
+    Array<int> first(allocator.get_allocator());
     first.push_back(9);
 
     Array<int> second = std::move(first);
 
-    EXPECT_EQ(second.allocator, &allocator);
+    EXPECT_EQ(second.allocator, allocator.get_allocator());
     EXPECT_EQ(second[0], 9);
-    EXPECT_EQ(first.allocator, nullptr);
+    EXPECT_FALSE(first.allocator.valid());
     EXPECT_EQ(first.data, nullptr);
 }
 
@@ -1146,10 +1146,10 @@ TEST(Allocator, alloc_array_returns_dynamic_array_view) {
 }
 
 TEST(Allocator, alloc_array_accepts_custom_allocator_without_alignment) {
-    mem::Hosted_Allocator hosted{};
+    mem::Hosted_Allocator_State hosted{};
 
-    auto array = mem::alloc_array<u64>(3, &hosted);
-    defer(mem::free_array(array, &hosted));
+    auto array = mem::alloc_array<u64>(3, hosted.get_allocator());
+    defer(mem::free_array(array, hosted.get_allocator()));
 
     ASSERT_NE(array.data, nullptr);
     ASSERT_EQ(array.size, 3u);
