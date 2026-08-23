@@ -54,6 +54,11 @@ force_inline auto alloc(usize size, usize alignment = alignof(std::max_align_t),
     return call_allocator(allocator, Allocator_Mode::ALLOCATE, static_cast<s64>(size), static_cast<s64>(alignment), 0, nullptr);
 }
 
+force_inline auto alloc(usize size, Allocator allocator = {}) -> Allocator_Result {
+    return alloc(size, alignof(std::max_align_t), allocator);
+}
+
+// @TODO(blanktiger): alignment?
 force_inline auto free(void* pointer, usize size = 0, Allocator allocator = {}) -> Allocator_Error {
     if (size > static_cast<usize>(S64_MAX))
         return Allocator_Error::INVALID_ARGUMENT;
@@ -174,7 +179,7 @@ struct Temporary_Allocator_State {
         kstd_assert(backing_allocator.valid());
         kstd_assert(size > 0);
 
-        auto allocation = alloc(size, alignof(std::max_align_t), backing_allocator);
+        auto allocation = alloc(size, backing_allocator);
         kstd_assert(allocation.memory != nullptr);
         kstd_assert(allocation.error == Allocator_Error::NONE);
 
