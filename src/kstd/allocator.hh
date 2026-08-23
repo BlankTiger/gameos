@@ -63,6 +63,48 @@ force_inline auto free(void* pointer, usize size = 0, Allocator allocator = {}) 
     return result.error;
 }
 
+//
+// The assumption is that you want to (AND HAVE TO) use the same allocator you
+// used for the original allocation.
+//
+force_inline auto realloc(void* pointer, usize old_size, usize new_size, usize alignment, Allocator allocator = {}) -> Allocator_Result {
+    if (old_size > static_cast<usize>(S64_MAX) || new_size > static_cast<usize>(S64_MAX))
+        return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
+
+    if (pointer == nullptr && new_size == 0) return result(nullptr);
+
+    allocator = resolve_allocator(allocator);
+    auto direct = call_allocator(allocator, Allocator_Mode::RESIZE, static_cast<s64>(new_size), static_cast<s64>(alignment), static_cast<s64>(old_size), pointer);
+    if (direct.error != Allocator_Error::MODE_NOT_IMPLEMENTED)
+        return direct;
+
+    auto features = get_features(allocator);
+    if (!has_feature(features, Allocator_Features::FREE))
+        return direct;
+
+    if (pointer != nullptr && old_size == 0)
+        return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
+
+    if (new_size == 0) {
+        auto error = free(pointer, old_size, allocator);
+        return result(nullptr, error);
+    }
+
+    auto allocation = alloc(new_size, alignment, allocator);
+    if (allocation.memory == nullptr) return allocation;
+
+    const auto copy_size = old_size < new_size ? old_size : new_size;
+    if (pointer != nullptr && copy_size > 0)
+        kstd_memcpy(allocation.memory, pointer, copy_size);
+
+    auto error = free(pointer, old_size, allocator);
+    if (error != Allocator_Error::NONE) {
+        // @TODO(blanktiger): Transform Allocator_Error into enum_flags an then OR the flags here.
+        (void)free(allocation.memory, new_size, allocator);
+        return result(nullptr, error);
+    }
+    return allocation;
+}
 
 force_inline auto get_features(Allocator allocator) -> Allocator_Features {
     auto features = Allocator_Features::NONE;
