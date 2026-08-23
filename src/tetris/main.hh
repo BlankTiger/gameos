@@ -4,6 +4,7 @@
 
 #include "kstd/allocator.hh"
 #include "kstd/array.hh"
+#include "kstd/math/grid3.hh"
 #include "kstd/math.hh"
 #include "kstd/numbers.hh"
 #include "kstd/string_builder.hh"
