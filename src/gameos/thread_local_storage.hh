@@ -27,12 +27,11 @@ struct Block {
         void*               dso_handle;
     };
 
-    void*           allocation = nullptr;
-    mem::Allocator* allocator  = nullptr;
+    void*          allocation = nullptr;
+    mem::Allocator allocator{};
 
-    Context                  context{};
-    void*                    temporary_storage = nullptr;
-    mem::Temporary_Allocator temporary_allocator{};
+    mem::Temporary_Allocator_State temporary_state{};
+    Context context{};
 
     Bounded_Array<Destructor, MAX_DESTRUCTORS> destructors;
 };
@@ -57,19 +56,31 @@ force_inline auto base() -> void* {
 }
 
 auto create(const Context& inherited_context) -> Block* {
-    auto* allocator = inherited_context.allocator;
-    kstd_assert(allocator != nullptr);
-    auto* block     = static_cast<Block*>(allocator->alloc(sizeof(Block), alignof(Block)));
-    auto* image     = static_cast<u8*>(allocator->alloc(allocation_size(), TLS_ALIGNMENT));
+    auto allocator = inherited_context.allocator;
+    kstd_assert(allocator.valid());
+
+    auto block_allocation = mem::alloc(sizeof(Block), alignof(Block), allocator);
+    auto image_allocation = mem::alloc(allocation_size(), TLS_ALIGNMENT, allocator);
+    kstd_assert(block_allocation.error == mem::Allocator_Error::NONE);
+    kstd_assert(image_allocation.error == mem::Allocator_Error::NONE);
+
+    auto* block = static_cast<Block*>(block_allocation.memory);
+    auto* image = static_cast<u8*>(image_allocation.memory);
+
     void* temporary_storage = nullptr;
-    if (inherited_context.temporary_allocator != nullptr) {
-        temporary_storage = allocator->alloc(mem::TEMPORARY_STORAGE_SIZE, TLS_ALIGNMENT);
+    if (inherited_context.temporary_state != nullptr) {
+        kstd_assert(inherited_context.temporary_state->base != nullptr);
+
+        auto temporary_allocation = mem::alloc(mem::TEMPORARY_STORAGE_SIZE, TLS_ALIGNMENT, allocator);
+        kstd_assert(temporary_allocation.error == mem::Allocator_Error::NONE);
+        temporary_storage = temporary_allocation.memory;
     }
+
     kstd_assert(
         block != nullptr &&
         image != nullptr &&
         (
-            inherited_context.temporary_allocator == nullptr ||
+            inherited_context.temporary_state == nullptr ||
             temporary_storage != nullptr
         ),
         "TLS allocation failed"
@@ -78,24 +89,32 @@ auto create(const Context& inherited_context) -> Block* {
     kstd_memset(image, 0, allocation_size());
     kstd_memcpy(image, __tls_start, ptr_addr(__tdata_end) - ptr_addr(__tls_start));
 
-    // Placement-new: raw alloc is not a live Block. Assignment would run
-    // Bounded_Array destructor over garbage size.
-    new (block) Block {
-        .allocation          = image,
-        .allocator           = allocator,
-        .context             = inherited_context,
-        .temporary_storage   = temporary_storage,
-        .temporary_allocator = {},
-        .destructors         = {},
-    };
+    auto new_context = inherited_context;
     if (temporary_storage != nullptr) {
-        block->temporary_allocator.~Temporary_Allocator();
-        new (&block->temporary_allocator) mem::Temporary_Allocator{
-            temporary_storage,
-            mem::TEMPORARY_STORAGE_SIZE,
+        auto state = mem::Temporary_Allocator_State{ temporary_storage, mem::TEMPORARY_STORAGE_SIZE };
+        new_context.temporary_allocator = state.get_allocator();
+        new_context.temporary_state     = state;
+
+        new (block) Block {
+            .allocation      = image,
+            .allocator       = allocator,
+            .temporary_state = state, // Might need std::move
+            .context         = new_context,
+            .destructors     = {},
         };
-        block->context.temporary_allocator = &block->temporary_allocator;
+    } else {
+        new_context.temporary_allocator = {};
+        new_context.temporary_state     = nullptr;
+
+        new (block) Block {
+            .allocation      = image,
+            .allocator       = allocator,
+            .temporary_state = {},
+            .context         = new_context,
+            .destructors     = {},
+        };
     }
+
     return block;
 }
 
@@ -128,11 +147,18 @@ auto destroy(Block* block) -> void {
         entry.function(entry.object);
     }
 
-    auto* allocator = block->allocator;
-    allocator->free(block->temporary_storage, mem::TEMPORARY_STORAGE_SIZE, TLS_ALIGNMENT);
-    allocator->free(block->allocation, allocation_size(), TLS_ALIGNMENT);
+    auto allocator = block->allocator;
+    auto* temporary_storage = block->context.temporary_state != nullptr ? block->context.temporary_state->base : nullptr;
+
+    auto error_free_temp = mem::free(temporary_storage, mem::TEMPORARY_STORAGE_SIZE, allocator);
+    kstd_debug_assert(error_free_temp == mem::Allocator_Error::NONE);
+
+    auto error_free_alloc = mem::free(block->allocation, allocation_size(), allocator);
+    kstd_debug_assert(error_free_alloc == mem::Allocator_Error::NONE);
+
     block->~Block();
-    allocator->free(block, sizeof(Block), alignof(Block));
+    auto error_free_block = mem::free(block, sizeof(Block), allocator);
+    kstd_debug_assert(error_free_block == mem::Allocator_Error::NONE);
 }
 
 extern "C" auto __cxa_thread_atexit(
@@ -154,10 +180,7 @@ auto initialize_bsp(const Context& inherited_context) -> void {
     activate(block);
 }
 
-auto initialize_application_processor(
-    u32 cpu_index,
-    const Context& inherited_context
-) -> void {
+auto initialize_application_processor(u32 cpu_index, const Context& inherited_context) -> void {
     auto* ap_block = create(inherited_context);
     idle_blocks[cpu_index] = ap_block;
     activate(ap_block);
