@@ -208,6 +208,17 @@ requires (!std::same_as<std::remove_cv_t<T>, bool>)
     return (value & (value - 1)) == 0;
 }
 
+[[nodiscard]] force_inline constexpr auto floor_pow2(u64 n) -> u64 {
+    if (n == 0) return 0;
+    n |= n >> 1;
+    n |= n >> 2;
+    n |= n >> 4;
+    n |= n >> 8;
+    n |= n >> 16;
+    n |= n >> 32;
+    return n & ~(n >> 1);
+}
+
 // Tangent, ported from the Cephes single-precision math library (tanf.c's
 // tancotf with cotflg=0, i.e. cotf support dropped, Stephen L. Moshier, public
 // domain, netlib.org/cephes). Range-reduces modulo pi/4 via Cody-Waite

@@ -2,6 +2,7 @@
 
 #include "kstd/allocator.hh"
 #include "kstd/assert.hh"
+#include "kstd/math.hh"
 
 #include "gameos/synchronization.hh"
 
@@ -9,9 +10,12 @@ namespace mem {
 
 //
 // Buddy heap over page-aligned physical regions. Call clear(), then
-// add_region() for each usable range, before alloc.
+// add_region() for each usable range, before using it.
 //
-struct Buddy_Allocator final : Allocator {
+struct Buddy_Allocator_State {
+    using enum Allocator_Features;
+    static constexpr Allocator_Features FEATURES = THREADSAFE | FREE | INFO | GENERAL_HEAP_ALLOCATOR;
+
     struct Free_Block {
         Free_Block* next;
     };
@@ -22,22 +26,14 @@ struct Buddy_Allocator final : Allocator {
         u8  reserved[7];
     };
 
-    static constexpr usize MIN_ORDER = 12;  // 4 KiB pages.
+    static constexpr usize MIN_ORDER = 12;
     static constexpr usize MAX_ORDER = 63;
 
     Free_Block* free_lists[MAX_ORDER + 1]{};
-    // It's the main global allocator, so it has to have a lock on `alloc` and `free`.
     synchronization::Spinlock lock;
 
-    static auto floor_pow2(u64 n) -> u64 {
-        if (n == 0) return 0;
-        n |= n >> 1;
-        n |= n >> 2;
-        n |= n >> 4;
-        n |= n >> 8;
-        n |= n >> 16;
-        n |= n >> 32;
-        return n & ~(n >> 1);
+    auto get_allocator() -> Allocator {
+        return { .proc = proc, .data = this };
     }
 
     static auto block_size_for_order(usize order) -> usize {
@@ -56,14 +52,14 @@ struct Buddy_Allocator final : Allocator {
 
     static auto next_block_size(u64 required_size) -> u64 {
         u64 block_size = mem::PAGE_SIZE;
-        while (block_size < required_size && block_size < (1ull << MAX_ORDER)) {
+        while (block_size < required_size && block_size < (1ull << MAX_ORDER))
             block_size <<= 1;
-        }
         return block_size;
     }
 
     auto clear() -> void {
-        for (usize i = 0; i <= MAX_ORDER; ++i) free_lists[i] = nullptr;
+        for (usize i = 0; i <= MAX_ORDER; ++i)
+            free_lists[i] = nullptr;
     }
 
     auto push_free_block(u64 base, usize order) -> void {
@@ -91,12 +87,12 @@ struct Buddy_Allocator final : Allocator {
 
         u64 current = start;
         while (current < end) {
-            u64 block_size = floor_pow2(end - current);
-            while (block_size > mem::PAGE_SIZE && (current & (block_size - 1)) != 0) {
+            u64 block_size = math::floor_pow2(end - current);
+            while (block_size > mem::PAGE_SIZE && (current & (block_size - 1)) != 0)
                 block_size >>= 1;
-            }
 
-            if (block_size < mem::PAGE_SIZE) block_size = mem::PAGE_SIZE;
+            if (block_size < mem::PAGE_SIZE)
+                block_size = mem::PAGE_SIZE;
 
             const usize order = order_for_block_size(block_size);
             push_free_block(current, order);
@@ -104,73 +100,110 @@ struct Buddy_Allocator final : Allocator {
         }
     }
 
-    auto alloc(usize size, usize alignment = alignof(std::max_align_t)) -> void* override {
-        if (alignment == 0) alignment = 1;
-        if (size == 0) size = 1;
+    static auto proc(Allocator_Mode mode, s64 size, s64 alignment, s64, void* old_memory, void* buddy_state) -> Allocator_Result {
+        auto* state = static_cast<Buddy_Allocator_State*>(buddy_state);
 
-        const u64 required_size = static_cast<u64>(size) + static_cast<u64>(alignment) + sizeof(Allocation_Header);
-        if (required_size < size) return nullptr;
+        switch (mode) {
+            case Allocator_Mode::ALLOCATE: {
+                if (size < 0 || alignment <= 0 || !math::is_power_of_two(alignment))
+                    return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
 
-        auto scoped_lock = lock.scoped_irq_lock();
+                if (size == 0) return result(nullptr);
 
-        const u64 target_block_size = next_block_size(required_size);
-        if (target_block_size < mem::PAGE_SIZE) return nullptr;
+                const u64 requested_size      = static_cast<u64>(size);
+                const u64 requested_alignment = static_cast<u64>(alignment);
+                const u64 required_size       = requested_size + requested_alignment + sizeof(Allocation_Header);
+                if (required_size < requested_size)
+                    return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
 
-        const usize target_order = order_for_block_size(target_block_size);
+                auto scoped_lock = state->lock.scoped_irq_lock();
+                const u64 target_block_size = next_block_size(required_size);
+                if (target_block_size < mem::PAGE_SIZE) return result(nullptr, Allocator_Error::OUT_OF_MEMORY);
 
-        usize order = target_order;
-        while (order <= MAX_ORDER && free_lists[order] == nullptr) order++;
-        if (order > MAX_ORDER) return nullptr;
+                const usize target_order = order_for_block_size(target_block_size);
+                usize order = target_order;
+                while (order <= MAX_ORDER && state->free_lists[order] == nullptr)
+                    order++;
 
-        u64 block_base = ptr_addr(free_lists[order]);
-        free_lists[order] = free_lists[order]->next;
+                if (order > MAX_ORDER)
+                    return result(nullptr, Allocator_Error::OUT_OF_MEMORY);
 
-        while (order > target_order) {
-            order--;
-            const u64 split_size = block_size_for_order(order);
-            push_free_block(block_base + split_size, order);
+                u64 block_base = ptr_addr(state->free_lists[order]);
+                state->free_lists[order] = state->free_lists[order]->next;
+                while (order > target_order) {
+                    order--;
+                    const u64 split_size = block_size_for_order(order);
+                    state->push_free_block(block_base + split_size, order);
+                }
+
+                const u64 block_size = block_size_for_order(order);
+                const u64 user_ptr = align_up(block_base + sizeof(Allocation_Header), requested_alignment);
+                if (user_ptr + requested_size < user_ptr || user_ptr + requested_size > block_base + block_size) {
+                    state->push_free_block(block_base, order);
+                    return result(nullptr, Allocator_Error::OUT_OF_MEMORY);
+                }
+
+                auto* header = reinterpret_cast<Allocation_Header*>(user_ptr - sizeof(Allocation_Header));
+                new (header) Allocation_Header {
+                    .block_base = block_base,
+                    .order      = static_cast<u8>(order),
+                };
+                return result(reinterpret_cast<void*>(user_ptr));
+            } break;
+
+            case Allocator_Mode::FREE: {
+                if (old_memory == nullptr) return result(nullptr);
+
+                auto scoped_lock = state->lock.scoped_irq_lock();
+                Allocation_Header header{};
+                kstd_memcpy(&header, reinterpret_cast<void*>(ptr_addr(old_memory) - sizeof(Allocation_Header)), sizeof(header));
+
+                u64 block_base = header.block_base;
+                usize order = header.order;
+                while (order < MAX_ORDER) {
+                    const u64 block_size = block_size_for_order(order);
+                    const u64 buddy_base = block_base ^ block_size;
+                    if (!state->remove_free_block(order, buddy_base)) break;
+                    if (buddy_base < block_base) block_base = buddy_base;
+                    order++;
+                }
+
+                state->push_free_block(block_base, order);
+                return result(nullptr);
+            } break;
+
+            case Allocator_Mode::FEATURES: {
+                auto* features = static_cast<Allocator_Features*>(old_memory);
+                if (features != nullptr) *features = FEATURES;
+                else                     return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
+
+                return result(nullptr);
+            } break;
+
+            // @TODO(blanktiger): Can and should be implemented.
+            case Allocator_Mode::IS_THIS_YOURS:
+                return result(nullptr, Allocator_Error::MODE_NOT_IMPLEMENTED);
+
+            case Allocator_Mode::INFO: {
+                auto* info = static_cast<Allocator_Info*>(old_memory);
+                if (info == nullptr || info->pointer == nullptr)
+                    return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
+
+                Allocation_Header header{};
+                kstd_memcpy(&header, reinterpret_cast<void*>(ptr_addr(info->pointer) - sizeof(Allocation_Header)), sizeof(header));
+                info->size      = static_cast<s64>(block_size_for_order(header.order));
+                info->alignment = static_cast<s64>(mem::PAGE_SIZE);
+
+                return result(nullptr);
+            } break;
+
+            default: return result(nullptr, Allocator_Error::MODE_NOT_IMPLEMENTED);
         }
 
-        const u64 block_size = block_size_for_order(order);
-        const u64 user_ptr   = align_up(block_base + sizeof(Allocation_Header), static_cast<u64>(alignment));
-        if (user_ptr + size > block_base + block_size) {
-            push_free_block(block_base, order);
-            return nullptr;
-        }
-
-        auto* header = reinterpret_cast<Allocation_Header*>(user_ptr - sizeof(Allocation_Header));
-        *header = Allocation_Header{};
-        header->block_base = block_base;
-        header->order      = static_cast<u8>(order);
-        return reinterpret_cast<void*>(user_ptr);
-    }
-
-    auto free(void* pointer, usize, usize alignment = alignof(std::max_align_t)) -> void override {
-        (void)alignment;
-        if (pointer == nullptr) return;
-
-        auto scoped_lock = lock.scoped_irq_lock();
-
-        Allocation_Header header{};
-        kstd_memcpy(&header, reinterpret_cast<void*>(ptr_addr(pointer) - sizeof(Allocation_Header)), sizeof(header));
-
-        u64   block_base = header.block_base;
-        usize order      = header.order;
-
-        while (order < MAX_ORDER) {
-            const u64 block_size = block_size_for_order(order);
-            const u64 buddy_base = block_base ^ block_size;
-            if (!remove_free_block(order, buddy_base)) break;
-
-            if (buddy_base < block_base) block_base = buddy_base;
-            order++;
-        }
-
-        push_free_block(block_base, order);
+        unreachable();
     }
 };
 
-
-inline Buddy_Allocator buddy{};
+inline Buddy_Allocator_State buddy{};
 
 }  // namespace mem
