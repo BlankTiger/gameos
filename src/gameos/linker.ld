@@ -58,7 +58,6 @@ SECTIONS
 		__debug_addr_start = .;
 		KEEP(*(.debug_addr))
 		__debug_addr_end = .;
-
 		KEEP(*(.debug_line_str))
 		__rodata_end = .;
 	}

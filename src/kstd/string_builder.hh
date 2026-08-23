@@ -26,13 +26,13 @@ struct String_Builder {
     static_assert(STRING_BUILDER_BUFFER_SIZE > sizeof(Buffer));
     static constexpr usize INITIAL_DATA_SIZE = STRING_BUILDER_BUFFER_SIZE - sizeof(Buffer);
 
-    mem::Allocator* allocator              = nullptr;
+    mem::Allocator  allocator{};
     Buffer*         current_buffer         = nullptr;
     usize           subsequent_buffer_size = INITIAL_DATA_SIZE;
     bool            failed                 = false;
     alignas(Buffer) u8 initial_bytes[STRING_BUILDER_BUFFER_SIZE]{};
 
-    String_Builder(mem::Allocator* allocator = nullptr, usize buffer_size = 0)
+    String_Builder(mem::Allocator allocator = {}, usize buffer_size = 0)
         : allocator(mem::resolve_allocator(allocator)),
           current_buffer(nullptr),
           subsequent_buffer_size(buffer_size > 0 ? buffer_size : INITIAL_DATA_SIZE),
@@ -120,14 +120,14 @@ struct String_Builder {
     // Contiguous copy onto destination_allocator (null -> current global).
     // Chain buffers stay on builder's allocator. Non-owning; pair with
     // free_string when not on temp. Resets builder by default.
-    auto to_string(mem::Allocator* destination_allocator = nullptr, bool do_reset = true) -> string {
+    auto to_string(mem::Allocator destination_allocator = {}, bool do_reset = true) -> string {
         usize count = length();
         if (count == 0) {
             if (do_reset) reset();
             return string{};
         }
 
-        auto* out = static_cast<char*>(mem::alloc(count, alignof(char), destination_allocator));
+        auto* out = static_cast<char*>(mem::alloc(count, alignof(char), destination_allocator).memory);
         kstd_assert(out != nullptr, "String_Builder::to_string allocation failed");
 
         char* cursor = out;
@@ -145,10 +145,10 @@ struct String_Builder {
     // Contiguous null-terminated copy onto destination_allocator (null -> current
     // global). Chain buffers stay on builder's allocator. free_c_string when not
     // on temp. Resets builder by default.
-    auto to_c_string(mem::Allocator* destination_allocator = nullptr, bool do_reset = true) -> const char* {
+    auto to_c_string(mem::Allocator destination_allocator = {}, bool do_reset = true) -> const char* {
         usize count = length();
 
-        auto* out = static_cast<char*>(mem::alloc(count + 1, alignof(char), destination_allocator));
+        auto* out = static_cast<char*>(mem::alloc(count + 1, alignof(char), destination_allocator).memory);
         kstd_assert(out != nullptr, "String_Builder::to_c_string allocation failed");
 
         char* cursor = out;
@@ -179,7 +179,7 @@ private:
 
     auto get_current_buffer() -> Buffer* {
         if (current_buffer != nullptr) return current_buffer;
-        kstd_assert(allocator != nullptr, "String_Builder used without allocator");
+        kstd_assert(allocator.valid(), "String_Builder used without a valid allocator.");
         return base_buffer();
     }
 
@@ -189,18 +189,19 @@ private:
         while (buffer != nullptr) {
             Buffer* next = buffer->next;
             usize block_size = sizeof(Buffer) + buffer->allocated;
-            allocator->free(buffer, block_size, alignof(Buffer));
+            (void)mem::free(buffer, block_size, allocator);
             buffer = next;
         }
         base->next = nullptr;
     }
 
     auto expand() -> bool {
-        kstd_assert(allocator != nullptr, "String_Builder expand without allocator");
+        kstd_assert(allocator.valid(), "String_Builder expand without a valid allocator.");
 
         usize subsequent = subsequent_buffer_size > 0 ? subsequent_buffer_size : INITIAL_DATA_SIZE;
         usize block_size = sizeof(Buffer) + subsequent;
-        auto* bytes = static_cast<u8*>(allocator->alloc(block_size, alignof(Buffer)));
+        auto allocation = mem::alloc(block_size, alignof(Buffer), allocator);
+        auto* bytes = static_cast<u8*>(allocation.memory);
         if (bytes == nullptr) return false;
 
         auto* buffer = reinterpret_cast<Buffer*>(bytes);
@@ -216,50 +217,50 @@ private:
 
 // Formats into allocator heap (null -> current global). Caller free_string(result) (or defer).
 template <typename... Args>
-auto sprint(mem::Allocator* allocator, Args&&... args) -> string {
+auto sprint(mem::Allocator allocator, Args&&... args) -> string {
     String_Builder builder(allocator);
     builder.print(std::forward<Args>(args)...);
     return builder.to_string(allocator);
 }
 
-// Pack form when first arg is not an allocator (else derived Allocator* would prefer pack).
+// Pack form when first arg is not an allocator.
 template <typename First, typename... Rest>
-    requires (!std::is_convertible_v<First, mem::Allocator*>)
+    requires (!std::is_convertible_v<First, mem::Allocator>)
 auto sprint(First&& first, Rest&&... rest) -> string {
-    return sprint(static_cast<mem::Allocator*>(nullptr),
+    return sprint(mem::Allocator{},
                   std::forward<First>(first),
                   std::forward<Rest>(rest)...);
 }
 
-// Format into mem::temporary_allocator, fire-and-forget until temporary_allocator.reset().
+// Format into context temporary allocator, fire-and-forget until reset().
 template <typename... Args>
 auto tprint(Args&&... args) -> string {
-    return sprint(mem::resolve_temporary_allocator(), std::forward<Args>(args)...);
+    return sprint(context.temporary_allocator, std::forward<Args>(args)...);
 }
 
 // C string print: formats into allocator heap (null -> current global), null-terminated.
 // Caller free_c_string(result) (or defer) when not on temp.
 template <typename... Args>
-auto csprint(mem::Allocator* allocator, Args&&... args) -> const char* {
+auto csprint(mem::Allocator allocator, Args&&... args) -> const char* {
     String_Builder builder(allocator);
     builder.print(std::forward<Args>(args)...);
     return builder.to_c_string(allocator);
 }
 
-// Pack form when first arg is not an allocator (else derived Allocator* would prefer pack).
+    // Pack form when first arg is not an allocator.
 template <typename First, typename... Rest>
-    requires (!std::is_convertible_v<First, mem::Allocator*>)
+    requires (!std::is_convertible_v<First, mem::Allocator>)
 auto csprint(First&& first, Rest&&... rest) -> const char* {
-    return csprint(static_cast<mem::Allocator*>(nullptr),
+    return csprint(mem::Allocator{},
                    std::forward<First>(first),
                    std::forward<Rest>(rest)...);
 }
 
-// C temporary print: format null-terminated into mem::temporary_allocator.
+// C temporary print: format null-terminated into context temporary allocator.
 // Valid until temporary_allocator.reset().
 template <typename... Args>
 auto ctprint(Args&&... args) -> const char* {
-    return csprint(mem::resolve_temporary_allocator(), std::forward<Args>(args)...);
+    return csprint(context.temporary_allocator, std::forward<Args>(args)...);
 }
 
 #ifdef UNIT_TESTS_KSTD_STRING_BUILDER

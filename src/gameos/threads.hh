@@ -82,7 +82,7 @@ struct Thread {
     void*            argument{};
     void*            stack{};
     u64              stack_size{};
-    mem::Allocator*  allocator{};
+    mem::Allocator   allocator{};
     void*            storage{};
     u64              storage_size{};
     u64              storage_alignment{};
@@ -188,7 +188,9 @@ auto reclaim(Thread& thread) -> void {
         thread.typed_destroy(thread.typed_control);
 
     tls::destroy(thread.tls_block);
-    thread.allocator->free(thread.storage, thread.storage_size, thread.storage_alignment);
+    // @TODO(blanktiger): Alignment?
+    auto error = mem::free(thread.storage, thread.storage_size, thread.allocator);
+    kstd_assert(error == mem::Allocator_Error::NONE);
     thread = {};
 }
 
@@ -215,7 +217,7 @@ auto create_thread(
     void*            data,
     void*            stack,
     u64              stack_size,
-    mem::Allocator*  allocator,
+    mem::Allocator   allocator,
     void*            storage,
     u64              storage_size,
     u64              storage_alignment,
@@ -273,8 +275,8 @@ auto create_thread(
     u32              cpu_affinity = ANY_CPU
 ) -> Thread_Handle<void> {
     using namespace hidden;
-    auto* allocator = mem::resolve_allocator();
-    auto* stack = allocator->alloc(stack_size, AP_STACK_ALIGNMENT);
+    auto stack_allocation = mem::alloc(stack_size, AP_STACK_ALIGNMENT, context.allocator);
+    auto* stack = stack_allocation.memory;
     kstd_assert(stack != nullptr, "Thread stack allocation failed");
     auto* tls_block = tls::create(context);
 
@@ -283,7 +285,7 @@ auto create_thread(
         data,
         stack,
         stack_size,
-        allocator,
+        context.allocator,
         stack,
         stack_size,
         AP_STACK_ALIGNMENT,
@@ -450,8 +452,8 @@ auto spawn(Procedure procedure, Arguments&&... args) -> Thread_Handle<hidden::Pr
     constexpr usize stack_offset      = (sizeof(Control) + AP_STACK_ALIGNMENT - 1) & ~(AP_STACK_ALIGNMENT - 1);
     constexpr usize storage_size      = stack_offset + THREAD_STACK_SIZE;
 
-    auto* allocator = mem::resolve_allocator();
-    auto* storage = allocator->alloc(storage_size, control_alignment);
+    auto storage_allocation = mem::alloc(storage_size, control_alignment, context.allocator);
+    auto* storage = storage_allocation.memory;
     auto* control = static_cast<Control*>(storage);
     kstd_assert(control != nullptr, "Typed thread control allocation failed");
 
@@ -468,7 +470,7 @@ auto spawn(Procedure procedure, Arguments&&... args) -> Thread_Handle<hidden::Pr
         nullptr,
         stack,
         THREAD_STACK_SIZE,
-        allocator,
+        context.allocator,
         storage,
         storage_size,
         control_alignment,
@@ -565,8 +567,8 @@ inline thread_local Smoke_Tls_Object tls_object;
 
 auto smoke_test() -> void {
     // Will assert if we leaked anything in this smoke test.
-    mem::Debug_Allocator dbg_allocator{};
-    PUSH_ALLOCATOR(&dbg_allocator);
+    mem::Debug_Allocator_State dbg_allocator_state{};
+    PUSH_ALLOCATOR(dbg_allocator_state.get_allocator());
 
     const auto smoke_proc = [](void* data) -> void {
         auto* sum = reinterpret_cast<u32*>(data);

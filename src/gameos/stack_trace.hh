@@ -30,7 +30,7 @@
 namespace stack_trace {
 
 namespace hidden {
-    mem::Arena_Allocator stack_trace_allocator(4096);
+    mem::Arena_Allocator_State stack_trace_allocator(4096);
 }
 
 struct Stack_Frame {

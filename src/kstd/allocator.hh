@@ -20,7 +20,7 @@ namespace mem {
 constexpr usize TEMPORARY_STORAGE_SIZE = 16 * 1024;
 
 
-force_inline auto resolve_allocator(Allocator allocator = {}) -> Allocator;
+force_inline auto resolve_allocator(Allocator allocator) -> Allocator;
 
 force_inline constexpr auto result(void* memory, Allocator_Error error = Allocator_Error::NONE) -> Allocator_Result {
     return { .memory = memory, .error = error };
@@ -126,7 +126,6 @@ force_inline auto get_features(Allocator allocator) -> Allocator_Features {
 force_inline auto is_this_yours(void* pointer, Allocator allocator) -> Allocator_Query_Result<bool> {
     auto query = call_allocator(allocator, Allocator_Mode::IS_THIS_YOURS, 0, 0, 0, pointer);
 
-    using enum Allocator_Ownership;
     if (query.error == Allocator_Error::MODE_NOT_IMPLEMENTED) {
         return query_result(false, Allocator_Query_Error::QUERY_NOT_IMPLEMENTED);
     }
@@ -138,9 +137,11 @@ force_inline auto is_this_yours(void* pointer, Allocator allocator) -> Allocator
 force_inline auto get_info(void* pointer, Allocator allocator) -> Allocator_Query_Result<Allocator_Info> {
     Allocator_Info info{ .pointer = pointer };
     auto query = call_allocator(allocator, Allocator_Mode::INFO, 0, 0, 0, &info);
+
     if (query.error == Allocator_Error::MODE_NOT_IMPLEMENTED) {
         return query_result(info, Allocator_Query_Error::QUERY_NOT_IMPLEMENTED);
     }
+
     kstd_assert(query.error == Allocator_Error::NONE, "Allocator info query failed");
     return query_result(info);
 }
@@ -426,8 +427,6 @@ struct Debug_Allocator_State {
     Allocator          backing{};
     Allocation_Record* live_head  = nullptr;
     usize              live_count = 0;
-
-    Debug_Allocator_State() : Debug_Allocator_State(mem::resolve_allocator()) {}
 
     explicit Debug_Allocator_State(Allocator backing_allocator)
         : backing(backing_allocator),

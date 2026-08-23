@@ -89,29 +89,30 @@ struct string {
 
 // Free heap bytes from copy_string / String_Builder::to_string / sprint / format().
 // allocator null -> current global allocator at free time (must match alloc heap).
-inline auto free_string(string s, mem::Allocator* allocator = nullptr) -> void {
+inline auto free_string(string s, mem::Allocator allocator = {}) -> void {
     if (s.data == nullptr || s.size == 0) return;
-    mem::free(s.data, s.size, alignof(char), allocator);
+    (void)mem::free(s.data, s.size, allocator);
 }
 
 // Free heap bytes from String_Builder::to_c_string / csprint.
 // allocator null -> current global allocator at free time (must match alloc heap).
-inline auto free_c_string(const char* s, mem::Allocator* allocator = nullptr) -> void {
+inline auto free_c_string(const char* s, mem::Allocator allocator = {}) -> void {
     if (s == nullptr) return;
-    mem::free(const_cast<char*>(s), kstd_strlen(s) + 1, alignof(char), allocator);
+    (void)mem::free(const_cast<char*>(s), kstd_strlen(s) + 1, allocator);
 }
 
-inline auto copy_string(string s, mem::Allocator* allocator = nullptr) -> string {
+inline auto copy_string(string s, mem::Allocator allocator = {}) -> string {
     if (s.size == 0) return string{};
 
-    auto* data = static_cast<char*>(mem::alloc(s.size, alignof(char), allocator));
+    auto allocation = mem::alloc(s.size, alignof(char), allocator);
+    auto* data = static_cast<char*>(allocation.memory);
     kstd_assert(data != nullptr, "copy_string allocation failed");
     kstd_memcpy(data, s.data, s.size);
     return string(data, s.size);
 }
 
 force_inline auto tcopy(string s) -> string {
-    return copy_string(s, mem::resolve_temporary_allocator());
+    return copy_string(s, context.temporary_allocator);
 }
 
 // Null-terminated copy in temp (for C APIs). Not counted in the string length.

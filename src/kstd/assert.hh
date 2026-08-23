@@ -34,18 +34,18 @@ constexpr force_inline auto kstd_debug_assert(
 #endif
 }
 
-constexpr force_inline auto unimplemented(
+[[noreturn]] constexpr force_inline auto unimplemented(
     const char* message = nullptr,
     const std::source_location& location = std::source_location::current()
 ) -> void {
-    kstd_assert(false, message ? message : "unimplemented", location);
+    kstd::assertion_failure(message ? message : "unimplemented", location);
 }
 
-constexpr force_inline auto unreachable(
+[[noreturn]] constexpr force_inline auto unreachable(
     const char* message = nullptr,
     const std::source_location& location = std::source_location::current()
 ) -> void {
-    kstd_assert(false, message ? message : "unreachable", location);
+    kstd::assertion_failure(message ? message : "unreachable", location);
 }
 
 #if OS == GAMEOS

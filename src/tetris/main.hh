@@ -980,8 +980,8 @@ auto update(Game& game, f32 camera_orbit_angle) -> void {
 }
 
 auto tetris_main() -> void {
-    mem::Debug_Allocator dbg_allocator{};
-    mem::set_allocator(&dbg_allocator);
+    mem::Debug_Allocator_State dbg_allocator_state{};
+    mem::set_allocator(dbg_allocator_state.get_allocator());
 
     gfx::Camera3D camera;
     f32 camera_orbit_angle = 0.f;
@@ -999,7 +999,7 @@ auto tetris_main() -> void {
 
     constexpr auto TARGET_TICKS = ticks_per_frame(FPS_MAX);
 
-    const auto* temporary_allocator_mark = mem::temporary_allocator.mark();
+    const auto* temporary_allocator_mark = context.temporary_allocator->mark();
     while (true) {
         input::begin_frame();
         if (input::key_pressed(Key::ESCAPE)) break;
@@ -1031,8 +1031,8 @@ auto tetris_main() -> void {
                 break;
             }
 
-            // serial::println("% MB", static_cast<f32>(mem::temporary_allocator.bytes_used()) / 1000000);
-            mem::temporary_allocator.rewind(temporary_allocator_mark);
+            // serial::println("% MB", static_cast<f32>(context.temporary_allocator->bytes_used()) / 1000000);
+            context.temporary_allocator->rewind(temporary_allocator_mark);
         }
 
         const u64 frame_ticks = get_ticks() - frame_start;

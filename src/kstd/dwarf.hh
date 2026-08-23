@@ -738,8 +738,8 @@ auto parse_subprograms(Byte_Reader& debug_info, Sections& sections) -> Parse_Com
     bool has_debug_line_offset = false;
 
     while (debug_info.remaining() > 0) {
-        auto* temp_mark = context.temporary_allocator->mark();
-        defer(context.temporary_allocator->rewind(temp_mark));
+        auto* temp_mark = context.temporary_state->mark();
+        defer(context.temporary_state->rewind(temp_mark));
 
         PUSH_ALLOCATOR(context.temporary_allocator);
 

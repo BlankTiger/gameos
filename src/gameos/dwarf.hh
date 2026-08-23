@@ -40,9 +40,9 @@ namespace hidden {
     // know how much stuff it needs to hold.
     //
     // @TODO(blanktiger): Actually do it.
-    // mem::Arena_Allocator debug_info_allocator(0);
+    // mem::Arena_Allocator_State debug_info_allocator(0);
 
-    mem::Arena_Allocator debug_info_building_allocator(10 * 1024 * 1024);
+    mem::Arena_Allocator_State debug_info_building_allocator(10 * 1024 * 1024);
     Array<Subprogram_Info> infos;
     Array<Source_Row>      rows;
 }
@@ -50,11 +50,11 @@ namespace hidden {
 auto build_debug_info() -> void {
     serial::println("dwarf: Building debug info");
 
-    mem::Temporary_Allocator dwarf_temp(5 * 1024 * 1024);
-    PUSH_TEMPORARY_ALLOCATOR(&dwarf_temp);
+    mem::Temporary_Allocator_State dwarf_temp(5 * 1024 * 1024);
+    PUSH_TEMPORARY_ALLOCATOR(dwarf_temp.get_allocator());
 
     using namespace hidden;
-    PUSH_ALLOCATOR(&debug_info_building_allocator);
+    PUSH_ALLOCATOR(debug_info_building_allocator.get_allocator());
     defer(serial::println("DWARF parsing uses: % MB", static_cast<f32>(debug_info_building_allocator.bytes_used()) / 1024 / 1024));
 
     auto debug_info_size        = ptr_addr(__debug_info_end)        - ptr_addr(__debug_info_start);

@@ -287,12 +287,12 @@ namespace hidden {
     Static_Array<u8, 8 * 1024> error_message_buffer{};
 
     // @TODO(blanktiger): Give this a lock since now we are multithreaded.
-    inline mem::Arena_Allocator emergency_error_message_allocator{error_message_buffer};
+    inline mem::Arena_Allocator_State emergency_error_message_allocator{error_message_buffer};
 }
 
 auto isr_unimplemented_handler(Interrupt_Vector_Type type, u64 error) -> void {
     auto error_message = csprint(
-        &hidden::emergency_error_message_allocator,
+        hidden::emergency_error_message_allocator.get_allocator(),
         "Unimplemented interrupt fired. Tell me why (%): %",
         type, error
     );
@@ -312,7 +312,7 @@ auto isr_handle_non_maskable_interrupt() -> void {
 
 auto isr_handle_double_fault(u64 error) -> void {
     auto error_message = csprint(
-        &hidden::emergency_error_message_allocator,
+        hidden::emergency_error_message_allocator.get_allocator(),
         "Double fault, caused by IDT entry: %",
         error
     );
@@ -324,7 +324,7 @@ auto isr_handle_page_fault(const Interrupt_Frame& frame) -> void {
     asm volatile("mov %%cr2, %0" : "=r"(fault_address));
 
     auto error_message = csprint(
-        &hidden::emergency_error_message_allocator,
+        hidden::emergency_error_message_allocator.get_allocator(),
         "Page fault: address=% rip=% rsp=% error=%",
         fault_address,
         frame.rip,

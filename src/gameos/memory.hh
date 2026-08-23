@@ -145,38 +145,69 @@ auto initialize(const boot::Multiboot2_Info* mbi) -> void {
     for (const auto& region : regions) {
         buddy.add_region(region.base, region.size);
     }
+    set_allocator(buddy.get_allocator());
 
     constexpr usize TEMPORARY_ALLOCATOR_SIZE = 1 * 1024 * 1024;
-    void* temporary_memory = buddy.alloc(TEMPORARY_ALLOCATOR_SIZE);
-    kstd_assert(temporary_memory != nullptr, "failed to allocate temporary allocator backing");
-    temporary_allocator.~Temporary_Allocator();
-    new (&temporary_allocator) Temporary_Allocator{temporary_memory, TEMPORARY_ALLOCATOR_SIZE};
+    auto temporary_allocation = mem::alloc(TEMPORARY_ALLOCATOR_SIZE);
+    void* temporary_memory = temporary_allocation.memory;
+    kstd_assert(temporary_memory != nullptr, "Failed to allocate temporary allocator backing memory.");
+    temporary_allocator = Temporary_Allocator_State{
+        temporary_memory,
+        TEMPORARY_ALLOCATOR_SIZE
+    };
+    set_temporary_allocator(&temporary_allocator);
 }
 
 }  // namespace mem
 
 auto operator new(usize size) -> void* {
-    if (void* ptr = mem::resolve_allocator()->alloc(size)) return ptr;
+    if (void* ptr = mem::alloc(size).memory) return ptr;
     halt::forever("new failed");
 }
 
 auto operator new[](usize size) -> void* {
-    if (void* ptr = mem::resolve_allocator()->alloc(size)) return ptr;
+    if (void* ptr = mem::alloc(size).memory) return ptr;
     halt::forever("new[] failed");
 }
 
+auto operator new(usize size, std::align_val_t alignment) -> void* {
+    if (void* ptr = mem::alloc(size, static_cast<usize>(alignment)).memory) return ptr;
+    halt::forever("aligned new failed");
+}
+
+auto operator new[](usize size, std::align_val_t alignment) -> void* {
+    if (void* ptr = mem::alloc(size, static_cast<usize>(alignment)).memory) return ptr;
+    halt::forever("aligned new[] failed");
+}
+
 auto operator delete(void* ptr) noexcept -> void {
-    mem::resolve_allocator()->free(ptr, 0);
+    (void)mem::free(ptr, 0);
 }
 
 auto operator delete[](void* ptr) noexcept -> void {
-    mem::resolve_allocator()->free(ptr, 0);
+    (void)mem::free(ptr, 0);
 }
 
 auto operator delete(void* ptr, usize size) noexcept -> void {
-    mem::resolve_allocator()->free(ptr, size);
+    (void)mem::free(ptr, size);
 }
 
 auto operator delete[](void* ptr, usize size) noexcept -> void {
-    mem::resolve_allocator()->free(ptr, size);
+    (void)mem::free(ptr, size);
+}
+
+auto operator delete(void* ptr, std::align_val_t) noexcept -> void {
+    (void)mem::free(ptr, 0);
+}
+
+auto operator delete[](void* ptr, std::align_val_t) noexcept -> void {
+    (void)mem::free(ptr, 0);
+}
+
+auto operator delete(void* ptr, usize size, std::align_val_t) noexcept -> void {
+    (void)mem::free(ptr, size);
+}
+
+auto operator delete[](void* ptr, usize size, std::align_val_t) noexcept -> void {
+    (void)mem::free(ptr, size);
 }

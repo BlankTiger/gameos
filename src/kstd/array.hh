@@ -125,15 +125,16 @@ template <typename T>
 force_inline auto alloc_array(
     usize count,
     usize alignment = alignof(T),
-    Allocator* allocator = nullptr
+    Allocator allocator = {}
 ) -> Array_View<T> {
     if (alignment < alignof(T)) alignment = alignof(T);
 
     const usize allocation_size = alloc_array_size<T>(count, alignment);
     if (allocation_size == 0) return {0, nullptr};
 
-    void* base = alloc(allocation_size, alignof(std::max_align_t), allocator);
-    if (base == nullptr) return {0, nullptr};
+    auto allocation = alloc(allocation_size, alignof(std::max_align_t), allocator);
+    if (allocation.memory == nullptr) return {0, nullptr};
+    void* base = allocation.memory;
 
     auto* data = reinterpret_cast<T*>(align_up(
         ptr_addr(base) + sizeof(Array_Allocation_Header),
@@ -148,22 +149,22 @@ force_inline auto alloc_array(
 }
 
 template <typename T>
-force_inline auto alloc_array(usize count, Allocator* allocator) -> Array_View<T> {
+force_inline auto alloc_array(usize count, Allocator allocator) -> Array_View<T> {
     return alloc_array<T>(count, alignof(T), allocator);
 }
 
 template <typename T>
-force_inline auto free_array(void* pointer, Allocator* allocator = nullptr) -> void {
+force_inline auto free_array(void* pointer, Allocator allocator = {}) -> void {
     if (pointer == nullptr) return;
 
     auto* header = reinterpret_cast<Array_Allocation_Header*>(
         static_cast<u8*>(pointer) - sizeof(Array_Allocation_Header)
     );
-    free(header->base, header->size, alignof(std::max_align_t), allocator);
+    (void)free(header->base, header->size, allocator);
 }
 
 template <typename T>
-force_inline auto free_array(Array_View<T> array, Allocator* allocator = nullptr) -> void {
+force_inline auto free_array(Array_View<T> array, Allocator allocator = {}) -> void {
     free_array<T>(array.data, allocator);
 }
 
@@ -555,24 +556,24 @@ TEST(Bounded_Array, passes_implicitly_to_function_taking_array_view) {
 template <typename T>
 struct Array {
     // Allocator first. Member init order follows declaration order.
-    mem::Allocator* allocator = nullptr;
+    mem::Allocator allocator{};
     usize           capacity  = 0;
     usize           size      = 0;
     T*              data      = nullptr;
 
-    Array(mem::Allocator* allocator = nullptr)
+    Array(mem::Allocator allocator = {})
         : allocator(mem::resolve_allocator(allocator)),
           capacity(1),
           size(0),
           data(allocate_storage(1)) {}
 
-    Array(usize initial_capacity, mem::Allocator* allocator = nullptr)
+    Array(usize initial_capacity, mem::Allocator allocator = {})
         : allocator(mem::resolve_allocator(allocator)),
           capacity(initial_capacity == 0 ? 1 : initial_capacity),
           size(0),
           data(allocate_storage(capacity)) {}
 
-    Array(usize initial_size, const T& initial_value, mem::Allocator* allocator = nullptr)
+    Array(usize initial_size, const T& initial_value, mem::Allocator allocator = {})
         : allocator(mem::resolve_allocator(allocator)),
           capacity(initial_size == 0 ? 1 : initial_size),
           size(0),
@@ -621,7 +622,7 @@ struct Array {
           capacity(from.capacity),
           size(from.size),
           data(from.data) {
-        from.allocator = nullptr;
+        from.allocator = {};
         from.capacity  = 0;
         from.size      = 0;
         from.data      = nullptr;
@@ -639,7 +640,7 @@ struct Array {
         size      = from.size;
         data      = from.data;
 
-        from.allocator = nullptr;
+        from.allocator = {};
         from.capacity  = 0;
         from.size      = 0;
         from.data      = nullptr;
@@ -759,22 +760,23 @@ struct Array {
 
 private:
     auto ensure_allocator() -> void {
-        if (allocator == nullptr)
-            allocator = mem::resolve_allocator();
+        if (!allocator.valid())
+            allocator = context.allocator;
     }
 
     auto allocate_storage(usize count) -> T* {
         ensure_allocator();
         if (count == 0) return nullptr;
-        void* memory = allocator->alloc(sizeof(T) * count, alignof(T));
-        kstd_assert(memory != nullptr, "Array allocation failed");
-        return static_cast<T*>(memory);
+        auto allocation = mem::alloc(sizeof(T) * count, alignof(T), allocator);
+        kstd_assert(allocation.memory != nullptr, "Array allocation failed");
+        return static_cast<T*>(allocation.memory);
     }
 
     auto free_storage(T* pointer, usize count) -> void {
         if (pointer == nullptr) return;
         ensure_allocator();
-        allocator->free(pointer, sizeof(T) * count, alignof(T));
+        // @TODO(blanktiger): Alignment?
+        (void)mem::free(pointer, sizeof(T) * count, allocator);
     }
 
     auto destroy_elements() -> void {

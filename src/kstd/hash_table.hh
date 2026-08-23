@@ -21,7 +21,7 @@ struct Hash_Table {
     usize count;         // Valid entry count.
     usize slots_filled;  // Count of slots that are unusable for new entries.
 
-    mem::Allocator*   allocator;
+    mem::Allocator    allocator;
     Array_View<Entry> entries;
 
     static constexpr auto MIN_SIZE = 32;
@@ -30,7 +30,7 @@ struct Hash_Table {
     static constexpr auto TOMBSTONE_HASH   = 1;
     static constexpr auto FIRST_VALID_HASH = 2;
 
-    Hash_Table(usize initial_size = MIN_SIZE, mem::Allocator* backing_allocator = nullptr)
+    Hash_Table(usize initial_size = MIN_SIZE, mem::Allocator backing_allocator = {})
         : count(0),
           slots_filled(0),
           allocator(mem::resolve_allocator(backing_allocator)),
@@ -49,7 +49,7 @@ struct Hash_Table {
           entries(from.entries) {
         from.count        = 0;
         from.slots_filled = 0;
-        from.allocator    = nullptr;
+        from.allocator    = {};
         from.entries      = {};
     }
 
@@ -65,13 +65,13 @@ struct Hash_Table {
 
         from.count        = 0;
         from.slots_filled = 0;
-        from.allocator    = nullptr;
+        from.allocator    = {};
         from.entries      = {};
 
         return *this;
     }
 
-    explicit Hash_Table(mem::Allocator* backing_allocator) : Hash_Table(MIN_SIZE, backing_allocator) {}
+    explicit Hash_Table(mem::Allocator backing_allocator) : Hash_Table(MIN_SIZE, backing_allocator) {}
 
     ~Hash_Table() {
         _destroy_entries(entries);

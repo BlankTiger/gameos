@@ -239,11 +239,12 @@ auto ap_main(u32 cpu_index) -> void {
     idt::load();
 
     tls::initialize_application_processor(cpu_index, {
-        .allocator = &mem::buddy,
+        .allocator = mem::buddy.get_allocator(),
         // This is set intentionally. If we hit an assert because we actually
         // want to use a temporary allocator in the APs startup then we can
         // reconsider.
-        .temporary_allocator = nullptr,
+        .temporary_state     = nullptr,
+        .temporary_allocator = {},
         .formatting_config   = {},
     });
     serial::println("AP index=% started", cpu_index);
@@ -283,7 +284,10 @@ auto get_stack_pointer() -> u8* {
 // @TODO(blanktiger): Free this if something goes wrong later (if we decide that
 // we want to continue with an AP that failed to initialize).
 auto set_up_a_new_stack() -> void {
-    auto stack_mem = mem::alloc(AP_STACK_SIZE, AP_STACK_ALIGNMENT);
+    auto stack_allocation = mem::alloc(AP_STACK_SIZE, AP_STACK_ALIGNMENT);
+    kstd_assert(stack_allocation.error == mem::Allocator_Error::NONE);
+
+    auto stack_mem = stack_allocation.memory;
     auto stack_top = ptr_addr(stack_mem) + AP_STACK_SIZE;
     *addr_as<volatile psize*>(STACK_POINTER_ADDR) = stack_top;
     serial::println("Created a % KiB stack", AP_STACK_SIZE / 1024);
