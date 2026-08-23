@@ -51,7 +51,7 @@ auto build_debug_info() -> void {
     serial::println("dwarf: Building debug info");
 
     mem::Temporary_Allocator_State dwarf_temp(5 * 1024 * 1024);
-    PUSH_TEMPORARY_ALLOCATOR(dwarf_temp.get_allocator());
+    PUSH_TEMPORARY_ALLOCATOR(&dwarf_temp);
 
     using namespace hidden;
     PUSH_ALLOCATOR(debug_info_building_allocator.get_allocator());

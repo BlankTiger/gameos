@@ -567,7 +567,7 @@ inline thread_local Smoke_Tls_Object tls_object;
 
 auto smoke_test() -> void {
     // Will assert if we leaked anything in this smoke test.
-    mem::Debug_Allocator_State dbg_allocator_state{};
+    mem::Debug_Allocator_State dbg_allocator_state{context.allocator};
     PUSH_ALLOCATOR(dbg_allocator_state.get_allocator());
 
     const auto smoke_proc = [](void* data) -> void {

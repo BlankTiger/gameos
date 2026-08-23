@@ -2,13 +2,13 @@
 
 #include <cstddef>
 #include <new>
+#include <type_traits>
 
 #include "kstd/allocator_types.hh"
 #include "kstd/context.hh"
 #include "kstd/basic.hh"
 #include "kstd/assert.hh"
 #include "kstd/cstring.hh"
-#include "kstd/context.hh"
 #include "kstd/math.hh"
 #include "kstd/pointer_utils.hh"
 
@@ -27,9 +27,11 @@ force_inline constexpr auto result(void* memory, Allocator_Error error = Allocat
 }
 
 template <typename T>
-force_inline constexpr auto query_result(T&& value, Allocator_Query_Error error = Allocator_Query_Error::NONE) -> Allocator_Query_Error<T> {
+force_inline constexpr auto query_result(T&& value, Allocator_Query_Error error = Allocator_Query_Error::NONE) -> Allocator_Query_Result<std::remove_cvref_t<T>> {
     return { .value = value, .error = error };
 }
+
+force_inline auto get_features(Allocator allocator) -> Allocator_Features;
 
 force_inline auto call_allocator(Allocator allocator, Allocator_Mode mode, s64 size, s64 alignment, s64 old_size, void* old_memory) -> Allocator_Result {
     //
@@ -47,14 +49,14 @@ force_inline auto alloc(usize size, usize alignment = alignof(std::max_align_t),
     if (size > static_cast<usize>(S64_MAX))
         return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
 
-    if (alignment == 0 || (!math::is_power_of_two(alignment) || alignment > static_cast<usize>(S64_MAX))
+    if (alignment == 0 || (!math::is_power_of_two(alignment) || alignment > static_cast<usize>(S64_MAX)))
         return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
 
     allocator = resolve_allocator(allocator);
     return call_allocator(allocator, Allocator_Mode::ALLOCATE, static_cast<s64>(size), static_cast<s64>(alignment), 0, nullptr);
 }
 
-force_inline auto alloc(usize size, Allocator allocator = {}) -> Allocator_Result {
+force_inline auto alloc(usize size, Allocator allocator) -> Allocator_Result {
     return alloc(size, alignof(std::max_align_t), allocator);
 }
 
@@ -161,9 +163,9 @@ struct Temporary_Allocator_State {
     using enum Allocator_Features;
     static constexpr auto FEATURES = FAST_BUMP_ALLOCATOR | PER_FRAME_TEMPORARY_STORAGE;
 
-    void*     base{};
-    void*     current{};
-    void*     end{};
+    u8*       base{};
+    u8*       current{};
+    u8*       end{};
     Allocator backing_allocator{};
 
     Temporary_Allocator_State() = default;
@@ -171,7 +173,7 @@ struct Temporary_Allocator_State {
     explicit Temporary_Allocator_State(usize size) : Temporary_Allocator_State(context.allocator, size) {}
 
     Temporary_Allocator_State(void* memory, usize size)
-        : base(memory),
+        : base(static_cast<u8*>(memory)),
           current(base),
           end(base + size) {
         kstd_assert(base != nullptr);
@@ -186,7 +188,7 @@ struct Temporary_Allocator_State {
         kstd_assert(allocation.memory != nullptr);
         kstd_assert(allocation.error == Allocator_Error::NONE);
 
-        base    = allocation.memory;
+        base    = static_cast<u8*>(allocation.memory);
         current = base;
         end     = base + size;
     }
@@ -194,6 +196,19 @@ struct Temporary_Allocator_State {
     // @NOTE(blanktiger): Couldn't figure out a way to avoid ownership issues with those two implemented.
     Temporary_Allocator_State(const Temporary_Allocator_State&) = delete;
     auto operator = (const Temporary_Allocator_State&) -> Temporary_Allocator_State& = delete;
+
+    Temporary_Allocator_State(Temporary_Allocator_State&& from) noexcept
+        : base(from.base),
+          current(from.current),
+          end(from.end),
+          backing_allocator(from.backing_allocator) {
+        from.base              = nullptr;
+        from.current           = nullptr;
+        from.end               = nullptr;
+        from.backing_allocator = {};
+    }
+
+    auto operator = (Temporary_Allocator_State&&) -> Temporary_Allocator_State& = delete;
 
     ~Temporary_Allocator_State() {
         if (backing_allocator.valid() && base != nullptr) {
@@ -224,7 +239,7 @@ struct Temporary_Allocator_State {
 
     auto rewind(const void* mark_point) -> void {
         kstd_assert(mark_point >= base && mark_point <= end);
-        current = const_cast<void*>(mark_point);
+        current = const_cast<u8*>(static_cast<const u8*>(mark_point));
     }
 
     static auto proc(Allocator_Mode mode, s64 size, s64 alignment, s64, void* old_memory, void* temporary_allocator_state) -> Allocator_Result {
@@ -235,12 +250,12 @@ struct Temporary_Allocator_State {
                 if (state->base == nullptr)
                     return result(nullptr, Allocator_Error::USE_OF_UNINITIALIZED_ALLOCATOR);
 
-                if (size < 0 || alignment <= 0 || (alignment & (alignment - 1)) != 0)
+                if (size < 0 || alignment <= 0 || !math::is_power_of_two(alignment))
                     return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
 
                 if (size == 0) return result(nullptr);
 
-                auto* aligned = reinterpret_cast<void*>(align_up(ptr_addr(state->current), static_cast<usize>(alignment)));
+                auto* aligned = reinterpret_cast<u8*>(align_up(ptr_addr(state->current), static_cast<usize>(alignment)));
                 auto* next = aligned + size;
                 if (next < aligned || next > state->end)
                     return result(nullptr, Allocator_Error::OUT_OF_MEMORY);
@@ -306,9 +321,9 @@ struct Arena_Allocator_State {
     Allocator backing_allocator{};
     usize     allocated{};
 
-    void* memory_base   = nullptr;
-    void* current_point = nullptr;
-    void* address_limit = nullptr;
+    u8* memory_base   = nullptr;
+    u8* current_point = nullptr;
+    u8* address_limit = nullptr;
 
     Arena_Allocator_State(usize reserve = DEFAULT_ARENA_RESERVE_SIZE, Allocator backing_allocator = {})
         : backing_allocator(mem::resolve_allocator(backing_allocator)),
@@ -320,7 +335,7 @@ struct Arena_Allocator_State {
         kstd_assert(allocation.memory != nullptr);
         kstd_assert(allocation.error == Allocator_Error::NONE);
 
-        memory_base   = allocation.memory;
+        memory_base   = static_cast<u8*>(allocation.memory);
         current_point = memory_base;
         address_limit = memory_base + allocated;
     }
@@ -329,7 +344,7 @@ struct Arena_Allocator_State {
     Arena_Allocator_State(void* memory, usize size)
         : backing_allocator({}),
           allocated(size),
-          memory_base(memory),
+          memory_base(static_cast<u8*>(memory)),
           current_point(memory_base),
           address_limit(memory_base + allocated) {
         kstd_assert(memory != nullptr);
@@ -361,7 +376,7 @@ struct Arena_Allocator_State {
         kstd_debug_assert(error == Allocator_Error::NONE);
 
         allocated     = reserve;
-        memory_base   = allocation.memory;
+        memory_base   = static_cast<u8*>(allocation.memory);
         current_point = memory_base;
         address_limit = memory_base + allocated;
     }
@@ -390,13 +405,13 @@ struct Arena_Allocator_State {
                 if (state->memory_base == nullptr)
                     return result(nullptr, Allocator_Error::USE_OF_UNINITIALIZED_ALLOCATOR);
 
-                if ( size < 0 || alignment <= 0 || !math::is_power_of_two(alignment))
+                if (size < 0 || alignment <= 0 || !math::is_power_of_two(alignment))
                     return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
 
                 if (size == 0)
                     return result(nullptr);
 
-                auto* aligned = reinterpret_cast<void*>(align_up(ptr_addr(state->current_point), static_cast<usize>(alignment)));
+                auto* aligned = reinterpret_cast<u8*>(align_up(ptr_addr(state->current_point), static_cast<usize>(alignment)));
                 auto* next = aligned + size;
                 if (next < aligned || next > state->address_limit)
                     return result(nullptr, Allocator_Error::OUT_OF_MEMORY);
@@ -482,7 +497,7 @@ struct Debug_Allocator_State {
                     .next = state->live_head
                 };
 
-                state->live_head = record_allocation.memory;
+                state->live_head = static_cast<Allocation_Record*>(record_allocation.memory);
                 state->live_count++;
                 return allocation;
             } break;
@@ -503,7 +518,7 @@ struct Debug_Allocator_State {
                         auto free_result        = free(record->pointer, record->size, state->backing);
                         auto record_free_result = free(record, sizeof(Allocation_Record), state->backing);
                         (void)record_free_result;
-                        return free_result;
+                        return result(nullptr, free_result);
                     }
 
                     link = &record->next;
@@ -517,9 +532,7 @@ struct Debug_Allocator_State {
                 if (features == nullptr)
                     return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
 
-                auto feature_result = get_features(state->backing);
-                if (feature_result.error != Allocator_Error::NONE) return feature_result;
-                *features = *features | FEATURES;
+                *features = *features | get_features(state->backing) | FEATURES;
                 return result(nullptr);
             } break;
 
@@ -594,8 +607,14 @@ force_inline auto set_allocator(Allocator allocator) -> void {
 }
 
 force_inline auto set_temporary_allocator(Temporary_Allocator_State* new_storage) -> void {
+    if (new_storage == nullptr) {
+        context.temporary_allocator = {};
+        context.temporary_state     = nullptr;
+        return;
+    }
+
     context.temporary_allocator = new_storage->get_allocator();
-    context.temporary_storage   = new_storage;
+    context.temporary_state     = new_storage;
 }
 
 force_inline auto resolve_allocator(Allocator allocator) -> Allocator {
@@ -693,9 +712,9 @@ TEST(Allocator, hosted_info_reports_allocation_metadata) {
     ASSERT_NE(allocation.memory, nullptr);
 
     auto info = mem::get_info(allocation.memory, allocator);
-    ASSERT_EQ(info.pointer, allocation.memory);
-    ASSERT_EQ(info.size, 24);
-    ASSERT_EQ(info.alignment, 64);
+    ASSERT_EQ(info.value.pointer, allocation.memory);
+    ASSERT_EQ(info.value.size, 24);
+    ASSERT_EQ(info.value.alignment, 64);
     ASSERT_EQ(mem::free(allocation.memory, 24, allocator), mem::Allocator_Error::NONE);
 }
 
@@ -704,9 +723,9 @@ TEST(Allocator, debug_ownership_query_tracks_live_allocations) {
     mem::Debug_Allocator_State debug{hosted.get_allocator()};
     auto allocator = debug.get_allocator();
     auto allocation = mem::alloc(24, 16, allocator);
-    ASSERT_TRUE(mem::is_this_yours(allocation.memory, allocator));
+    ASSERT_TRUE(mem::is_this_yours(allocation.memory, allocator).value);
     ASSERT_EQ(mem::free(allocation.memory, 24, allocator), mem::Allocator_Error::NONE);
-    ASSERT_FALSE(mem::is_this_yours(allocation.memory, allocator));
+    ASSERT_FALSE(mem::is_this_yours(allocation.memory, allocator).value);
 }
 
 TEST(Allocator, rejects_invalid_alignment) {

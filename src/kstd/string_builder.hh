@@ -303,9 +303,9 @@ TEST(String_Builder, to_string_uses_current_global) {
 }
 
 TEST(String_Builder, on_temp_survives_until_reset) {
-    mem::temporary_allocator_reset();
-    defer(mem::temporary_allocator_reset(););
-    PUSH_ALLOCATOR(context.temporary_allocator->get_allocator());
+    mem::reset_temporary_allocator();
+    defer(mem::reset_temporary_allocator(););
+    PUSH_ALLOCATOR(context.temporary_allocator);
 
     String_Builder builder;
     builder.append("frame");
@@ -399,7 +399,7 @@ TEST(csprint, empty_is_null_terminated) {
 }
 
 TEST(ctprint, formats_into_temporary_allocator) {
-    defer(mem::temporary_allocator_reset());
+    defer(mem::reset_temporary_allocator());
 
     auto* a = ctprint("%, %!", "hello", "world");
     EXPECT_STREQ(a, "hello, world!");
@@ -420,7 +420,7 @@ TEST(String_Builder, to_c_string_null_terminates) {
 }
 
 TEST(tprint, formats_into_temporary_allocator) {
-    defer(mem::temporary_allocator_reset());
+    defer(mem::reset_temporary_allocator());
 
     auto a = tprint("%, %!", "hello", "world");
     EXPECT_EQ(a, "hello, world!");
@@ -431,17 +431,17 @@ TEST(tprint, formats_into_temporary_allocator) {
 }
 
 TEST(tprint, reset_invalidates_previous_views_memory_reuse) {
-    defer(mem::temporary_allocator_reset());
+    defer(mem::reset_temporary_allocator());
     auto first = tprint("first");
     EXPECT_EQ(first, "first");
 
-    mem::temporary_allocator_reset();
+    mem::reset_temporary_allocator();
     auto second = tprint("second-longer");
     EXPECT_EQ(second, "second-longer");
 }
 
 TEST(tcopy, copies_into_temp) {
-    defer(mem::temporary_allocator_reset());
+    defer(mem::reset_temporary_allocator());
     const char* literal = "abc";
     auto copied = tcopy(string(literal));
     EXPECT_EQ(copied, "abc");
@@ -449,7 +449,7 @@ TEST(tcopy, copies_into_temp) {
 }
 
 TEST(temp_c_string, null_terminates) {
-    defer(mem::temporary_allocator_reset());
+    defer(mem::reset_temporary_allocator());
     auto* cstr = temp_c_string("hi");
     EXPECT_EQ(cstr[0], 'h');
     EXPECT_EQ(cstr[1], 'i');

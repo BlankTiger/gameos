@@ -92,16 +92,18 @@ auto create(const Context& inherited_context) -> Block* {
     auto new_context = inherited_context;
     if (temporary_storage != nullptr) {
         auto state = mem::Temporary_Allocator_State{ temporary_storage, mem::TEMPORARY_STORAGE_SIZE };
-        new_context.temporary_allocator = state.get_allocator();
-        new_context.temporary_state     = state;
+        new_context.temporary_allocator = {};
+        new_context.temporary_state     = nullptr;
 
         new (block) Block {
             .allocation      = image,
             .allocator       = allocator,
-            .temporary_state = state, // Might need std::move
+            .temporary_state = std::move(state),
             .context         = new_context,
             .destructors     = {},
         };
+        block->context.temporary_state     = &block->temporary_state;
+        block->context.temporary_allocator = block->temporary_state.get_allocator();
     } else {
         new_context.temporary_allocator = {};
         new_context.temporary_state     = nullptr;

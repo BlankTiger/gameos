@@ -113,7 +113,7 @@ namespace hidden {
                 linux_temporary_allocator_buffer,
                 LINUX_TEMPORARY_ALLOCATOR_SIZE
             };
-            set_temporary_allocator(temporary_allocator_state);
+            set_temporary_allocator(&temporary_allocator_state);
         }
     };
 

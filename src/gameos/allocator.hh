@@ -147,6 +147,7 @@ struct Buddy_Allocator_State {
                 new (header) Allocation_Header {
                     .block_base = block_base,
                     .order      = static_cast<u8>(order),
+                    .reserved   = {},
                 };
                 return result(reinterpret_cast<void*>(user_ptr));
             } break;

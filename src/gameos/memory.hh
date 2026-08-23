@@ -148,25 +148,25 @@ auto initialize(const boot::Multiboot2_Info* mbi) -> void {
     set_allocator(buddy.get_allocator());
 
     constexpr usize TEMPORARY_ALLOCATOR_SIZE = 1 * 1024 * 1024;
-    auto temporary_allocation = mem::alloc(TEMPORARY_ALLOCATOR_SIZE);
+    auto temporary_allocation = mem::alloc(TEMPORARY_ALLOCATOR_SIZE, context.allocator);
     void* temporary_memory = temporary_allocation.memory;
     kstd_assert(temporary_memory != nullptr, "Failed to allocate temporary allocator backing memory.");
-    temporary_allocator = Temporary_Allocator_State{
+    new (&temporary_allocator_state) Temporary_Allocator_State{
         temporary_memory,
         TEMPORARY_ALLOCATOR_SIZE
     };
-    set_temporary_allocator(&temporary_allocator);
+    set_temporary_allocator(&temporary_allocator_state);
 }
 
 }  // namespace mem
 
 auto operator new(usize size) -> void* {
-    if (void* ptr = mem::alloc(size).memory) return ptr;
+    if (void* ptr = mem::alloc(size, context.allocator).memory) return ptr;
     halt::forever("new failed");
 }
 
 auto operator new[](usize size) -> void* {
-    if (void* ptr = mem::alloc(size).memory) return ptr;
+    if (void* ptr = mem::alloc(size, context.allocator).memory) return ptr;
     halt::forever("new[] failed");
 }
 
