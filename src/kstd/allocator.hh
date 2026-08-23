@@ -3,10 +3,13 @@
 #include <cstddef>
 #include <new>
 
+#include "kstd/allocator_types.hh"
+#include "kstd/context.hh"
 #include "kstd/basic.hh"
 #include "kstd/assert.hh"
 #include "kstd/cstring.hh"
 #include "kstd/context.hh"
+#include "kstd/math.hh"
 #include "kstd/pointer_utils.hh"
 
 template <typename T, usize N>
@@ -16,16 +19,44 @@ namespace mem {
 
 constexpr usize TEMPORARY_STORAGE_SIZE = 16 * 1024;
 
-struct Allocator {
-    virtual auto alloc(usize size, usize alignment = alignof(std::max_align_t)) -> void* = 0;
-    virtual auto free(void* pointer, usize size, usize alignment = alignof(std::max_align_t)) -> void = 0;
-    virtual ~Allocator() = default;
-};
 
-force_inline auto resolve_allocator(Allocator* allocator = nullptr) -> Allocator*;
-force_inline auto resolve_temporary_allocator() -> Allocator*;
-force_inline auto alloc(usize size, usize alignment = alignof(std::max_align_t), Allocator* allocator = nullptr) -> void*;
-force_inline auto free(void* pointer, usize size, usize alignment = alignof(std::max_align_t), Allocator* allocator = nullptr) -> void;
+force_inline auto resolve_allocator(Allocator allocator) -> Allocator;
+
+force_inline constexpr auto result(void* memory, Allocator_Error error = Allocator_Error::NONE) -> Allocator_Result {
+    return { .memory = memory, .error = error };
+}
+
+force_inline auto call_allocator(Allocator allocator, Allocator_Mode mode, s64 size, s64 alignment, s64 old_size, void* old_memory) -> Allocator_Result {
+    //
+    // @NOTE: We don't resolve the allocator here, because we assume that what
+    // you pass is what you actually want to use, and because this is a low
+    // level helper. Higher level helpers like alloc / free do resolve the
+    // allocator and use the one from the context if you don't provide an
+    // override exactly because they provide the option to not pass any
+    // allocator at all.
+    //
+    return allocator.proc(mode, size, alignment, old_size, old_memory, allocator.data);
+}
+
+force_inline auto alloc(usize size, usize alignment = alignof(std::max_align_t), Allocator allocator = {}) -> Allocator_Result {
+    if (size > static_cast<usize>(S64_MAX))
+        return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
+
+    if (alignment == 0 || (!math::is_power_of_two(alignment) || alignment > static_cast<usize>(S64_MAX))
+        return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
+
+    allocator = resolve_allocator(allocator);
+    return call_allocator(allocator, Allocator_Mode::ALLOCATE, static_cast<s64>(size), static_cast<s64>(alignment), 0, nullptr);
+}
+
+force_inline auto free(void* pointer, usize size = 0, Allocator allocator = {}) -> Allocator_Error {
+    if (size > static_cast<usize>(S64_MAX))
+        return Allocator_Error::INVALID_ARGUMENT;
+
+    allocator = resolve_allocator(allocator);
+    auto result = call_allocator(allocator, Allocator_Mode::FREE, 0, 0, static_cast<s64>(size), pointer);
+    return result.error;
+}
 
 template <typename T>
 force_inline auto align_up(T value, T alignment) -> T {
@@ -37,40 +68,54 @@ force_inline auto align_down(T value, T alignment) -> T {
     return value & ~(alignment - 1);
 }
 
-struct Temporary_Allocator final : Allocator {
-    u8* base    = nullptr;
-    u8* current = nullptr;
-    u8* end     = nullptr;
+// @TODO(blanktiger): Implement overflow pages. Implement DEBUG like on Arena_Allocator_State. Implement high water mark.
+struct Temporary_Allocator_State {
+    using enum Allocator_Features;
+    static constexpr auto FEATURES = FAST_BUMP_ALLOCATOR | PER_FRAME_TEMPORARY_STORAGE;
 
-    Allocator* backing_allocator = nullptr;
+    void*     base{};
+    void*     current{};
+    void*     end{};
+    Allocator backing_allocator{};
 
-    Temporary_Allocator() = default;
+    Temporary_Allocator_State() = default;
 
-    explicit Temporary_Allocator(usize size) : Temporary_Allocator(context.allocator, size) {}
+    explicit Temporary_Allocator_State(usize size) : Temporary_Allocator_State(context.allocator, size) {}
 
-    Temporary_Allocator(void* memory, usize size) {
-        kstd_assert(memory != nullptr);
+    Temporary_Allocator_State(void* memory, usize size)
+        : base(memory),
+          current(base),
+          end(base + size) {
+        kstd_assert(base != nullptr);
         kstd_assert(size > 0);
-        base    = static_cast<u8*>(memory);
+    }
+
+    Temporary_Allocator_State(Allocator backing, usize size) : backing_allocator(backing) {
+        kstd_assert(backing_allocator.valid());
+        kstd_assert(size > 0);
+
+        auto allocation = alloc(size, alignof(std::max_align_t), backing_allocator);
+        kstd_assert(allocation.memory != nullptr);
+        kstd_assert(allocation.error == Allocator_Error::NONE);
+
+        base    = allocation.memory;
         current = base;
         end     = base + size;
     }
 
-    Temporary_Allocator(Allocator* backing_allocator, usize size)
-        : backing_allocator(resolve_allocator(backing_allocator)) {
-        kstd_assert(this->backing_allocator != nullptr);
-        kstd_assert(size > 0);
-        auto* backing_memory = this->backing_allocator->alloc(size);
-        kstd_assert(backing_memory != nullptr);
-        base    = static_cast<u8*>(backing_memory);
-        current = base;
-        end     = base + size;
-    }
+    // @NOTE(blanktiger): Couldn't figure out a way to avoid ownership issues with those two implemented.
+    Temporary_Allocator_State(const Temporary_Allocator_State&) = delete;
+    auto operator = (const Temporary_Allocator_State&) -> Temporary_Allocator_State& = delete;
 
-    ~Temporary_Allocator() {
-        if (backing_allocator != nullptr && base != nullptr) {
-            backing_allocator->free(base, static_cast<usize>(end - base));
+    ~Temporary_Allocator_State() {
+        if (backing_allocator.valid() && base != nullptr) {
+            auto error = mem::free(base, static_cast<usize>(end - base), backing_allocator);
+            kstd_debug_assert(error == Allocator_Error::NONE);
         }
+    }
+
+    auto get_allocator() -> Allocator {
+        return { .proc = proc, .data = this };
     }
 
     auto reset() -> void {
@@ -85,34 +130,65 @@ struct Temporary_Allocator final : Allocator {
         return static_cast<usize>(end - current);
     }
 
-    auto mark() const -> u8* {
+    auto mark() const -> void* {
         return current;
     }
 
-    auto rewind(const u8* mark_point) -> void {
+    auto rewind(const void* mark_point) -> void {
         kstd_assert(mark_point >= base && mark_point <= end);
-        current = const_cast<u8*>(mark_point);
+        current = const_cast<void*>(mark_point);
     }
 
-    auto alloc(usize size, usize alignment = alignof(std::max_align_t)) -> void* override {
-        if (alignment == 0) alignment = 1;
-        if (size == 0) size = 1;
-        auto* aligned = reinterpret_cast<u8*>(align_up(ptr_addr(current), static_cast<usize>(alignment)));
-        auto* next   = aligned + size;
-        if (next > end) return nullptr;
-        current = next;
-        return aligned;
-    }
+    static auto proc(Allocator_Mode mode, s64 size, s64 alignment, s64, void* old_memory, void* temporary_allocator_state) -> Allocator_Result {
+        auto* state = static_cast<Temporary_Allocator_State*>(temporary_allocator_state);
 
-    auto free(void*, usize, usize = alignof(std::max_align_t)) -> void override {}
+        switch (mode) {
+            case Allocator_Mode::ALLOCATE: {
+                if (state->base == nullptr)
+                    return result(nullptr, Allocator_Error::USE_OF_UNINITIALIZED_ALLOCATOR);
+
+                if (size < 0 || alignment <= 0 || (alignment & (alignment - 1)) != 0)
+                    return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
+
+                if (size == 0) return result(nullptr);
+
+                auto* aligned = reinterpret_cast<void*>(align_up(ptr_addr(state->current), static_cast<usize>(alignment)));
+                auto* next = aligned + size;
+                if (next < aligned || next > state->end)
+                    return result(nullptr, Allocator_Error::OUT_OF_MEMORY);
+
+                state->current = next;
+                return result(aligned);
+            } break;
+
+            case Allocator_Mode::FREE: {
+                return result(nullptr);
+            } break;
+
+            case Allocator_Mode::FEATURES: {
+                auto* features = static_cast<Allocator_Features*>(old_memory);
+                if (features != nullptr) *features = FEATURES;
+                return result(nullptr);
+            } break;
+
+            case Allocator_Mode::IS_THIS_YOURS: {
+                auto address = ptr_addr(old_memory);
+                return result(address >= ptr_addr(state->base) && address < ptr_addr(state->end) ? old_memory : nullptr);
+            } break;
+
+            default: return result(nullptr, Allocator_Error::MODE_NOT_IMPLEMENTED);
+        }
+
+        unreachable();
+    }
 };
 
-inline Temporary_Allocator temporary_allocator{};
+inline Temporary_Allocator_State temporary_allocator{};
 
 force_inline auto talloc(usize size, usize alignment = alignof(std::max_align_t)) -> void* {
-    void* memory = resolve_temporary_allocator()->alloc(size, alignment);
-    kstd_assert(memory != nullptr, "temporary allocator exhausted");
-    return memory;
+    auto allocation = alloc(size, alignment, context.temporary_allocator);
+    kstd_assert(allocation.memory != nullptr, "Temporary allocator exhausted.");
+    return allocation.memory;
 }
 
 constexpr usize DEFAULT_ARENA_RESERVE_SIZE = 1 * 1024 * 1024;
@@ -290,60 +366,57 @@ struct Null_Allocator final : Allocator {
 
 inline Null_Allocator null_allocator{};
 
-force_inline auto set_allocator(Allocator* allocator) -> void {
-    context.allocator = allocator != nullptr ? allocator : &null_allocator;
+
+
+
+inline Null_Allocator_State null_allocator_state{};
+inline Allocator null_allocator = null_allocator_state.get_allocator();
+
+force_inline auto set_allocator(Allocator allocator) -> void {
+    context.allocator = allocator.valid() ? allocator : null_allocator;
 }
 
-force_inline auto set_temporary_allocator(Temporary_Allocator* allocator) -> void {
-    context.temporary_allocator = allocator;
+force_inline auto set_temporary_allocator(Temporary_Allocator_State* new_storage) -> void {
+    context.temporary_allocator = new_storage->get_allocator();
+    context.temporary_storage   = new_storage;
 }
 
-force_inline auto resolve_allocator(Allocator* allocator) -> Allocator* {
-    return allocator != nullptr ? allocator : context.allocator;
-}
-
-force_inline auto resolve_temporary_allocator() -> Allocator* {
-    return context.temporary_allocator;
-}
-
-force_inline auto alloc(usize size, usize alignment, Allocator* allocator) -> void* {
-    auto* resolved_allocator = resolve_allocator(allocator);
-    return resolved_allocator->alloc(size, alignment);
-}
-
-force_inline auto free(void* pointer, usize size, usize alignment, Allocator* allocator) -> void {
-    auto* resolved_allocator = resolve_allocator(allocator);
-    resolved_allocator->free(pointer, size, alignment);
+force_inline auto resolve_allocator(Allocator allocator) -> Allocator {
+    if (allocator.valid()) return allocator;
+    if (context.allocator.valid()) return context.allocator;
+    return null_allocator;
 }
 
 struct Push_Allocator {
-    Allocator* previous_allocator;
+    Allocator previous_allocator;
 
-    Push_Allocator(Allocator* new_allocator) : previous_allocator(context.allocator) {
+    Push_Allocator(Allocator new_allocator) : previous_allocator(context.allocator) {
         set_allocator(new_allocator);
     }
+
     ~Push_Allocator() {
         set_allocator(previous_allocator);
     }
 };
 
 struct Push_Temporary_Allocator {
-    Temporary_Allocator* previous_allocator;
+    Temporary_Allocator_State* previous_state;
 
-    Push_Temporary_Allocator(Temporary_Allocator* new_allocator)
-        : previous_allocator(context.temporary_allocator) {
-        set_temporary_allocator(new_allocator);
+    Push_Temporary_Allocator(Temporary_Allocator_State* new_state) : previous_state(context.temporary_state) {
+        set_temporary_allocator(new_state);
     }
+
     ~Push_Temporary_Allocator() {
-        set_temporary_allocator(previous_allocator);
+        set_temporary_allocator(previous_state);
     }
 };
 
 }  // namespace mem
 
-// Named RAII so destructor runs at scope exit.
 #define PUSH_ALLOCATOR(allocator) mem::Push_Allocator DEFER_UNIQ(_push_allocator_)(allocator)
 #define PUSH_TEMPORARY_ALLOCATOR(allocator) mem::Push_Temporary_Allocator DEFER_UNIQ(_push_temporary_allocator_)(allocator)
+
+// @TODO(blanktiger): Macro for automatically getting the temp mark and deferring the unwind to it.
 
 #if OS == GAMEOS
 #include "gameos/allocator.hh"
