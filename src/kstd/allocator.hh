@@ -253,6 +253,8 @@ struct Temporary_Allocator_State {
             case Allocator_Mode::FEATURES: {
                 auto* features = static_cast<Allocator_Features*>(old_memory);
                 if (features != nullptr) *features = FEATURES;
+                else                     return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
+
                 return result(nullptr);
             } break;
 
@@ -279,29 +281,37 @@ force_inline auto talloc(usize size, usize alignment = alignof(std::max_align_t)
 constexpr usize DEFAULT_ARENA_RESERVE_SIZE = 1 * 1024 * 1024;
 
 template <bool DEBUG = false>
-struct Arena_Allocator final : Allocator {
-    Allocator* backing_allocator;
-    usize      allocated;
+struct Arena_Allocator_State {
+    using enum Allocator_Features;
+    static constexpr auto FEATURES = FAST_BUMP_ALLOCATOR | IS_THIS_YOURS;
 
-    // @TODO: unique_ptr?
-    u8* memory_base;
-    u8* current_point;
-    u8* address_limit;
+    Allocator backing_allocator{};
+    usize     allocated{};
 
-    Arena_Allocator(usize reserve = DEFAULT_ARENA_RESERVE_SIZE, Allocator* backing_allocator = nullptr)
+    void* memory_base   = nullptr;
+    void* current_point = nullptr;
+    void* address_limit = nullptr;
+
+    Arena_Allocator_State(usize reserve = DEFAULT_ARENA_RESERVE_SIZE, Allocator backing_allocator = {})
         : backing_allocator(mem::resolve_allocator(backing_allocator)),
           allocated(align_up(reserve, mem::PAGE_SIZE)),
-          memory_base(static_cast<u8*>(this->backing_allocator->alloc(allocated))),
-          current_point(memory_base),
-          address_limit(memory_base + allocated) {
-        kstd_assert(memory_base != nullptr);
+          memory_base(nullptr),
+          current_point(nullptr),
+          address_limit(nullptr) {
+        auto allocation = alloc(allocated, backing_allocator);
+        kstd_assert(allocation.memory != nullptr);
+        kstd_assert(allocation.error == Allocator_Error::NONE);
+
+        memory_base   = allocation.memory;
+        current_point = memory_base;
+        address_limit = memory_base + allocated;
     }
 
     // Does not own buffer. Destructor will not free it.
-    Arena_Allocator(void* memory, usize size)
-        : backing_allocator(nullptr),
+    Arena_Allocator_State(void* memory, usize size)
+        : backing_allocator({}),
           allocated(size),
-          memory_base(static_cast<u8*>(memory)),
+          memory_base(memory),
           current_point(memory_base),
           address_limit(memory_base + allocated) {
         kstd_assert(memory != nullptr);
@@ -310,56 +320,93 @@ struct Arena_Allocator final : Allocator {
 
     // Does not own buffer. Destructor will not free it.
     template <usize N>
-    Arena_Allocator(Static_Array<u8, N>& buffer)
-        : Arena_Allocator(buffer.data, N) {}
+    Arena_Allocator_State(Static_Array<u8, N>& buffer) : Arena_Allocator_State(buffer.data, N) {}
 
-    ~Arena_Allocator() {
+    ~Arena_Allocator_State() {
         reset();
-        if (backing_allocator != nullptr) {
-            backing_allocator->free(memory_base, allocated);
+        if (backing_allocator.valid()) {
+            auto error = mem::free(memory_base, allocated, backing_allocator);
+            kstd_debug_assert(error == Allocator_Error::NONE);
         }
     }
 
-    auto resize_and_dont_copy_old_memory(usize reserve) {
-        allocated = align_up(reserve, mem::PAGE_SIZE);
-        memory_base = static_cast<u8*>(backing_allocator->alloc(allocated));
-        kstd_assert(memory_base != nullptr);
+    auto get_allocator() -> Allocator {
+        return { .proc = proc, .data = this };
+    }
 
+    auto resize_and_dont_copy_old_memory(usize reserve) -> void {
+        reserve = align_up(reserve, mem::PAGE_SIZE);
+        auto allocation = alloc(reserve, backing_allocator);
+        kstd_assert(allocation.memory != nullptr);
+
+        auto error = mem::free(memory_base, allocated, backing_allocator);
+        kstd_debug_assert(error == Allocator_Error::NONE);
+
+        allocated     = reserve;
+        memory_base   = allocation.memory;
         current_point = memory_base;
         address_limit = memory_base + allocated;
     }
 
     auto reset() -> void {
         if constexpr (DEBUG) {
-            const auto STAMP = 0xCC;
+            static constexpr auto STAMP = 0xCC;
             kstd_memset(memory_base, STAMP, current_point - memory_base);
         }
         current_point = memory_base;
     }
 
-    auto bytes_left() -> usize {
-        return address_limit - current_point;
+    auto bytes_left() const -> usize {
+        return static_cast<usize>(address_limit - current_point);
     }
 
-    auto bytes_used() -> usize {
-        return current_point - memory_base;
+    auto bytes_used() const -> usize {
+        return static_cast<usize>(current_point - memory_base);
     }
 
-    auto alloc(usize size, usize alignment = alignof(std::max_align_t)) -> void* override {
-        if (alignment == 0) alignment = 1;
+    static auto proc(Allocator_Mode mode, s64 size, s64 alignment, s64, void* old_memory, void* arena_state) -> Allocator_Result {
+        auto* state = static_cast<Arena_Allocator_State*>(arena_state);
 
-        auto* aligned_point = reinterpret_cast<u8*>(
-            align_up(ptr_addr(current_point), static_cast<usize>(alignment))
-        );
-        auto* new_point = aligned_point + size;
+        switch (mode) {
+            case Allocator_Mode::ALLOCATE: {
+                if (state->memory_base == nullptr)
+                    return result(nullptr, Allocator_Error::USE_OF_UNINITIALIZED_ALLOCATOR);
 
-        if (new_point > address_limit) return nullptr;
-        current_point = new_point;
+                if ( size < 0 || alignment <= 0 || !math::is_power_of_two(alignment))
+                    return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
 
-        return static_cast<void*>(aligned_point);
+                if (size == 0)
+                    return result(nullptr);
+
+                auto* aligned = reinterpret_cast<void*>(align_up(ptr_addr(state->current_point), static_cast<usize>(alignment)));
+                auto* next = aligned + size;
+                if (next < aligned || next > state->address_limit)
+                    return result(nullptr, Allocator_Error::OUT_OF_MEMORY);
+
+                state->current_point = next;
+                return result(aligned);
+            } break;
+
+            case Allocator_Mode::FEATURES: {
+                auto* features = static_cast<Allocator_Features*>(old_memory);
+                if (features != nullptr) *features = FEATURES;
+                else                     return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
+
+                return result(nullptr);
+            } break;
+
+            case Allocator_Mode::IS_THIS_YOURS: {
+                auto address = ptr_addr(old_memory);
+                return result(address >= ptr_addr(state->memory_base) && address < ptr_addr(state->address_limit) ? old_memory : nullptr);
+            } break;
+
+            default: {
+                return result(nullptr, Allocator_Error::MODE_NOT_IMPLEMENTED);
+            } break;
+        }
+
+        unreachable();
     }
-
-    auto free(void*, usize, usize = alignof(std::max_align_t)) -> void override {}
 };
 
 //
