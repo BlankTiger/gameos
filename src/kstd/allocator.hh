@@ -11,6 +11,7 @@
 #include "kstd/cstring.hh"
 #include "kstd/math.hh"
 #include "kstd/pointer_utils.hh"
+#include "kstd/synchronization.hh"
 
 template <typename T, usize N>
 struct Static_Array;
@@ -485,6 +486,10 @@ struct Arena_Allocator_State {
 // Thin leak-checking wrapper. Forwards allocation requests to a backing allocator.
 struct Debug_Allocator_State {
     using enum Allocator_Features;
+    // @TODO(blanktiger): Consider leaving only DEBUG_ALLOCATOR here because it
+    // then acts like a better wrapper that doesn't add to much that would lead
+    // to issues after removing the wrapper if someone depended on some flag
+    // that comes only from the wrapper.
     static constexpr Allocator_Features FEATURES = IS_THIS_YOURS | INFO | DEBUG_ALLOCATOR;
 
     struct Allocation_Record {
@@ -494,12 +499,15 @@ struct Debug_Allocator_State {
         Allocation_Record* next;
     };
 
-    Allocator          backing{};
-    Allocation_Record* live_head  = nullptr;
-    usize              live_count = 0;
+    Allocator                 backing{};
+    synchronization::Spinlock guard;
+    bool                      synchronized{};
+    Allocation_Record*        live_head  = nullptr;
+    usize                     live_count = 0;
 
     explicit Debug_Allocator_State(Allocator backing_allocator)
         : backing(backing_allocator),
+          synchronized(backing_allocator.valid() && has_feature(get_features(backing_allocator), THREADSAFE)),
           live_head(nullptr),
           live_count(0) {
         kstd_assert(backing.valid());
@@ -512,9 +520,7 @@ struct Debug_Allocator_State {
 
     auto get_allocator() -> Allocator { return {.proc = proc, .data = this}; }
 
-    static auto proc(Allocator_Mode mode, s64 size, s64 alignment, s64 old_size, void* old_memory, void* debug_state) -> Allocator_Result {
-        auto* state = static_cast<Debug_Allocator_State*>(debug_state);
-
+    static auto dispatch(Debug_Allocator_State* state, Allocator_Mode mode, s64 size, s64 alignment, s64 old_size, void* old_memory) -> Allocator_Result {
         switch (mode) {
             case Allocator_Mode::ALLOCATE: {
                 auto allocation = call_allocator(state->backing, mode, size, alignment, old_size, old_memory);
@@ -539,6 +545,52 @@ struct Debug_Allocator_State {
 
                 state->live_head = static_cast<Allocation_Record*>(record_allocation.memory);
                 state->live_count++;
+                return allocation;
+            } break;
+
+            case Allocator_Mode::RESIZE: {
+                auto allocation = call_allocator(state->backing, mode, size, alignment, old_size, old_memory);
+                if (allocation.error != Allocator_Error::NONE)
+                    return allocation;
+
+                Allocation_Record* record = state->live_head;
+                while (record != nullptr && record->pointer != old_memory)
+                    record = record->next;
+
+                if (old_memory == nullptr) {
+                    if (allocation.memory == nullptr)
+                        return allocation;
+
+                    auto record_allocation = alloc(sizeof(Allocation_Record), alignof(Allocation_Record), state->backing);
+                    if (record_allocation.memory == nullptr)
+                        return result(nullptr, Allocator_Error::OUT_OF_MEMORY);
+
+                    new(record_allocation.memory) Allocation_Record {
+                        .pointer   = allocation.memory,
+                        .size      = static_cast<usize>(size),
+                        .alignment = static_cast<usize>(alignment),
+                        .next      = state->live_head
+                    };
+                    state->live_head = static_cast<Allocation_Record*>(record_allocation.memory);
+                    state->live_count++;
+                    return allocation;
+                }
+
+                kstd_assert(record != nullptr, "Debug allocator resize of unknown pointer");
+                if (size == 0) {
+                    Allocation_Record** link = &state->live_head;
+                    while (*link != record) 
+                        link = &(*link)->next;
+
+                    *link = record->next;
+                    state->live_count--;
+                    (void)free(record, sizeof(Allocation_Record), alignof(Allocation_Record), state->backing);
+                    return allocation;
+                }
+
+                record->pointer   = allocation.memory;
+                record->size      = static_cast<usize>(size);
+                record->alignment = static_cast<usize>(alignment);
                 return allocation;
             } break;
 
@@ -567,15 +619,6 @@ struct Debug_Allocator_State {
                 unreachable("Debug_Allocator_State: double free");
             } break;
 
-            case Allocator_Mode::FEATURES: {
-                auto* features = static_cast<Allocator_Features*>(old_memory);
-                if (features == nullptr)
-                    return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
-
-                *features = *features | get_features(state->backing) | FEATURES;
-                return result(nullptr);
-            } break;
-
             case Allocator_Mode::IS_THIS_YOURS: {
                 for (auto* record = state->live_head; record != nullptr; record = record->next)
                     if (record->pointer == old_memory)
@@ -597,6 +640,41 @@ struct Debug_Allocator_State {
                 }
 
                 return result(nullptr, Allocator_Error::INVALID_POINTER);
+            } break;
+
+            default: unreachable();
+        }
+
+        unreachable();
+    }
+
+    static auto proc(Allocator_Mode mode, s64 size, s64 alignment, s64 old_size, void* old_memory, void* debug_state) -> Allocator_Result {
+        auto* state = static_cast<Debug_Allocator_State*>(debug_state);
+
+        switch (mode) {
+            case Allocator_Mode::ALLOCATE:
+            case Allocator_Mode::FREE:
+            case Allocator_Mode::RESIZE:
+            case Allocator_Mode::IS_THIS_YOURS:
+            case Allocator_Mode::INFO: {
+                if (state->synchronized) {
+                    auto scoped_lock = state->guard.scoped_lock();
+                    return dispatch(state, mode, size, alignment, old_size, old_memory);
+                }
+
+                kstd_assert(state->guard.try_lock(), "Debug_Allocator_State: concurrent access on non-threadsafe backing");
+                auto allocation = dispatch(state, mode, size, alignment, old_size, old_memory);
+                state->guard.unlock();
+                return allocation;
+            } break;
+
+            case Allocator_Mode::FEATURES: {
+                auto* features = static_cast<Allocator_Features*>(old_memory);
+                if (features == nullptr)
+                    return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
+
+                *features = *features | get_features(state->backing) | FEATURES;
+                return result(nullptr);
             } break;
 
             default: return call_allocator(state->backing, mode, size, alignment, old_size, old_memory);
