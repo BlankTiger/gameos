@@ -190,6 +190,7 @@ struct Buddy_Allocator_State {
                 if (info == nullptr || info->pointer == nullptr)
                     return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
 
+                auto scoped_lock = state->lock.scoped_irq_lock();
                 Allocation_Header header{};
                 kstd_memcpy(&header, reinterpret_cast<void*>(ptr_addr(info->pointer) - sizeof(Allocation_Header)), sizeof(header));
                 info->size      = static_cast<s64>(block_size_for_order(header.order));
