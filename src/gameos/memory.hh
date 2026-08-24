@@ -203,18 +203,18 @@ auto operator delete[](void* ptr, usize size) noexcept -> void {
     (void)mem::free(ptr, size);
 }
 
-auto operator delete(void* ptr, std::align_val_t) noexcept -> void {
-    (void)mem::free(ptr, 0);
+auto operator delete(void* ptr, std::align_val_t alignment) noexcept -> void {
+    (void)mem::free(ptr, 0, static_cast<usize>(alignment));
 }
 
-auto operator delete[](void* ptr, std::align_val_t) noexcept -> void {
-    (void)mem::free(ptr, 0);
+auto operator delete[](void* ptr, std::align_val_t alignment) noexcept -> void {
+    (void)mem::free(ptr, 0, static_cast<usize>(alignment));
 }
 
-auto operator delete(void* ptr, usize size, std::align_val_t) noexcept -> void {
-    (void)mem::free(ptr, size);
+auto operator delete(void* ptr, usize size, std::align_val_t alignment) noexcept -> void {
+    (void)mem::free(ptr, size, static_cast<usize>(alignment));
 }
 
-auto operator delete[](void* ptr, usize size, std::align_val_t) noexcept -> void {
-    (void)mem::free(ptr, size);
+auto operator delete[](void* ptr, usize size, std::align_val_t alignment) noexcept -> void {
+    (void)mem::free(ptr, size, static_cast<usize>(alignment));
 }

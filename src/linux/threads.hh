@@ -34,7 +34,7 @@ auto spawn_thread(F&& function, Args&&... args) -> std::thread {
             std::apply(std::move(function), std::move(args));
 
             if (temporary_storage != nullptr)
-                (void)mem::free(temporary_storage, mem::TEMPORARY_STORAGE_SIZE, inherited_context.allocator);
+                (void)mem::free(temporary_storage, mem::TEMPORARY_STORAGE_SIZE, alignof(std::max_align_t), inherited_context.allocator);
         }
     );
 }

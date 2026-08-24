@@ -60,14 +60,17 @@ force_inline auto alloc(usize size, Allocator allocator) -> Allocator_Result {
     return alloc(size, alignof(std::max_align_t), allocator);
 }
 
-// @TODO(blanktiger): alignment?
-force_inline auto free(void* pointer, usize size = 0, Allocator allocator = {}) -> Allocator_Error {
-    if (size > static_cast<usize>(S64_MAX))
+force_inline auto free(void* pointer, usize size, usize alignment, Allocator allocator = {}) -> Allocator_Error {
+    if (size > static_cast<usize>(S64_MAX) || alignment > static_cast<usize>(S64_MAX))
         return Allocator_Error::INVALID_ARGUMENT;
 
     allocator = resolve_allocator(allocator);
-    auto result = call_allocator(allocator, Allocator_Mode::FREE, 0, 0, static_cast<s64>(size), pointer);
+    auto result = call_allocator(allocator, Allocator_Mode::FREE, 0, static_cast<s64>(alignment), static_cast<s64>(size), pointer);
     return result.error;
+}
+
+force_inline auto free(void* pointer, usize size = 0, Allocator allocator = {}) -> Allocator_Error {
+    return free(pointer, size, 0, allocator);
 }
 
 //
@@ -93,7 +96,7 @@ force_inline auto realloc(void* pointer, usize old_size, usize new_size, usize a
         return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
 
     if (new_size == 0) {
-        auto error = free(pointer, old_size, allocator);
+        auto error = free(pointer, old_size, alignment, allocator);
         return result(nullptr, error);
     }
 
@@ -104,12 +107,12 @@ force_inline auto realloc(void* pointer, usize old_size, usize new_size, usize a
     if (pointer != nullptr && copy_size > 0)
         kstd_memcpy(allocation.memory, pointer, copy_size);
 
-    auto error = free(pointer, old_size, allocator);
+    auto error = free(pointer, old_size, alignment, allocator);
     if (error != Allocator_Error::NONE) {
         // @TODO(blanktiger): Transform Allocator_Error into enum_flags an then
         // OR the flags here. Think of how to make it intuitive, cause then you
         // can't just switch on the error to check what happened.
-        (void)free(allocation.memory, new_size, allocator);
+        (void)free(allocation.memory, new_size, alignment, allocator);
         return result(nullptr, error);
     }
     return allocation;
@@ -485,7 +488,7 @@ struct Debug_Allocator_State {
                 auto record_allocation = alloc(sizeof(Allocation_Record), alignof(Allocation_Record), state->backing);
                 if (record_allocation.memory == nullptr) {
                     // @TODO(blanktiger): Merge errors once they are enum_flags.
-                    auto error = free(allocation.memory, size, state->backing);
+                    auto error = free(allocation.memory, size, static_cast<usize>(alignment), state->backing);
                     (void)error;
                     return result(nullptr, Allocator_Error::OUT_OF_MEMORY);
                 }
@@ -515,8 +518,8 @@ struct Debug_Allocator_State {
                         *link = record->next;
                         state->live_count--;
 
-                        auto free_result        = free(record->pointer, record->size, state->backing);
-                        auto record_free_result = free(record, sizeof(Allocation_Record), state->backing);
+                        auto free_result        = free(record->pointer, record->size, record->alignment, state->backing);
+                        auto record_free_result = free(record, sizeof(Allocation_Record), alignof(Allocation_Record), state->backing);
                         (void)record_free_result;
                         return result(nullptr, free_result);
                     }
@@ -669,9 +672,11 @@ struct Push_Temporary_Allocator {
 TEST(Allocator, dispatches_to_state_data) {
     struct State {
         u32 calls = 0;
-        static auto proc(mem::Allocator_Mode mode, s64, s64, s64, void*, void* data) -> mem::Allocator_Result {
+        s64 free_alignment = 0;
+        static auto proc(mem::Allocator_Mode mode, s64, s64 alignment, s64, void*, void* data) -> mem::Allocator_Result {
             auto* state = static_cast<State*>(data);
             if (mode == mem::Allocator_Mode::ALLOCATE) state->calls++;
+            if (mode == mem::Allocator_Mode::FREE) state->free_alignment = alignment;
             return {.memory = state, .error = mem::Allocator_Error::NONE};
         }
         auto get_allocator() -> mem::Allocator { return {.proc = proc, .data = this}; }
@@ -680,6 +685,10 @@ TEST(Allocator, dispatches_to_state_data) {
     auto allocation = mem::alloc(16, alignof(u64), state.get_allocator());
     ASSERT_EQ(allocation.memory, &state);
     ASSERT_EQ(state.calls, 1u);
+    ASSERT_EQ(mem::free(&state, 16, 64, state.get_allocator()), mem::Allocator_Error::NONE);
+    ASSERT_EQ(state.free_alignment, 64);
+    ASSERT_EQ(mem::free(&state, 16, state.get_allocator()), mem::Allocator_Error::NONE);
+    ASSERT_EQ(state.free_alignment, 0);
 }
 
 TEST(Allocator, features_are_queried_through_dispatch) {
@@ -702,7 +711,7 @@ TEST(Allocator, realloc_moves_and_preserves_memory) {
     auto* bytes = static_cast<u8*>(resized.memory);
     for (usize i = 0; i < 8; ++i) ASSERT_EQ(bytes[i], static_cast<u8>(0xAB));
     ASSERT_EQ(ptr_addr(resized.memory) % 16, 0u);
-    ASSERT_EQ(mem::free(resized.memory, 32, allocator), mem::Allocator_Error::NONE);
+    ASSERT_EQ(mem::free(resized.memory, 32, 16, allocator), mem::Allocator_Error::NONE);
 }
 
 TEST(Allocator, hosted_info_reports_allocation_metadata) {
@@ -715,7 +724,7 @@ TEST(Allocator, hosted_info_reports_allocation_metadata) {
     ASSERT_EQ(info.value.pointer, allocation.memory);
     ASSERT_EQ(info.value.size, 24);
     ASSERT_EQ(info.value.alignment, 64);
-    ASSERT_EQ(mem::free(allocation.memory, 24, allocator), mem::Allocator_Error::NONE);
+    ASSERT_EQ(mem::free(allocation.memory, 24, 64, allocator), mem::Allocator_Error::NONE);
 }
 
 TEST(Allocator, debug_ownership_query_tracks_live_allocations) {
@@ -724,7 +733,7 @@ TEST(Allocator, debug_ownership_query_tracks_live_allocations) {
     auto allocator = debug.get_allocator();
     auto allocation = mem::alloc(24, 16, allocator);
     ASSERT_TRUE(mem::is_this_yours(allocation.memory, allocator).value);
-    ASSERT_EQ(mem::free(allocation.memory, 24, allocator), mem::Allocator_Error::NONE);
+    ASSERT_EQ(mem::free(allocation.memory, 24, 16, allocator), mem::Allocator_Error::NONE);
     ASSERT_FALSE(mem::is_this_yours(allocation.memory, allocator).value);
 }
 

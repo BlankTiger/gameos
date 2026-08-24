@@ -152,14 +152,14 @@ auto destroy(Block* block) -> void {
     auto allocator = block->allocator;
     auto* temporary_storage = block->context.temporary_state != nullptr ? block->context.temporary_state->base : nullptr;
 
-    auto error_free_temp = mem::free(temporary_storage, mem::TEMPORARY_STORAGE_SIZE, allocator);
+    auto error_free_temp = mem::free(temporary_storage, mem::TEMPORARY_STORAGE_SIZE, TLS_ALIGNMENT, allocator);
     kstd_debug_assert(error_free_temp == mem::Allocator_Error::NONE);
 
-    auto error_free_alloc = mem::free(block->allocation, allocation_size(), allocator);
+    auto error_free_alloc = mem::free(block->allocation, allocation_size(), TLS_ALIGNMENT, allocator);
     kstd_debug_assert(error_free_alloc == mem::Allocator_Error::NONE);
 
     block->~Block();
-    auto error_free_block = mem::free(block, sizeof(Block), allocator);
+    auto error_free_block = mem::free(block, sizeof(Block), alignof(Block), allocator);
     kstd_debug_assert(error_free_block == mem::Allocator_Error::NONE);
 }
 

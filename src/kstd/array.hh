@@ -776,8 +776,7 @@ private:
     auto free_storage(T* pointer, usize count) -> void {
         if (pointer == nullptr) return;
         ensure_allocator();
-        // @TODO(blanktiger): Alignment?
-        (void)mem::free(pointer, sizeof(T) * count, allocator);
+        (void)mem::free(pointer, sizeof(T) * count, alignof(T), allocator);
     }
 
     auto destroy_elements() -> void {

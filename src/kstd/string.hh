@@ -91,14 +91,14 @@ struct string {
 // allocator null -> current global allocator at free time (must match alloc heap).
 inline auto free_string(string s, mem::Allocator allocator = {}) -> void {
     if (s.data == nullptr || s.size == 0) return;
-    (void)mem::free(s.data, s.size, allocator);
+    (void)mem::free(s.data, s.size, alignof(char), allocator);
 }
 
 // Free heap bytes from String_Builder::to_c_string / csprint.
 // allocator null -> current global allocator at free time (must match alloc heap).
 inline auto free_c_string(const char* s, mem::Allocator allocator = {}) -> void {
     if (s == nullptr) return;
-    (void)mem::free(const_cast<char*>(s), kstd_strlen(s) + 1, allocator);
+    (void)mem::free(const_cast<char*>(s), kstd_strlen(s) + 1, alignof(char), allocator);
 }
 
 inline auto copy_string(string s, mem::Allocator allocator = {}) -> string {

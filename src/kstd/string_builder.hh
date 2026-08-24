@@ -189,7 +189,7 @@ private:
         while (buffer != nullptr) {
             Buffer* next = buffer->next;
             usize block_size = sizeof(Buffer) + buffer->allocated;
-            (void)mem::free(buffer, block_size, allocator);
+            (void)mem::free(buffer, block_size, alignof(Buffer), allocator);
             buffer = next;
         }
         base->next = nullptr;

@@ -188,8 +188,7 @@ auto reclaim(Thread& thread) -> void {
         thread.typed_destroy(thread.typed_control);
 
     tls::destroy(thread.tls_block);
-    // @TODO(blanktiger): Alignment?
-    auto error = mem::free(thread.storage, thread.storage_size, thread.allocator);
+    auto error = mem::free(thread.storage, thread.storage_size, thread.storage_alignment, thread.allocator);
     kstd_assert(error == mem::Allocator_Error::NONE);
     thread = {};
 }
