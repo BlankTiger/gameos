@@ -20,10 +20,16 @@ struct Buddy_Allocator_State {
         Free_Block* next;
     };
 
+    enum struct Allocation_State : u8 {
+        LIVE  = 0xA5,
+        FREED = 0x5A,
+    };
+
     struct Allocation_Header {
-        u64 block_base;
-        u8  order;
-        u8  reserved[7];
+        u64              block_base;
+        u8               order;
+        Allocation_State state;
+        u8               reserved[6];
     };
 
     static constexpr usize MIN_ORDER = 12;
@@ -147,6 +153,7 @@ struct Buddy_Allocator_State {
                 new (header) Allocation_Header {
                     .block_base = block_base,
                     .order      = static_cast<u8>(order),
+                    .state      = Allocation_State::LIVE,
                     .reserved   = {},
                 };
                 return result(reinterpret_cast<void*>(user_ptr));
@@ -156,8 +163,11 @@ struct Buddy_Allocator_State {
                 if (old_memory == nullptr) return result(nullptr);
 
                 auto scoped_lock = state->lock.scoped_irq_lock();
+                auto* header_pointer = reinterpret_cast<Allocation_Header*>(ptr_addr(old_memory) - sizeof(Allocation_Header));
                 Allocation_Header header{};
-                kstd_memcpy(&header, reinterpret_cast<void*>(ptr_addr(old_memory) - sizeof(Allocation_Header)), sizeof(header));
+                kstd_memcpy(&header, header_pointer, sizeof(header));
+                kstd_assert(header.state == Allocation_State::LIVE, "Buddy allocator: double free");
+                header_pointer->state = Allocation_State::FREED;
 
                 u64 block_base = header.block_base;
                 usize order = header.order;
