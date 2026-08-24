@@ -24,7 +24,7 @@ enum struct Allocator_Features : u32 {
     NONE                        = 0b000000000000,
 
     FREE                        = 0b000000000001,
-    FREE_NO_OP                  = 0b000000000010,
+    RESIZE_SHRINK_NO_OP         = 0b000000000010,
     ACTUALLY_RESIZE             = 0b000000000100,
     THREADSAFE                  = 0b000000001000,
     IS_THIS_YOURS               = 0b000000010000,

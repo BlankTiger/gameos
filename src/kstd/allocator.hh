@@ -88,8 +88,10 @@ force_inline auto realloc(void* pointer, usize old_size, usize new_size, usize a
     if (direct.error != Allocator_Error::MODE_NOT_IMPLEMENTED)
         return direct;
 
-    auto features = get_features(allocator);
-    if (!has_feature(features, Allocator_Features::FREE))
+    const auto features = get_features(allocator);
+    const bool can_free = has_feature(features, Allocator_Features::FREE);
+
+    if (!can_free)
         return direct;
 
     if (pointer != nullptr && old_size == 0)
@@ -99,6 +101,10 @@ force_inline auto realloc(void* pointer, usize old_size, usize new_size, usize a
         auto error = free(pointer, old_size, alignment, allocator);
         return result(nullptr, error);
     }
+
+    const bool resize_shrink_is_no_op = has_feature(features, Allocator_Features::RESIZE_SHRINK_NO_OP);
+    if (pointer != nullptr && new_size <= old_size && resize_shrink_is_no_op)
+        return result(pointer);
 
     auto allocation = alloc(new_size, alignment, allocator);
     if (allocation.memory == nullptr) return allocation;
@@ -115,6 +121,7 @@ force_inline auto realloc(void* pointer, usize old_size, usize new_size, usize a
         (void)free(allocation.memory, new_size, alignment, allocator);
         return result(nullptr, error);
     }
+
     return allocation;
 }
 
@@ -164,7 +171,7 @@ force_inline auto align_down(T value, T alignment) -> T {
 // @TODO(blanktiger): Implement overflow pages. Implement DEBUG like on Arena_Allocator_State. Implement high water mark.
 struct Temporary_Allocator_State {
     using enum Allocator_Features;
-    static constexpr auto FEATURES = FAST_BUMP_ALLOCATOR | PER_FRAME_TEMPORARY_STORAGE;
+    static constexpr auto FEATURES = RESIZE_SHRINK_NO_OP | FAST_BUMP_ALLOCATOR | PER_FRAME_TEMPORARY_STORAGE;
 
     u8*       base{};
     u8*       current{};
@@ -245,7 +252,7 @@ struct Temporary_Allocator_State {
         current = const_cast<u8*>(static_cast<const u8*>(mark_point));
     }
 
-    static auto proc(Allocator_Mode mode, s64 size, s64 alignment, s64, void* old_memory, void* temporary_allocator_state) -> Allocator_Result {
+    static auto proc(Allocator_Mode mode, s64 size, s64 alignment, s64 old_size, void* old_memory, void* temporary_allocator_state) -> Allocator_Result {
         auto* state = static_cast<Temporary_Allocator_State*>(temporary_allocator_state);
 
         switch (mode) {
@@ -267,8 +274,21 @@ struct Temporary_Allocator_State {
                 return result(aligned);
             } break;
 
-            case Allocator_Mode::FREE: {
-                return result(nullptr);
+            case Allocator_Mode::RESIZE: {
+                if (size < 0 || alignment <= 0 || !math::is_power_of_two(alignment))
+                    return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
+
+                if (size == 0 || size <= old_size)
+                    return result(size == 0 ? nullptr : old_memory);
+
+                auto allocation = proc(Allocator_Mode::ALLOCATE, size, alignment, 0, nullptr, temporary_allocator_state);
+                if (allocation.memory == nullptr)
+                    return allocation;
+
+                if (old_memory != nullptr && old_size > 0)
+                    kstd_memcpy(allocation.memory, old_memory, static_cast<usize>(old_size));
+
+                return allocation;
             } break;
 
             case Allocator_Mode::FEATURES: {
@@ -319,7 +339,7 @@ constexpr usize DEFAULT_ARENA_RESERVE_SIZE = 1 * 1024 * 1024;
 template <bool DEBUG = false>
 struct Arena_Allocator_State {
     using enum Allocator_Features;
-    static constexpr auto FEATURES = FAST_BUMP_ALLOCATOR | IS_THIS_YOURS;
+    static constexpr auto FEATURES = RESIZE_SHRINK_NO_OP | FAST_BUMP_ALLOCATOR | IS_THIS_YOURS;
 
     Allocator backing_allocator{};
     usize     allocated{};
@@ -400,7 +420,7 @@ struct Arena_Allocator_State {
         return static_cast<usize>(current_point - memory_base);
     }
 
-    static auto proc(Allocator_Mode mode, s64 size, s64 alignment, s64, void* old_memory, void* arena_state) -> Allocator_Result {
+    static auto proc(Allocator_Mode mode, s64 size, s64 alignment, s64 old_size, void* old_memory, void* arena_state) -> Allocator_Result {
         auto* state = static_cast<Arena_Allocator_State*>(arena_state);
 
         switch (mode) {
@@ -421,6 +441,23 @@ struct Arena_Allocator_State {
 
                 state->current_point = next;
                 return result(aligned);
+            } break;
+
+            case Allocator_Mode::RESIZE: {
+                if (size < 0 || alignment <= 0 || !math::is_power_of_two(alignment))
+                    return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
+
+                if (size == 0 || size <= old_size)
+                    return result(size == 0 ? nullptr : old_memory);
+
+                auto allocation = proc(Allocator_Mode::ALLOCATE, size, alignment, 0, nullptr, arena_state);
+                if (allocation.memory == nullptr)
+                    return allocation;
+
+                if (old_memory != nullptr && old_size > 0)
+                    kstd_memcpy(allocation.memory, old_memory, static_cast<usize>(old_size));
+
+                return allocation;
             } break;
 
             case Allocator_Mode::FEATURES: {
@@ -712,6 +749,26 @@ TEST(Allocator, realloc_moves_and_preserves_memory) {
     for (usize i = 0; i < 8; ++i) ASSERT_EQ(bytes[i], static_cast<u8>(0xAB));
     ASSERT_EQ(ptr_addr(resized.memory) % 16, 0);
     ASSERT_EQ(mem::free(resized.memory, 32, 16, allocator), mem::Allocator_Error::NONE);
+}
+
+TEST(Allocator, bump_allocators_realloc_shrink_in_place) {
+    mem::Temporary_Allocator_State temporary{256};
+    auto temporary_allocator = temporary.get_allocator();
+    auto temporary_allocation = mem::alloc(32, 16, temporary_allocator);
+    auto temporary_used = temporary.bytes_used();
+    auto temporary_resized = mem::realloc(temporary_allocation.memory, 32, 8, 16, temporary_allocator);
+    ASSERT_EQ(temporary_resized.memory, temporary_allocation.memory);
+    ASSERT_EQ(temporary_resized.error, mem::Allocator_Error::NONE);
+    ASSERT_EQ(temporary.bytes_used(), temporary_used);
+
+    mem::Arena_Allocator_State arena{256};
+    auto arena_allocator = arena.get_allocator();
+    auto arena_allocation = mem::alloc(32, 16, arena_allocator);
+    auto arena_used = arena.bytes_used();
+    auto arena_resized = mem::realloc(arena_allocation.memory, 32, 8, 16, arena_allocator);
+    ASSERT_EQ(arena_resized.memory, arena_allocation.memory);
+    ASSERT_EQ(arena_resized.error, mem::Allocator_Error::NONE);
+    ASSERT_EQ(arena.bytes_used(), arena_used);
 }
 
 TEST(Allocator, hosted_info_reports_allocation_metadata) {
