@@ -10,7 +10,7 @@
 
 namespace tls {
 
-constexpr u32   IA32_FS_BASE    = 0xC0000100u;
+constexpr u32   IA32_FS_BASE    = 0xC0000100;
 constexpr usize MAX_DESTRUCTORS = 32;
 constexpr usize TLS_ALIGNMENT   = 16;
 

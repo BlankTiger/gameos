@@ -43,7 +43,7 @@ struct Buddy_Allocator_State {
     }
 
     static auto block_size_for_order(usize order) -> usize {
-        return 1ull << order;
+        return u64{1} << order;
     }
 
     static auto order_for_block_size(u64 block_size) -> usize {
@@ -58,7 +58,7 @@ struct Buddy_Allocator_State {
 
     static auto next_block_size(u64 required_size) -> u64 {
         u64 block_size = mem::PAGE_SIZE;
-        while (block_size < required_size && block_size < (1ull << MAX_ORDER))
+        while (block_size < required_size && block_size < (u64{1} << MAX_ORDER))
             block_size <<= 1;
         return block_size;
     }

@@ -1141,8 +1141,8 @@ TEST(Allocator, alloc_array_returns_dynamic_array_view) {
     defer(mem::free_array(array));
 
     ASSERT_NE(array.data, nullptr);
-    ASSERT_EQ(array.size, 3u);
-    ASSERT_EQ(ptr_addr(array.data) % alignof(u64), 0u);
+    ASSERT_EQ(array.size, 3);
+    ASSERT_EQ(ptr_addr(array.data) % alignof(u64), 0);
 }
 
 TEST(Allocator, alloc_array_accepts_custom_allocator_without_alignment) {
@@ -1152,7 +1152,7 @@ TEST(Allocator, alloc_array_accepts_custom_allocator_without_alignment) {
     defer(mem::free_array(array, hosted.get_allocator()));
 
     ASSERT_NE(array.data, nullptr);
-    ASSERT_EQ(array.size, 3u);
+    ASSERT_EQ(array.size, 3);
 }
 
 TEST(Allocator, free_array_accepts_pointer) {
@@ -1160,13 +1160,13 @@ TEST(Allocator, free_array_accepts_pointer) {
     defer(mem::free_array<u64>(array.data));
 
     ASSERT_NE(array.data, nullptr);
-    ASSERT_EQ(array.size, 3u);
+    ASSERT_EQ(array.size, 3);
 }
 
 TEST(Allocator, alloc_array_size_uses_type_alignment_by_default) {
     ASSERT_EQ(
         mem::alloc_array_size<u64>(3),
-        3u * sizeof(u64) + sizeof(mem::Array_Allocation_Header) + alignof(u64) - 1u
+        3 * sizeof(u64) + sizeof(mem::Array_Allocation_Header) + alignof(u64) - 1
     );
     ASSERT_EQ(mem::alloc_array_size<u64>(3, 1), mem::alloc_array_size<u64>(3));
 }

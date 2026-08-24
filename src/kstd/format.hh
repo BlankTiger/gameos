@@ -86,8 +86,8 @@ static auto write_signed(Backend& backend, s64 value) -> int {
         backend.put_char('-');
         ++written;
         // Handle minimum value overflow.
-        if (value == -9223372036854775807LL - 1) {
-            written += write_unsigned(backend, (u64)9223372036854775808ULL);
+        if (value == s64{-9223372036854775807} - 1) {
+            written += write_unsigned(backend, u64{0x8000000000000000});
             return written;
         }
         value = -value;

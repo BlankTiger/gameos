@@ -5,7 +5,7 @@
 #define AP_STACK_SIZE (64 * 1024)
 #define AP_STACK_ALIGNMENT 16
 
-#define IA32_GS_BASE 0xC0000101u
+#define IA32_GS_BASE 0xC0000101
 
 #define SMP_OFFSET_GDTR      0xF10
 #define SMP_OFFSET_FAR32     0xF00

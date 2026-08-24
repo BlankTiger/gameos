@@ -6,9 +6,9 @@
 namespace boot {
 
 enum class Multiboot_Info_Flag : u32 {
-    HAS_MMAP = 1u << 6,
-    HAS_VBE = 1u << 11,
-    HAS_FRAMEBUFFER = 1u << 12,
+    HAS_MMAP        = 1 << 6,
+    HAS_VBE         = 1 << 11,
+    HAS_FRAMEBUFFER = 1 << 12,
 };
 
 constexpr u32 MULTIBOOT2_MAGIC = 0x36D76289;
@@ -54,7 +54,7 @@ struct Multiboot2_Tag {
     }
 
     auto next() const -> const Multiboot2_Tag* {
-        return reinterpret_cast<const Multiboot2_Tag*>(ptr_addr(this) + ((size + 7u) & ~7u));
+        return reinterpret_cast<const Multiboot2_Tag*>(ptr_addr(this) + ((size + 7) & ~u32{7}));
     }
 } __attribute__((packed));
 

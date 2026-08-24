@@ -684,7 +684,7 @@ TEST(Allocator, dispatches_to_state_data) {
 
     auto allocation = mem::alloc(16, alignof(u64), state.get_allocator());
     ASSERT_EQ(allocation.memory, &state);
-    ASSERT_EQ(state.calls, 1u);
+    ASSERT_EQ(state.calls, 1);
     ASSERT_EQ(mem::free(&state, 16, 64, state.get_allocator()), mem::Allocator_Error::NONE);
     ASSERT_EQ(state.free_alignment, 64);
     ASSERT_EQ(mem::free(&state, 16, state.get_allocator()), mem::Allocator_Error::NONE);
@@ -710,7 +710,7 @@ TEST(Allocator, realloc_moves_and_preserves_memory) {
     ASSERT_EQ(resized.error, mem::Allocator_Error::NONE);
     auto* bytes = static_cast<u8*>(resized.memory);
     for (usize i = 0; i < 8; ++i) ASSERT_EQ(bytes[i], static_cast<u8>(0xAB));
-    ASSERT_EQ(ptr_addr(resized.memory) % 16, 0u);
+    ASSERT_EQ(ptr_addr(resized.memory) % 16, 0);
     ASSERT_EQ(mem::free(resized.memory, 32, 16, allocator), mem::Allocator_Error::NONE);
 }
 
@@ -838,14 +838,14 @@ TEST(Arena_Allocator_State, respects_alignment) {
     ASSERT_NE(mem::alloc(1, 64, arena.get_allocator()).memory, nullptr);
     auto allocation = mem::alloc(8, 64, arena.get_allocator());
     ASSERT_NE(allocation.memory, nullptr);
-    ASSERT_EQ(ptr_addr(allocation.memory) % 64, 0u);
+    ASSERT_EQ(ptr_addr(allocation.memory) % 64, 0);
 }
 
 TEST(Arena_Allocator_State, returns_nullptr_when_exhausted) {
     mem::Arena_Allocator_State arena{4096};
     auto all = mem::alloc(arena.bytes_left(), arena.get_allocator());
     ASSERT_NE(all.memory, nullptr);
-    ASSERT_EQ(arena.bytes_left(), 0u);
+    ASSERT_EQ(arena.bytes_left(), 0);
     ASSERT_EQ(mem::alloc(1, arena.get_allocator()).error, mem::Allocator_Error::OUT_OF_MEMORY);
 }
 

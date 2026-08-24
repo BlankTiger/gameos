@@ -23,7 +23,7 @@ constexpr auto frexp_f32(f32 f) -> std::pair<f32, int> {
     if (f == 0.0f) return { 0.0f, 0 };
 
     u32 bits     = std::bit_cast<u32>(f);
-    u32 exp_bits = (bits >> 23) & 0xFFu;
+    u32 exp_bits = (bits >> 23) & u32{0xFF};
 
     if (exp_bits == 0) {
         // Subnormal input: not perf-critical, so just re-normalize by
@@ -32,11 +32,11 @@ constexpr auto frexp_f32(f32 f) -> std::pair<f32, int> {
         return { mantissa, exponent - 24 };
     }
 
-    if (exp_bits == 0xFFu) return { f, 0 };  // inf/nan: pass through unchanged.
+    if (exp_bits == 0xFF) return { f, 0 };  // inf/nan: pass through unchanged.
 
     // f = 1.mantissa * 2^(exp_bits-127) = (1.mantissa/2) * 2^(exp_bits-126).
     int exponent      = static_cast<int>(exp_bits) - 126;
-    u32 mantissa_bits = (bits & 0x807FFFFFu) | (126u << 23);  // force exponent field to 126, i.e. 2^-1.
+    u32 mantissa_bits = (bits & u32{0x807FFFFF}) | (u32{126} << 23);  // force exponent field to 126, i.e. 2^-1.
 
     return { std::bit_cast<f32>(mantissa_bits), exponent };
 }
@@ -48,12 +48,12 @@ constexpr auto ldexp_f32(f32 mantissa, int e) -> f32 {
     if (mantissa == 0.0f) return mantissa;
 
     u32 bits     = std::bit_cast<u32>(mantissa);
-    int exp_bits = static_cast<int>((bits >> 23) & 0xFFu) + e;
+    int exp_bits = static_cast<int>((bits >> 23) & u32{0xFF}) + e;
 
-    if (exp_bits <= 0)    return std::bit_cast<f32>(bits & 0x80000000u);                   // underflow -> signed zero.
-    if (exp_bits >= 0xFF) return std::bit_cast<f32>((bits & 0x80000000u) | (0xFFu << 23)); // overflow  -> signed infinity.
+    if (exp_bits <= 0)    return std::bit_cast<f32>(bits & u32{0x80000000});                   // underflow -> signed zero.
+    if (exp_bits >= 0xFF) return std::bit_cast<f32>((bits & u32{0x80000000}) | (u32{0xFF} << 23)); // overflow  -> signed infinity.
 
-    return std::bit_cast<f32>((bits & 0x807FFFFFu) | (static_cast<u32>(exp_bits) << 23));
+    return std::bit_cast<f32>((bits & u32{0x807FFFFF}) | (static_cast<u32>(exp_bits) << 23));
 }
 
 }  // namespace
@@ -1219,14 +1219,14 @@ TEST(Math, log2) {
 }
 
 TEST(Math, log2_integer) {
-    EXPECT_EQ(log2(0u), -1);
+    EXPECT_EQ(log2(0), -1);
     EXPECT_EQ(log2(-1), -1);
-    EXPECT_EQ(log2(1u), 0);
-    EXPECT_EQ(log2(2u), 1);
-    EXPECT_EQ(log2(3u), 1);
-    EXPECT_EQ(log2(4u), 2);
-    EXPECT_EQ(log2(255u), 7);
-    EXPECT_EQ(log2(256u), 8);
+    EXPECT_EQ(log2(1), 0);
+    EXPECT_EQ(log2(2), 1);
+    EXPECT_EQ(log2(3), 1);
+    EXPECT_EQ(log2(4), 2);
+    EXPECT_EQ(log2(255), 7);
+    EXPECT_EQ(log2(256), 8);
 }
 
 TEST(Math, tan) {

@@ -11,7 +11,7 @@
 
 namespace mem {
 
-static constexpr int MULTIBOOT_MMAP_USABLE = 1u;
+static constexpr int MULTIBOOT_MMAP_USABLE = 1;
 static constexpr int MAX_MEMORY_REGIONS    = 128;
 
 struct Memory_Region {
