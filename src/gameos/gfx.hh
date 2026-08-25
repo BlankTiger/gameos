@@ -344,11 +344,11 @@ struct Framebuffer {
     u32 height;
     u8 bits_per_pixel;
     u8 type;
-    usize stride;
+    s64 stride;
 };
 
 namespace hidden {
-    constexpr usize GFX_ARENA_SIZE = 16 * 1024;
+    constexpr s64 GFX_ARENA_SIZE = 16 * 1024;
     constexpr u8 FRAME_OVERLAP = 2;
 
     struct Frame_Data {
@@ -576,7 +576,7 @@ auto inner_draw_circle(u32 x, u32 y, u32 r, Color color, Depth depth = DEPTH_FAR
     if (y2 < y) y2 = height();
 
     u32 color_alpha = color.a;
-    for (usize i = 0; i < colors_table.size; ++i) {
+    for (s64 i = 0; i < colors_table.size; ++i) {
         colors_table[i] = Color{
             .r = color.r,
             .g = color.g,
@@ -1499,9 +1499,9 @@ auto clip_to_screen(Vector4<f32> clip) -> Vector4<f32> {
 
 force_inline static auto project(Mesh_Instance instance, Camera3D camera) -> Array<Vector4<f32>> {
     Matrix4<f32> M = hidden::projection.M_projection * camera.M_camera * instance.transform;
-    const usize vertex_count = instance.model.vertices.size;
+    const s64 vertex_count = instance.model.vertices.size;
     Array<Vector4<f32>> projected_positions(vertex_count, Vector4<f32>::zero());
-    for (usize i = 0; i < vertex_count; ++i) {
+    for (s64 i = 0; i < vertex_count; ++i) {
         Vector4<f32> clip = multiply(M, Vector4<f32>::as_point(instance.model.vertices[i].position));
         if (clip.w == 0.f) {
             projected_positions[i] = Vector4<f32>::zero();

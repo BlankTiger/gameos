@@ -39,7 +39,7 @@ struct Hosted_Allocator_State {
 
                 const s64 total_size = requested_size + size_of(Allocation_Header) + requested_alignment - 1;
 
-                void* raw = ::operator new(cast(usize)total_size, std::align_val_t{cast(usize)raw_alignment});
+                void* raw = ::operator new(cast(usize)total_size, cast(std::align_val_t)raw_alignment);
                 auto* aligned = cast(u8*)(align_up(ptr_addr(raw) + size_of(Allocation_Header), cast(psize)requested_alignment));
                 auto* header  = aligned - size_of(Allocation_Header);
                 new (header) Allocation_Header {
@@ -60,7 +60,7 @@ struct Hosted_Allocator_State {
                 if (header->magic != HEADER_MAGIC)
                     return result(nullptr, Allocator_Error::INVALID_POINTER);
 
-                ::operator delete(header->raw, std::align_val_t{cast(usize)header->raw_alignment});
+                ::operator delete(header->raw, cast(std::align_val_t)header->raw_alignment});
                 return result(nullptr);
             } break;
 
@@ -103,7 +103,7 @@ struct Hosted_Allocator_State {
 #if UNIT_TEST
 namespace hidden {
     inline Hosted_Allocator_State hosted_allocator_state{};
-    constexpr usize LINUX_TEMPORARY_ALLOCATOR_SIZE = 256 * 1024;
+    constexpr s64 LINUX_TEMPORARY_ALLOCATOR_SIZE = 256 * 1024;
     alignas(16) inline u8 linux_temporary_allocator_buffer[LINUX_TEMPORARY_ALLOCATOR_SIZE];
 
     struct Hosted_Allocator_Init {

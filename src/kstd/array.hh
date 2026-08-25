@@ -854,7 +854,7 @@ TEST(Array, push_back_increases_capacity_when_full) {
     arr.push_back(1);
     arr.push_back(2);
 
-    usize pre_capacity = arr.capacity;
+    s64 pre_capacity = arr.capacity;
 
     arr.push_back(3);
 

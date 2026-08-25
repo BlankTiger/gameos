@@ -447,9 +447,9 @@ auto spawn(Procedure procedure, Arguments&&... args) -> Thread_Handle<hidden::Pr
 
     // To reduce allocations we allocate only once for Control and for the thread's stack.
     using Control = Typed_Control<Procedure, Result_Type, Arguments...>;
-    constexpr usize control_alignment = align_of(Control) > AP_STACK_ALIGNMENT ? align_of(Control) : AP_STACK_ALIGNMENT;
-    constexpr usize stack_offset      = (size_of(Control) + AP_STACK_ALIGNMENT - 1) & ~(AP_STACK_ALIGNMENT - 1);
-    constexpr usize storage_size      = stack_offset + THREAD_STACK_SIZE;
+    constexpr s64 control_alignment = align_of(Control) > AP_STACK_ALIGNMENT ? align_of(Control) : AP_STACK_ALIGNMENT;
+    constexpr s64 stack_offset      = (size_of(Control) + AP_STACK_ALIGNMENT - 1) & ~(AP_STACK_ALIGNMENT - 1);
+    constexpr s64 storage_size      = stack_offset + THREAD_STACK_SIZE;
 
     auto storage_allocation = mem::alloc(storage_size, control_alignment, context.allocator);
     auto* storage = storage_allocation.memory;

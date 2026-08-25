@@ -15,7 +15,7 @@ struct Resource_View {
     }
 };
 
-template <usize N>
+template <s64 N>
 struct Resource {
     Static_Array<u8, N> data;
     const u32 width;

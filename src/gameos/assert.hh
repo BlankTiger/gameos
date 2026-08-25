@@ -25,7 +25,7 @@ namespace hidden {
 
     constexpr auto HALT_PRINT_BUF_SIZE = 1024;
     inline char    halt_print_buf[HALT_PRINT_BUF_SIZE];
-    inline usize   halt_print_len = 0;
+    inline s64     halt_print_len = 0;
 }
 
 force_inline auto set_pre_halt_hook(Pre_Halt_Hook hook) -> void {
@@ -48,11 +48,11 @@ struct Halt_Printer_Backend {
         auto* buf = hidden::halt_print_buf;
         auto  len = hidden::halt_print_len;
 
-        for (usize i = 0; i < len; ++i) {
+        for (s64 i = 0; i < len; ++i) {
             serial::put_char(buf[i]);
         }
         for (int idx = 0; idx < hidden::current_halt_print_count; ++idx) {
-            for (usize i = 0; i < len; ++i) {
+            for (s64 i = 0; i < len; ++i) {
                 hidden::halt_print_fns[idx](buf[i]);
             }
         }

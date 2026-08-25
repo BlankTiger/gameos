@@ -118,7 +118,7 @@ static auto write_hex(Backend& backend, u64 value) -> int {
 template <typename Backend>
 static auto write_pointer(Backend& backend, const void* value) -> int {
     int written = write_string(backend, "0x");
-    written += write_hex(backend, (u64)cast(usize)value);
+    written += write_hex(backend, cast(u64)value);
     return written;
 }
 
@@ -141,11 +141,11 @@ static auto write_float(Backend& backend, f64 value) -> int {
     backend.put_char('.');
     ++written;
     char buf[6];
-    for (usize i = 0; i < 6; ++i) {
+    for (int i = 0; i < 6; ++i) {
         buf[5 - i] = cast(char)('0' + (scaled % 10));
         scaled /= 10;
     }
-    for (usize i = 0; i < 6; ++i) {
+    for (int i = 0; i < 6; ++i) {
         backend.put_char(buf[i]);
     }
     written += 6;
@@ -377,7 +377,7 @@ force_inline auto is_digit(char c) -> bool {
     return c >= '0' && c <= '9';
 }
 
-template <usize I = 0, typename Backend, typename Tuple>
+template <int I = 0, typename Backend, typename Tuple>
 force_inline auto print_arg_at(Backend& backend, Tuple& args, s64 index) -> int {
     if constexpr (I < std::tuple_size_v<Tuple>) {
         if (I == index)
@@ -616,7 +616,7 @@ namespace fmt_test {
 
 struct Owned_Format {
     auto format() const -> string {
-        constexpr usize n = 5;
+        constexpr int n = 5;
         // Can't include string_builder.hh here..
         auto* data = cast(char*)(mem::alloc(n, align_of(char)).memory);
         data[0] = 'o';

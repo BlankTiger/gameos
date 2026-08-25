@@ -81,7 +81,7 @@ inline auto detect_features() -> void {
 
     // Vendor string is packed EBX, EDX, ECX.
     const u32 parts[3] = { leaf0.ebx, leaf0.edx, leaf0.ecx };
-    for (usize i = 0; i < 3; i++) {
+    for (int i = 0; i < 3; i++) {
         f.vendor[i * 4 + 0] = cast(char)( parts[i]        & 0xFF);
         f.vendor[i * 4 + 1] = cast(char)((parts[i] >>  8) & 0xFF);
         f.vendor[i * 4 + 2] = cast(char)((parts[i] >> 16) & 0xFF);

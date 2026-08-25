@@ -4,7 +4,7 @@
 #include "basic.hh"
 #include "string_builder.hh"
 
-template <typename T, usize N>
+template <typename T, s64 N>
 struct Ring_Buffer {
     static_assert(N > 0);
 

@@ -365,7 +365,7 @@ auto isr_handle_ps2_keyboard() -> void {
     }
 }
 
-constexpr usize MOUSE_PACKET_SIZE = 3;
+constexpr int MOUSE_PACKET_SIZE = 3;
 
 enum struct Mouse_Flags : u8 {
     LEFT_BUTTON   = 1 << 0,

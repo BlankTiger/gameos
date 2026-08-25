@@ -467,13 +467,13 @@ struct is_vec<Vector4<T>> : std::true_type {};
 template <typename T>
 concept IsVector = is_vec<std::remove_cvref_t<T>>::value;
 
-template<usize I, IsVector V>
+template<int I, IsVector V>
 constexpr auto get(V& v) -> @T(V::Value_Type)& {
     static_assert(I < V::size);
     return v.data[I];
 }
 
-template<usize I, IsVector V>
+template<int I, IsVector V>
 constexpr auto get(const V& v) -> const @T(V::Value_Type)& {
     static_assert(I < V::size);
     return v.data[I];
@@ -487,7 +487,7 @@ namespace std {
     template<typename T>
     struct tuple_size<math::Vector2<T>> : integral_constant<size_t, 2> {};
 
-    template<usize I, typename T>
+    template<int I, typename T>
     struct tuple_element<I, math::Vector2<T>> {
         using type = T;
     };
@@ -495,7 +495,7 @@ namespace std {
     template<typename T>
     struct tuple_size<math::Vector3<T>> : integral_constant<size_t, 3> {};
 
-    template<usize I, typename T>
+    template<int I, typename T>
     struct tuple_element<I, math::Vector3<T>> {
         using type = T;
     };
@@ -503,7 +503,7 @@ namespace std {
     template<typename T>
     struct tuple_size<math::Vector4<T>> : integral_constant<size_t, 4> {};
 
-    template<usize I, typename T>
+    template<int I, typename T>
     struct tuple_element<I, math::Vector4<T>> {
         using type = T;
     };
@@ -514,39 +514,39 @@ namespace math {
 template <IsVector V>
 [[nodiscard]] constexpr auto operator + (const V& a, const V& b) -> V {
     V result {};
-    for (usize i = 0; i < V::size; ++i) result[i] = a[i] + b[i];
+    for (int i = 0; i < V::size; ++i) result[i] = a[i] + b[i];
     return result;
 }
 
 template <IsVector V>
 constexpr auto operator += (V& a, const V& b) -> V& {
-    for (usize i = 0; i < V::size; ++i) a[i] += b[i];
+    for (int i = 0; i < V::size; ++i) a[i] += b[i];
     return a;
 }
 
 template <IsVector V>
 [[nodiscard]] constexpr auto operator - (const V& a, const V& b) -> V {
     V result {};
-    for (usize i = 0; i < V::size; ++i) result[i] = a[i] - b[i];
+    for (int i = 0; i < V::size; ++i) result[i] = a[i] - b[i];
     return result;
 }
 
 template <IsVector V>
 constexpr auto operator -= (V& a, const V& b) -> V& {
-    for (usize i = 0; i < V::size; ++i) a[i] -= b[i];
+    for (int i = 0; i < V::size; ++i) a[i] -= b[i];
     return a;
 }
 
 template <IsVector V>
 [[nodiscard]] constexpr auto operator * (const V& v, @T(V::Value_Type) scalar) -> V {
     V result{};
-    for (usize i = 0; i < V::size; ++i) result[i] = v[i] * scalar;
+    for (int i = 0; i < V::size; ++i) result[i] = v[i] * scalar;
     return result;
 }
 
 template <IsVector V>
 constexpr auto operator *= (V& a, @T(V::Value_Type) scalar) -> V& {
-    for (usize i = 0; i < V::size; ++i) a[i] *= scalar;
+    for (int i = 0; i < V::size; ++i) a[i] *= scalar;
     return a;
 }
 
@@ -558,20 +558,20 @@ template <IsVector V>
 template <IsVector V>
 [[nodiscard]] constexpr auto operator / (const V& v, @T(V::Value_Type) scalar) -> V {
     V result{};
-    for (usize i = 0; i < V::size; i++) result[i] = v[i] / scalar;
+    for (int i = 0; i < V::size; i++) result[i] = v[i] / scalar;
     return result;
 }
 
 template <IsVector V>
 [[nodiscard]] constexpr auto operator - (const V& v) -> V {
     V result{};
-    for (usize i = 0; i < V::size; i++) result[i] = -v[i];
+    for (int i = 0; i < V::size; i++) result[i] = -v[i];
     return result;
 }
 
 template <IsVector V>
 constexpr auto operator == (const V& a, const V& b) -> bool {
-    for (usize i = 0; i < V::size; i++) {
+    for (int i = 0; i < V::size; i++) {
         if (a[i] != b[i])
             return false;
     }
@@ -588,7 +588,7 @@ template <IsVector V>
 [[nodiscard]] force_inline constexpr auto dot(const V& a, const V& b) -> @T(V::Value_Type) {
     using T = @T(V::Value_Type);
     T result{};
-    for (usize i = 0; i < V::size; i++) result += a[i] * b[i];
+    for (int i = 0; i < V::size; i++) result += a[i] * b[i];
     return result;
 }
 
@@ -701,7 +701,7 @@ TEST(Vector, create) {
 template <IsVector V>
 void test_zero() {
     auto v = V::zero();
-    for (usize i = 0; i < V::size; ++i) EXPECT_EQ(v[i], 0);
+    for (int i = 0; i < V::size; ++i) EXPECT_EQ(v[i], 0);
 }
 
 TEST(Vector, zero) {
@@ -716,7 +716,7 @@ TEST(Vector, zero) {
 template <IsVector V>
 void test_one() {
     auto v = V::one();
-    for (usize i = 0; i < V::size; ++i) EXPECT_EQ(v[i], 1);
+    for (int i = 0; i < V::size; ++i) EXPECT_EQ(v[i], 1);
 }
 
 
@@ -733,13 +733,13 @@ template <IsVector V>
 void test_add() {
     V a{}, b{};
 
-    for (usize i = 0; i < V::size; ++i) {
+    for (int i = 0; i < V::size; ++i) {
         a[i] = i + 1;
         b[i] = i + 2;
     }
 
     auto result = a + b;
-    for (usize i = 0; i < V::size; ++i) EXPECT_EQ(result[i], (i + 1) + (i + 2));
+    for (int i = 0; i < V::size; ++i) EXPECT_EQ(result[i], (i + 1) + (i + 2));
 }
 
 TEST(Vector, add) {
@@ -755,13 +755,13 @@ template <IsVector V>
 void test_add_assign() {
     V a{}, b{};
 
-    for (usize i = 0; i < V::size; ++i) {
+    for (int i = 0; i < V::size; ++i) {
         a[i] = i + 1;
         b[i] = i + 2;
     }
 
     a += b;
-    for (usize i = 0; i < V::size; ++i) EXPECT_EQ(a[i], (i + 1) + (i + 2));
+    for (int i = 0; i < V::size; ++i) EXPECT_EQ(a[i], (i + 1) + (i + 2));
 }
 
 TEST(Vector, add_assign) {
@@ -777,13 +777,13 @@ template <IsVector V>
 void test_subtract() {
     V a{}, b{};
 
-    for (usize i = 0; i < V::size; ++i) {
+    for (int i = 0; i < V::size; ++i) {
         a[i] = i + 5;
         b[i] = i + 2;
     }
 
     auto result = a - b;
-    for (usize i = 0; i < V::size; ++i) EXPECT_EQ(result[i], 3);
+    for (int i = 0; i < V::size; ++i) EXPECT_EQ(result[i], 3);
 }
 
 TEST(Vector, subtract) {
@@ -799,13 +799,13 @@ template <IsVector V>
 void test_subtract_assign() {
     V a{}, b{};
 
-    for (usize i = 0; i < V::size; ++i) {
+    for (int i = 0; i < V::size; ++i) {
         a[i] = i + 5;
         b[i] = i + 2;
     }
 
     a -= b;
-    for (usize i = 0; i < V::size; ++i) EXPECT_EQ(a[i], 3);
+    for (int i = 0; i < V::size; ++i) EXPECT_EQ(a[i], 3);
 }
 
 TEST(Vector, subtract_assign) {
@@ -821,11 +821,11 @@ template <IsVector V>
 void test_scalar_multiply() {
     V v{};
 
-    for (usize i = 0; i < V::size; ++i)
+    for (int i = 0; i < V::size; ++i)
         v[i] = i + 1;
 
     auto result = v * 2;
-    for (usize i = 0; i < V::size; ++i) EXPECT_EQ(result[i], (i + 1) * 2);
+    for (int i = 0; i < V::size; ++i) EXPECT_EQ(result[i], (i + 1) * 2);
 }
 
 TEST(Vector, multiply_scalar) {
@@ -841,11 +841,11 @@ template <IsVector V>
 void test_scalar_left_multiply() {
     V v{};
 
-    for (usize i = 0; i < V::size; ++i)
+    for (int i = 0; i < V::size; ++i)
         v[i] = i + 1;
 
     auto result = 2 * v;
-    for (usize i = 0; i < V::size; ++i) EXPECT_EQ(result[i], (i + 1) * 2);
+    for (int i = 0; i < V::size; ++i) EXPECT_EQ(result[i], (i + 1) * 2);
 }
 
 TEST(Vector, scalar_left_multiply) {
@@ -861,11 +861,11 @@ template <IsVector V>
 void test_scalar_multiply_assign() {
     V v{};
 
-    for (usize i = 0; i < V::size; ++i)
+    for (int i = 0; i < V::size; ++i)
         v[i] = i + 1;
 
     v *= 2;
-    for (usize i = 0; i < V::size; ++i) EXPECT_EQ(v[i], (i + 1) * 2);
+    for (int i = 0; i < V::size; ++i) EXPECT_EQ(v[i], (i + 1) * 2);
 }
 
 TEST(Vector, multiply_scalar_assign) {
@@ -881,11 +881,11 @@ template <IsVector V>
 void test_scalar_divide() {
     V v{};
 
-    for (usize i = 0; i < V::size; ++i)
+    for (int i = 0; i < V::size; ++i)
         v[i] = (i + 1) * 2;
 
     auto result = v / 2;
-    for (usize i = 0; i < V::size; ++i) EXPECT_EQ(result[i], i + 1);
+    for (int i = 0; i < V::size; ++i) EXPECT_EQ(result[i], i + 1);
 }
 
 TEST(Vector, divide_scalar) {
@@ -901,7 +901,7 @@ template <IsVector V>
 void test_unary_minus() {
     V v{};
 
-    for (usize i = 0; i < V::size; ++i)
+    for (int i = 0; i < V::size; ++i)
         v[i] = i + 1;
 
     auto result = -v;
@@ -921,7 +921,7 @@ template <IsVector V>
 void test_equality() {
     V a{}, b{}, c{};
 
-    for (usize i = 0; i < V::size; ++i) {
+    for (int i = 0; i < V::size; ++i) {
         a[i] = i;
         b[i] = i;
         c[i] = i + 1;
@@ -947,7 +947,7 @@ void test_dot() {
 
     @T(V::Value_Type) expected = 0;
 
-    for (usize i = 0; i < V::size; ++i) {
+    for (int i = 0; i < V::size; ++i) {
         a[i] = i + 1;
         b[i] = i + 2;
         expected += a[i] * b[i];
@@ -971,7 +971,7 @@ void test_length_squared() {
 
     @T(V::Value_Type) expected = 0;
 
-    for (usize i = 0; i < V::size; ++i) {
+    for (int i = 0; i < V::size; ++i) {
         v[i] = i + 1;
         expected += v[i] * v[i];
     }
@@ -1081,7 +1081,7 @@ void test_det_xy_zero() {
 
     @T(V::Value_Type) expected = 0;
 
-    for (usize i = 0; i < V::size; ++i) {
+    for (int i = 0; i < V::size; ++i) {
         v1[i] = i + 1;
         v2[i] = i + 1;
     }
@@ -1104,7 +1104,7 @@ void test_det_xy_non_zero() {
 
     @T(V::Value_Type) expected = -1;
 
-    for (usize i = 0; i < V::size; ++i) {
+    for (int i = 0; i < V::size; ++i) {
         v1[i] = i + 1;
         v2[i] = i + 2;
     }

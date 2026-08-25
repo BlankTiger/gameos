@@ -17,7 +17,7 @@ force_inline auto kstd_memeq(const void* a, const void* b, s64 length) -> bool {
     return kstd_memcmp(a, b, length) == 0;
 }
 
-template <typename T, usize N>
+template <typename T, s64 N>
 force_inline auto kstd_memeq(const void* bytes, const T (&array)[N]) -> bool {
     return kstd_memcmp(bytes, array, size_of(T) * N) == 0;
 }

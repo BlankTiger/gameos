@@ -12,10 +12,10 @@
 
 namespace acpi {
 
-constexpr usize RSDP_V1_SIZE            = 20;
-constexpr usize MAX_CPUS                = 64;
-constexpr usize MAX_IOAPICS             = 4;
-constexpr usize MAX_INTERRUPT_OVERRIDES = 32;
+constexpr s64 RSDP_V1_SIZE            = 20;
+constexpr s64 MAX_CPUS                = 64;
+constexpr s64 MAX_IOAPICS             = 4;
+constexpr s64 MAX_INTERRUPT_OVERRIDES = 32;
 
 inline constexpr char RSDP_SIGNATURE[8] = {
     'R', 'S', 'D', ' ', 'P', 'T', 'R', ' '
@@ -292,11 +292,11 @@ auto find_madt_in_rsdt(const SDT_Header* rsdt) -> const MADT* {
     if (!sdt_valid(rsdt)) return nullptr;
     if (!kstd_memeq(rsdt->signature, RSDT_SIGNATURE)) return nullptr;
 
-    const usize entry_bytes = rsdt->length - size_of(SDT_Header);
-    const usize entry_count = entry_bytes / size_of(u32);
+    const s64 entry_bytes = rsdt->length - size_of(SDT_Header);
+    const s64 entry_count = entry_bytes / size_of(u32);
     const auto* entries = addr_as<const u32*>(ptr_addr(rsdt) + size_of(SDT_Header));
 
-    for (usize i = 0; i < entry_count; ++i) {
+    for (s64 i = 0; i < entry_count; ++i) {
         const auto* header = addr_as<const SDT_Header*>(entries[i]);
         if (!sdt_valid(header)) continue;
         if (kstd_memeq(header->signature, MADT_SIGNATURE)) {
@@ -310,11 +310,11 @@ auto find_madt_in_xsdt(const SDT_Header* xsdt) -> const MADT* {
     if (!sdt_valid(xsdt)) return nullptr;
     if (!kstd_memeq(xsdt->signature, XSDT_SIGNATURE)) return nullptr;
 
-    const usize entry_bytes = xsdt->length - size_of(SDT_Header);
-    const usize entry_count = entry_bytes / size_of(u64);
+    const s64 entry_bytes = xsdt->length - size_of(SDT_Header);
+    const s64 entry_count = entry_bytes / size_of(u64);
     const auto* entries = addr_as<const u64*>(ptr_addr(xsdt) + size_of(SDT_Header));
 
-    for (usize i = 0; i < entry_count; ++i) {
+    for (s64 i = 0; i < entry_count; ++i) {
         const auto* header = addr_as<const SDT_Header*>(entries[i]);
         if (!sdt_valid(header)) continue;
         if (kstd_memeq(header->signature, MADT_SIGNATURE)) {

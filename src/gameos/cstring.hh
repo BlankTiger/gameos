@@ -4,8 +4,8 @@
 
 force_inline auto kstd_memcpy(void* __restrict destination, const void* __restrict source, s64 length) -> void* {
     if (length <= 0) return destination;
-    usize qwords    = cast(usize)(length / 8);
-    usize remainder = cast(usize)(length % 8);
+    int qwords    = cast(int)(length / 8);
+    int remainder = cast(int)(length % 8);
     void* dst       = destination;
     const void* src = source;
 

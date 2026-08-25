@@ -33,8 +33,8 @@ struct Buddy_Allocator_State {
     };
     static_assert(size_of(Allocation_Header) == 2 * size_of(u64));
 
-    static constexpr usize MIN_ORDER = 12;   // 4 KiB pages.
-    static constexpr usize MAX_ORDER = 63;
+    static constexpr int MIN_ORDER = 12;  // 4 KiB pages.
+    static constexpr int MAX_ORDER = 63;
 
     Free_Block* free_lists[MAX_ORDER + 1]{};
     // It's the main global allocator, so it has to have a lock on `alloc` and `free`.
@@ -44,12 +44,12 @@ struct Buddy_Allocator_State {
         return { .proc = proc, .data = this };
     }
 
-    static auto block_size_for_order(usize order) -> usize {
+    static auto block_size_for_order(int order) -> u64 {
         return u64{1} << order;
     }
 
-    static auto order_for_block_size(u64 block_size) -> usize {
-        usize order   = MIN_ORDER;
+    static auto order_for_block_size(u64 block_size) -> int {
+        int order     = MIN_ORDER;
         u64   current = mem::PAGE_SIZE;
         while (current < block_size && order < MAX_ORDER) {
             current <<= 1;
@@ -66,17 +66,17 @@ struct Buddy_Allocator_State {
     }
 
     auto clear() -> void {
-        for (usize i = 0; i <= MAX_ORDER; ++i)
+        for (int i = 0; i <= MAX_ORDER; ++i)
             free_lists[i] = nullptr;
     }
 
-    auto push_free_block(u64 base, usize order) -> void {
+    auto push_free_block(u64 base, int order) -> void {
         auto* block = cast(Free_Block*)base;
         block->next = free_lists[order];
         free_lists[order] = block;
     }
 
-    auto remove_free_block(usize order, u64 base) -> bool {
+    auto remove_free_block(int order, u64 base) -> bool {
         auto** link = &free_lists[order];
         while (*link != nullptr) {
             if (ptr_addr(*link) == base) {
@@ -102,7 +102,7 @@ struct Buddy_Allocator_State {
             if (block_size < mem::PAGE_SIZE)
                 block_size = mem::PAGE_SIZE;
 
-            const usize order = order_for_block_size(block_size);
+            const int order = order_for_block_size(block_size);
             push_free_block(current, order);
             current += block_size;
         }
@@ -128,8 +128,8 @@ struct Buddy_Allocator_State {
                 const u64 target_block_size = next_block_size(required_size);
                 if (target_block_size < mem::PAGE_SIZE) return result(nullptr, Allocator_Error::OUT_OF_MEMORY);
 
-                const usize target_order = order_for_block_size(target_block_size);
-                usize order = target_order;
+                const int target_order = order_for_block_size(target_block_size);
+                int order = target_order;
                 while (order <= MAX_ORDER && state->free_lists[order] == nullptr)
                     order++;
 
@@ -172,7 +172,7 @@ struct Buddy_Allocator_State {
                 header_pointer->state = Allocation_State::FREED;
 
                 u64 block_base = header.block_base;
-                usize order = header.order;
+                int order = header.order;
                 while (order < MAX_ORDER) {
                     const u64 block_size = block_size_for_order(order);
                     const u64 buddy_base = block_base ^ block_size;

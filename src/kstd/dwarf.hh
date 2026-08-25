@@ -131,7 +131,7 @@ using Abbreviations = Hash_Table<u64, Abbreviation>;
 // `debug_abbrev` must be initialized with memory of the .debug_abbrev section.
 // It's stopped at the (0, 0, 0) terminator that ends the abbreviations table.
 //
-auto parse_abbreviations(Byte_Reader& debug_abbrev, usize preallocate_abbreviation_count = 0) -> Abbreviations {
+auto parse_abbreviations(Byte_Reader& debug_abbrev, s64 preallocate_abbreviation_count = 0) -> Abbreviations {
     Abbreviations abbreviations(preallocate_abbreviation_count);
 
     for (;;) {
@@ -234,7 +234,7 @@ struct Attribute_Value {
     };
 };
 
-inline auto normalize_section_offset(Array_View<const u8> section, u32 raw_offset) -> usize {
+inline auto normalize_section_offset(Array_View<const u8> section, u32 raw_offset) -> s64 {
     if (raw_offset <= section.size) return raw_offset;
 
     // Linker resolves this DWARF relocation to section address when debug
@@ -244,7 +244,7 @@ inline auto normalize_section_offset(Array_View<const u8> section, u32 raw_offse
 
     auto offset = cast(psize)raw_offset - section_address;
     kstd_assert(offset <= section.size, "dwarf: section offset out of range");
-    return cast(usize)offset;
+    return cast(s64)offset;
 }
 
 auto read_section_string(Array_View<const u8> section, u32 offset) -> string {
@@ -563,7 +563,7 @@ struct Parse_Compilation_Unit_Result {
 };
 
 struct Pending_Subprogram {
-    usize  specification_offset;
+    u64    specification_offset;
     string name;
     psize  low_pc;
     psize  high_pc;
@@ -587,7 +587,7 @@ auto parse_compilation_unit_debug_information_entries(
     u8 address_size,
     Sections& sections
 ) -> Parse_Compilation_Unit_Result {
-    Hash_Table<usize, string> names;
+    Hash_Table<u64, string> names;
     Array<Pending_Subprogram> pending_subprograms;
 
     Array<Subprogram_Info> infos;
@@ -625,7 +625,7 @@ auto parse_compilation_unit_debug_information_entries(
         string name{};
         psize  low_pc{};
         psize  high_pc_raw{};
-        usize  specification_offset{};
+        u64    specification_offset{};
         bool   high_pc_is_offset = false;
 
         for (const auto& spec : declaration->attribute_specs) {
@@ -821,7 +821,7 @@ struct Paths_And_Indices {
 
 auto parse_directories_or_file_names(
     Byte_Reader& debug_line,
-    usize address_size,
+    u8 address_size,
     const Entry_Formats& entry_formats,
     const Sections& sections
 ) -> Paths_And_Indices {
@@ -1016,7 +1016,7 @@ struct Debug_Line_State {
     explicit Debug_Line_State(bool default_is_stmt) : is_stmt(default_is_stmt) {}
 };
 
-auto parse_line_table(const Sections& sections, u32 debug_line_offset, usize preallocate_row_count = 0) -> Array<Source_Row> {
+auto parse_line_table(const Sections& sections, u32 debug_line_offset, s64 preallocate_row_count = 0) -> Array<Source_Row> {
     Byte_Reader debug_line(sections.debug_line_bytes);
     auto normalized_offset = normalize_section_offset(sections.debug_line_bytes, debug_line_offset);
     auto skip_ok = debug_line.skip(normalized_offset);

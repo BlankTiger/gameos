@@ -385,7 +385,7 @@ TEST(csprint, explicit_allocator_grows_past_inline_buffer) {
     kstd_memset(payload, 'x', size_of(payload));
     auto* formatted = csprint(debug.get_allocator(), "%", string(payload, size_of(payload)));
     EXPECT_EQ(kstd_strlen(formatted), size_of(payload));
-    for (usize i = 0; i < size_of(payload); ++i)
+    for (int i = 0; i < size_of(payload); ++i)
         EXPECT_EQ(formatted[i], 'x');
     EXPECT_EQ(formatted[size_of(payload)], '\0');
     free_c_string(formatted, debug.get_allocator());

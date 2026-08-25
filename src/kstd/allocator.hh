@@ -858,7 +858,7 @@ TEST(Allocator, realloc_moves_and_preserves_memory) {
     ASSERT_NE(resized.memory, nullptr);
     ASSERT_EQ(resized.error, mem::Allocator_Error::NONE);
     auto* bytes = cast(u8*)resized.memory;
-    for (usize i = 0; i < 8; ++i)
+    for (int i = 0; i < 8; ++i)
         ASSERT_EQ(bytes[i], cast(u8)(0xAB));
     ASSERT_EQ(ptr_addr(resized.memory) % 16, 0);
     ASSERT_EQ(mem::free(resized.memory, 32, 16), mem::Allocator_Error::NONE);
@@ -1015,7 +1015,7 @@ TEST(Debug_Allocator_State, tracks_resize_to_new_pointer) {
     ASSERT_EQ(resized.error, mem::Allocator_Error::NONE);
 
     auto* bytes = cast(u8*)resized.memory;
-    for (usize i = 0; i < 8; ++i)
+    for (int i = 0; i < 8; ++i)
         ASSERT_EQ(bytes[i], cast(u8)(0xAB));
 
     auto info = mem::get_info(resized.memory, debug.get_allocator());
@@ -1076,7 +1076,7 @@ TEST(Arena_Allocator_State, sequential_allocs_bump_forward) {
 
 TEST(Arena_Allocator_State, reset_reclaims_memory) {
     mem::Arena_Allocator_State arena{4096};
-    usize left_before = arena.bytes_left();
+    s64 left_before = arena.bytes_left();
     ASSERT_NE(mem::alloc(256, arena.get_allocator()).memory, nullptr);
     ASSERT_LT(arena.bytes_left(), left_before);
     arena.reset();
@@ -1106,7 +1106,7 @@ TEST(Arena_Allocator_State, debug_stamps_used_memory_on_reset) {
     kstd_memset(allocation.memory, 0x11, 32);
     arena.reset();
     auto* bytes = cast(u8*)allocation.memory;
-    for (usize i = 0; i < 32; ++i) ASSERT_EQ(bytes[i], cast(u8)(0xCC));
+    for (int i = 0; i < 32; ++i) ASSERT_EQ(bytes[i], cast(u8)(0xCC));
 }
 
 #endif

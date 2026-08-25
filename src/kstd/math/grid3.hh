@@ -108,7 +108,7 @@ struct Grid3 {
         return backing_array[index];
     }
 
-    force_inline auto backing_array_index_for(u32 row, u32 col, u32 layer) const -> usize {
+    force_inline auto backing_array_index_for(u32 row, u32 col, u32 layer) const -> s64 {
         return cells_in_layer * layer + row * cols + col;
     }
 
