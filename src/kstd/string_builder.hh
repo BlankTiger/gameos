@@ -127,7 +127,7 @@ struct String_Builder {
             return string{};
         }
 
-        auto* out = static_cast<char*>(mem::alloc(count, align_of(char), destination_allocator).memory);
+        auto* out = cast(char*)(mem::alloc(count, align_of(char), destination_allocator).memory);
         kstd_assert(out != nullptr, "String_Builder::to_string allocation failed");
 
         char* cursor = out;
@@ -148,7 +148,7 @@ struct String_Builder {
     auto to_c_string(mem::Allocator destination_allocator = {}, bool do_reset = true) -> const char* {
         s64 count = length();
 
-        auto* out = static_cast<char*>(mem::alloc(count + 1, align_of(char), destination_allocator).memory);
+        auto* out = cast(char*)(mem::alloc(count + 1, align_of(char), destination_allocator).memory);
         kstd_assert(out != nullptr, "String_Builder::to_c_string allocation failed");
 
         char* cursor = out;
@@ -166,15 +166,15 @@ struct String_Builder {
 
 private:
     auto base_buffer() -> Buffer* {
-        return reinterpret_cast<Buffer*>(initial_bytes);
+        return cast(Buffer*)initial_bytes;
     }
 
     auto base_buffer() const -> const Buffer* {
-        return reinterpret_cast<const Buffer*>(initial_bytes);
+        return cast(const Buffer*)initial_bytes;
     }
 
     static auto buffer_data(Buffer* buffer) -> char* {
-        return reinterpret_cast<char*>(buffer) + size_of(Buffer);
+        return cast(char*)buffer + size_of(Buffer);
     }
 
     auto get_current_buffer() -> Buffer* {
@@ -189,7 +189,7 @@ private:
         while (buffer != nullptr) {
             Buffer* next = buffer->next;
             s64 block_size = size_of(Buffer) + buffer->allocated;
-            (void)mem::free(buffer, block_size, align_of(Buffer), allocator);
+            cast(void)mem::free(buffer, block_size, align_of(Buffer), allocator);
             buffer = next;
         }
         base->next = nullptr;
@@ -201,10 +201,10 @@ private:
             s64 subsequent = subsequent_buffer_size > 0 ? subsequent_buffer_size : INITIAL_DATA_SIZE;
             s64 block_size = size_of(Buffer) + subsequent;
         auto allocation = mem::alloc(block_size, align_of(Buffer), allocator);
-        auto* bytes = static_cast<u8*>(allocation.memory);
+        auto* bytes = cast(u8*)allocation.memory;
         if (bytes == nullptr) return false;
 
-        auto* buffer = reinterpret_cast<Buffer*>(bytes);
+        auto* buffer = cast(Buffer*)bytes;
         buffer->next      = nullptr;
         buffer->count     = 0;
         buffer->allocated = subsequent;

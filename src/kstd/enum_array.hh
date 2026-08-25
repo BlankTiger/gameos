@@ -8,12 +8,12 @@ template <typename Enum, typename Value>
 struct Enum_Array {
     static_assert(std::is_enum_v<Enum>, "Enum_Array requires an enum type");
 
-    static constexpr auto COUNT = static_cast<s64>(Enum::COUNT);
+    static constexpr auto COUNT = cast(s64)Enum::COUNT;
 
     Static_Array<Value, COUNT> backing_array;
 
-    Value       &operator [] (Enum index)       { return backing_array[static_cast<s64>(index)]; }
-    const Value &operator [] (Enum index) const { return backing_array[static_cast<s64>(index)]; }
+    Value       &operator [] (Enum index)       { return backing_array[cast(s64)index]; }
+    const Value &operator [] (Enum index) const { return backing_array[cast(s64)index]; }
 
     struct Entry {
         Enum   index;
@@ -24,7 +24,7 @@ struct Enum_Array {
         Enum_Array *ea;
         s64        i;
 
-        Entry operator * ()  const { return Entry{ static_cast<Enum>(i), ea->backing_array[i] }; }
+        Entry operator * ()  const { return Entry{ cast(Enum)i, ea->backing_array[i] }; }
         Iterator &operator ++ ()   { ++i; return *this; }
         bool operator != (const Iterator &other) const { return i != other.i; }
     };

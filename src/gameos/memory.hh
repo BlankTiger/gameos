@@ -87,7 +87,7 @@ auto parse_multiboot2_memory_map(Memory_Regions& regions, const boot::Multiboot2
 
             while (ptr_addr(entry) < ptr_addr(tag_end)) {
                 if (entry->type == MULTIBOOT_MMAP_USABLE) add_usable_region(regions, entry->addr, entry->len);
-                entry = reinterpret_cast<const boot::Multiboot2_Memory_Map_Entry*>(ptr_addr(entry) + mmap_tag->entry_size);
+                entry = cast(const boot::Multiboot2_Memory_Map_Entry*)(ptr_addr(entry) + mmap_tag->entry_size);
             }
         }
 
@@ -115,7 +115,7 @@ auto reserve_multiboot2_data(Memory_Regions& regions, const boot::Multiboot2_Inf
     const auto* end = mbi->end_tag();
 
     while (ptr_addr(tag) < ptr_addr(end)) {
-        const auto tag_type = static_cast<boot::Multiboot2_Tag_Type>(tag->type);
+        const auto tag_type = cast(boot::Multiboot2_Tag_Type)tag->type;
         if (tag_type == boot::Multiboot2_Tag_Type::CMDLINE || tag_type == boot::Multiboot2_Tag_Type::BOOT_LOADER_NAME) {
             const auto* text = tag->payload_as<char>();
             reserve_range(regions, ptr_addr(text), ptr_addr(text) + kstd_strlen(text) + 1);
@@ -168,53 +168,53 @@ auto initialize(const boot::Multiboot2_Info* mbi) -> Context {
 }  // namespace mem
 
 auto operator new(usize size) -> void* {
-    if (void* ptr = mem::alloc(static_cast<s64>(size), context.allocator).memory) return ptr;
+    if (void* ptr = mem::alloc(cast(s64)size, context.allocator).memory) return ptr;
     halt::forever("new failed");
 }
 
 auto operator new[](usize size) -> void* {
-    if (void* ptr = mem::alloc(static_cast<s64>(size), context.allocator).memory) return ptr;
+    if (void* ptr = mem::alloc(cast(s64)size, context.allocator).memory) return ptr;
     halt::forever("new[] failed");
 }
 
 auto operator new(usize size, std::align_val_t alignment) -> void* {
-    if (void* ptr = mem::alloc(static_cast<s64>(size), static_cast<s64>(alignment)).memory) return ptr;
+    if (void* ptr = mem::alloc(cast(s64)size, cast(s64)alignment).memory) return ptr;
     halt::forever("aligned new failed");
 }
 
 auto operator new[](usize size, std::align_val_t alignment) -> void* {
-    if (void* ptr = mem::alloc(static_cast<s64>(size), static_cast<s64>(alignment)).memory) return ptr;
+    if (void* ptr = mem::alloc(cast(s64)size, cast(s64)alignment).memory) return ptr;
     halt::forever("aligned new[] failed");
 }
 
 auto operator delete(void* ptr) noexcept -> void {
-    (void)mem::free(ptr, 0);
+    cast(void)mem::free(ptr, 0);
 }
 
 auto operator delete[](void* ptr) noexcept -> void {
-    (void)mem::free(ptr, 0);
+    cast(void)mem::free(ptr, 0);
 }
 
 auto operator delete(void* ptr, usize size) noexcept -> void {
-    (void)mem::free(ptr, static_cast<s64>(size));
+    cast(void)mem::free(ptr, cast(s64)size);
 }
 
 auto operator delete[](void* ptr, usize size) noexcept -> void {
-    (void)mem::free(ptr, static_cast<s64>(size));
+    cast(void)mem::free(ptr, cast(s64)size);
 }
 
 auto operator delete(void* ptr, std::align_val_t alignment) noexcept -> void {
-    (void)mem::free(ptr, 0, static_cast<s64>(alignment));
+    cast(void)mem::free(ptr, 0, cast(s64)alignment);
 }
 
 auto operator delete[](void* ptr, std::align_val_t alignment) noexcept -> void {
-    (void)mem::free(ptr, 0, static_cast<s64>(alignment));
+    cast(void)mem::free(ptr, 0, cast(s64)alignment);
 }
 
 auto operator delete(void* ptr, usize size, std::align_val_t alignment) noexcept -> void {
-    (void)mem::free(ptr, static_cast<s64>(size), static_cast<s64>(alignment));
+    cast(void)mem::free(ptr, cast(s64)size, cast(s64)alignment);
 }
 
 auto operator delete[](void* ptr, usize size, std::align_val_t alignment) noexcept -> void {
-    (void)mem::free(ptr, static_cast<s64>(size), static_cast<s64>(alignment));
+    cast(void)mem::free(ptr, cast(s64)size, cast(s64)alignment);
 }

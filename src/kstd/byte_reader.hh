@@ -14,7 +14,7 @@ struct Byte_Reader {
     Byte_Reader() = default;
 
     Byte_Reader(void* source, s64 size)
-        : source(reinterpret_cast<u8*>(source)),
+        : source(cast(u8*)source),
           size(size),
           current_offset(0) {}
 
@@ -25,7 +25,7 @@ struct Byte_Reader {
 
     // @TODO(blanktiger): Make source const u8*
     Byte_Reader(Array_View<const u8> source)
-        : source(const_cast<u8*>(source.data)),
+        : source(cast(u8*)source.data),
           size(source.size),
           current_offset(0) {}
 
@@ -40,7 +40,7 @@ struct Byte_Reader {
     }
 
     auto read_u8() -> Read_Result<u8> {
-        if (size - current_offset < static_cast<s64>(size_of(u8))) return { u8{}, false };
+        if (size - current_offset < cast(s64)size_of(u8)) return { u8{}, false };
         Read_Result<u8> result(source[current_offset], true);
         current_offset += size_of(u8);
         return result;
@@ -48,7 +48,7 @@ struct Byte_Reader {
 
     force_inline auto read_bool() -> Read_Result<bool> {
         auto [value, value_ok] = read_u8();
-        return { static_cast<bool>(value), value_ok };
+        return { cast(bool)value, value_ok };
     }
 
     force_inline auto read_s8() -> Read_Result<s8> {
@@ -57,7 +57,7 @@ struct Byte_Reader {
     }
 
     auto read_u16() -> Read_Result<u16> {
-        if (size - current_offset < static_cast<s64>(size_of(u16))) return { u16{}, false };
+        if (size - current_offset < cast(s64)size_of(u16)) return { u16{}, false };
 
         u16 result = 0;
         @for (int i = 0; i < 2; ++i) {
@@ -72,7 +72,7 @@ struct Byte_Reader {
     }
 
     auto read_u32() -> Read_Result<u32> {
-        if (size - current_offset < static_cast<s64>(size_of(u32))) return { u32{}, false };
+        if (size - current_offset < cast(s64)size_of(u32)) return { u32{}, false };
 
         u32 result = 0;
         @for (int i = 0; i < 4; ++i) {
@@ -87,7 +87,7 @@ struct Byte_Reader {
     }
 
     auto read_u64() -> Read_Result<u64> {
-        if (size - current_offset < static_cast<s64>(size_of(u64))) return { u64{}, false };
+        if (size - current_offset < cast(s64)size_of(u64)) return { u64{}, false };
 
         u64 result = 0;
         @for (int i = 0; i < 8; ++i) {
@@ -121,7 +121,7 @@ struct Byte_Reader {
                 return { u64{}, false };
 
             u8 byte = source[current_offset + byte_shift];
-            result |= static_cast<u64>(byte & LEB_VALUE_MASK) << (byte_shift * LEB_VALUE_BIT_COUNT);
+            result |= cast(u64)(byte & LEB_VALUE_MASK) << (byte_shift * LEB_VALUE_BIT_COUNT);
             if ((byte & LEB_CONTINUE_MASK) == LEB_STOP_VALUE) break;
 
             ++byte_shift;
@@ -145,7 +145,7 @@ struct Byte_Reader {
                 return { s64{}, false };
 
             byte = source[current_offset + byte_shift];
-            result |= static_cast<u64>(byte & LEB_VALUE_MASK) << (byte_shift * LEB_VALUE_BIT_COUNT);
+            result |= cast(u64)(byte & LEB_VALUE_MASK) << (byte_shift * LEB_VALUE_BIT_COUNT);
             if ((byte & LEB_CONTINUE_MASK) == LEB_STOP_VALUE) break;
 
             ++byte_shift;
@@ -157,7 +157,7 @@ struct Byte_Reader {
         }
 
         current_offset += byte_shift + 1;
-        return { static_cast<s64>(result), true };
+        return { cast(s64)result, true };
     }
 
     // Returns a non-owning view into the source bytes.
@@ -180,7 +180,7 @@ struct Byte_Reader {
         }
 
         defer(current_offset += string_size + 1);
-        return { { reinterpret_cast<const char*>(source + current_offset), string_size }, true };
+        return { { cast(const char*)(source + current_offset), string_size }, true };
     }
 
     // Returns true if there was enough bytes left to skip over them.

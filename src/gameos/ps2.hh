@@ -84,7 +84,7 @@ auto wait_output_ready() -> bool {
 // Returns false if the controller did not become ready in time.
 auto send_cmd(Cmd cmd) -> bool {
     if (!wait_input_ready()) return false;
-    outb(PS2_CMD_PORT, static_cast<u8>(cmd));
+    outb(PS2_CMD_PORT, cast(u8)cmd);
     return true;
 }
 
@@ -121,7 +121,7 @@ auto initialize() -> void {
 
     // 4. Tell the mouse to start sending movement/click packets.
     if (!send_cmd(Cmd::write_to_mouse)) return;
-    if (!send_data(static_cast<u8>(Mouse_Cmd::enable_reporting))) return;
+    if (!send_data(cast(u8)Mouse_Cmd::enable_reporting)) return;
     read_data();  // consume ACK (ignore timeout - mouse may not be present)
 }
 
@@ -349,7 +349,7 @@ auto isr_handle_ps2_keyboard() -> void {
         extended_pending  = false;
     }
 
-    const auto key = to_input_key(static_cast<Scancode>(key_value));
+    const auto key = to_input_key(cast(Scancode)key_value);
     if (key == input::Key::UNKNOWN) return;
     const bool repeat = !key_up && input::key_held(key);
     if (key_up) {
@@ -403,22 +403,22 @@ auto submit_mouse_button(Mouse_Flags flags, Mouse_Flags button_flag, input::Mous
 }
 
 auto process_mouse_byte(u8 value) -> void {
-    if (mouse_packet.index == 0 && !has_flag(static_cast<Mouse_Flags>(value), Mouse_Flags::ALWAYS_ONE)) return;
+    if (mouse_packet.index == 0 && !has_flag(cast(Mouse_Flags)value, Mouse_Flags::ALWAYS_ONE)) return;
 
     mouse_packet.bytes[mouse_packet.index] = value;
     ++mouse_packet.index;
     if (mouse_packet.index < MOUSE_PACKET_SIZE) return;
     mouse_packet.index = 0;
 
-    const auto flags = static_cast<Mouse_Flags>(mouse_packet.bytes[0]);
+    const auto flags = cast(Mouse_Flags)mouse_packet.bytes[0];
     submit_mouse_button(flags, Mouse_Flags::LEFT_BUTTON, input::Mouse_Button::LEFT);
     submit_mouse_button(flags, Mouse_Flags::RIGHT_BUTTON, input::Mouse_Button::RIGHT);
     submit_mouse_button(flags, Mouse_Flags::MIDDLE_BUTTON, input::Mouse_Button::MIDDLE);
 
     if (has_flag(flags, Mouse_Flags::X_OVERFLOW) || has_flag(flags, Mouse_Flags::Y_OVERFLOW)) return;
 
-    const auto xrel = static_cast<s32>(static_cast<s8>(mouse_packet.bytes[1]));
-    const auto yrel = -static_cast<s32>(static_cast<s8>(mouse_packet.bytes[2]));
+    const auto xrel = cast(s32)cast(s8)(mouse_packet.bytes[1]);
+    const auto yrel = -cast(s32)cast(s8)(mouse_packet.bytes[2]);
     if (xrel == 0 && yrel == 0) return;
 
     input::submit_event({
@@ -431,7 +431,7 @@ auto isr_handle_ps2_mouse() -> void {
     constexpr u8 OUTPUT_BUFFER_FULL = 1 << 0;
     constexpr u8 AUX_DATA          = 1 << 5;
 
-    while (has_flag(static_cast<Mouse_Flags>(inb(PS2_STATUS_PORT)), static_cast<Mouse_Flags>(OUTPUT_BUFFER_FULL | AUX_DATA))) {
+    while (has_flag(cast(Mouse_Flags)inb(PS2_STATUS_PORT), cast(Mouse_Flags)(OUTPUT_BUFFER_FULL | AUX_DATA))) {
         process_mouse_byte(inb(PS2_DATA_PORT));
     }
 }

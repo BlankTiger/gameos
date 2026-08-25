@@ -264,7 +264,7 @@ force_inline auto memory_mapped_register_base() -> volatile u32* {
 }
 
 force_inline auto read_register(Register_Offset offset) -> u32 {
-    const auto byte_offset = static_cast<u32>(offset);
+    const auto byte_offset = cast(u32)offset;
     kstd_debug_assert(hidden::memory_mapped_registers != nullptr);
     kstd_debug_assert((byte_offset & 3) == 0);  // Make sure byte_offset is divisible by 4, because we are shifting a u32*
     return *ptr_offset(hidden::memory_mapped_registers, byte_offset);
@@ -273,10 +273,10 @@ force_inline auto read_register(Register_Offset offset) -> u32 {
 template <typename Integer>
 requires std::integral<Integer> && std::constructible_from<u32, Integer>
 force_inline auto write_register(Register_Offset offset, Integer value) -> void {
-    const auto byte_offset = static_cast<u32>(offset);
+    const auto byte_offset = cast(u32)offset;
     kstd_debug_assert(hidden::memory_mapped_registers != nullptr);
     kstd_debug_assert((byte_offset & 3) == 0);  // Make sure byte_offset is divisible by 4, because we are shifting a u32*
-    *ptr_offset(hidden::memory_mapped_registers, byte_offset) = static_cast<u32>(value);
+    *ptr_offset(hidden::memory_mapped_registers, byte_offset) = cast(u32)value;
 }
 
 template <typename Register>
@@ -305,7 +305,7 @@ force_inline auto bootstrap_processor_apic_id() -> u32 {
 }
 
 force_inline auto physical_base_address(IA32_Apic_Base_Model_Specific_Register value) -> u64 {
-    auto physical_base_frame = static_cast<u64>(value.physical_base_frame);
+    auto physical_base_frame = cast(u64)value.physical_base_frame;
      // Look at the memory layout of the register type to understand the shift.
     return physical_base_frame << (64 - 52);
 }
@@ -320,7 +320,7 @@ auto resolve_memory_mapped_base() -> void {
     kstd_assert(apic_base.x2apic_mode_enable == 0, "x2APIC enabled; this path is xAPIC memory-mapped only for now");
 
     const u64 physical_base = physical_base_address(apic_base);
-    hidden::memory_mapped_registers = reinterpret_cast<volatile u32*>(physical_base);
+    hidden::memory_mapped_registers = cast(volatile u32*)physical_base;
 }
 
 // Firmware/chipset wires legacy 8259 PIC output into BSP’s LINT0. This
@@ -458,7 +458,7 @@ auto initialize_bootstrap_processor() -> void {
         hidden::bootstrap_processor_apic_id,
         version.version,
         version.max_local_vector_table_entry,
-        reinterpret_cast<psize>(hidden::memory_mapped_registers)
+        cast(psize)hidden::memory_mapped_registers
     );
 }
 
@@ -499,7 +499,7 @@ auto calibrate_and_start_timer(u32 frequency_hz) -> void {
     const u64 counts_elapsed   = 0xFFFFFFFF - counts_remaining;
     kstd_assert(counts_elapsed > 0, "local APIC timer did not count during calibration");
 
-    hidden::timer_counts_per_second = static_cast<u32>(counts_elapsed * 1000 / CALIBRATION_DURATION_MILLISECONDS);
+    hidden::timer_counts_per_second = cast(u32)(counts_elapsed * 1000 / CALIBRATION_DURATION_MILLISECONDS);
     kstd_assert(hidden::timer_counts_per_second >= frequency_hz);
 
     const u32 counts_per_interrupt = hidden::timer_counts_per_second / frequency_hz;

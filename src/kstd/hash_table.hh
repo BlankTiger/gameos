@@ -253,7 +253,7 @@ struct Hash_Table {
         slot_count_to_allocate = math::next_power_of_two(slot_count_to_allocate);
         auto new_entries = mem::alloc_array<Entry>(slot_count_to_allocate, allocator);
         for (s64 i = 0; i < new_entries.size; ++i)
-            ::new (static_cast<void*>(new_entries.data + i)) Entry{};
+            ::new (cast(void*)(new_entries.data + i)) Entry{};
 
         auto old_entries = entries;
         entries = new_entries;

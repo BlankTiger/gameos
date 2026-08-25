@@ -71,7 +71,7 @@ struct Buddy_Allocator_State {
     }
 
     auto push_free_block(u64 base, usize order) -> void {
-        auto* block = reinterpret_cast<Free_Block*>(base);
+        auto* block = cast(Free_Block*)base;
         block->next = free_lists[order];
         free_lists[order] = block;
     }
@@ -89,8 +89,8 @@ struct Buddy_Allocator_State {
     }
 
     auto add_region(u64 base, u64 size) -> void {
-        const u64 start = align_up(base, static_cast<u64>(mem::PAGE_SIZE));
-        const u64 end   = align_down(base + size, static_cast<u64>(mem::PAGE_SIZE));
+        const u64 start = align_up(base, cast(u64)mem::PAGE_SIZE);
+        const u64 end   = align_down(base + size, cast(u64)mem::PAGE_SIZE);
         if (start >= end) return;
 
         u64 current = start;
@@ -109,7 +109,7 @@ struct Buddy_Allocator_State {
     }
 
     static auto proc(Allocator_Mode mode, s64 size, s64 alignment, s64, void* old_memory, void* buddy_state) -> Allocator_Result {
-        auto* state = static_cast<Buddy_Allocator_State*>(buddy_state);
+        auto* state = cast(Buddy_Allocator_State*)buddy_state;
 
         switch (mode) {
             case Allocator_Mode::ALLOCATE: {
@@ -118,8 +118,8 @@ struct Buddy_Allocator_State {
 
                 if (size == 0) return result(nullptr);
 
-                const u64 requested_size      = static_cast<u64>(size);
-                const u64 requested_alignment = static_cast<u64>(alignment);
+                const u64 requested_size      = cast(u64)size;
+                const u64 requested_alignment = cast(u64)alignment;
                 const u64 required_size       = requested_size + requested_alignment + size_of(Allocation_Header);
                 if (required_size < requested_size)
                     return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
@@ -151,21 +151,21 @@ struct Buddy_Allocator_State {
                     return result(nullptr, Allocator_Error::OUT_OF_MEMORY);
                 }
 
-                auto* header = reinterpret_cast<Allocation_Header*>(user_ptr - size_of(Allocation_Header));
+                auto* header = cast(Allocation_Header*)(user_ptr - size_of(Allocation_Header));
                 new (header) Allocation_Header {
                     .block_base = block_base,
-                    .order      = static_cast<u8>(order),
+                    .order      = cast(u8)order,
                     .state      = Allocation_State::LIVE,
                     .reserved   = {},
                 };
-                return result(reinterpret_cast<void*>(user_ptr));
+                return result(cast(void*)user_ptr);
             } break;
 
             case Allocator_Mode::FREE: {
                 if (old_memory == nullptr) return result(nullptr);
 
                 auto scoped_lock = state->lock.scoped_irq_lock();
-                auto* header_pointer = reinterpret_cast<Allocation_Header*>(ptr_addr(old_memory) - size_of(Allocation_Header));
+                auto* header_pointer = cast(Allocation_Header*)(ptr_addr(old_memory) - size_of(Allocation_Header));
                 Allocation_Header header{};
                 kstd_memcpy(&header, header_pointer, size_of(header));
                 kstd_assert(header.state == Allocation_State::LIVE, "Buddy allocator: double free");
@@ -186,7 +186,7 @@ struct Buddy_Allocator_State {
             } break;
 
             case Allocator_Mode::FEATURES: {
-                auto* features = static_cast<Allocator_Features*>(old_memory);
+                auto* features = cast(Allocator_Features*)old_memory;
                 if (features != nullptr) *features = FEATURES;
                 else                     return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
 
@@ -198,15 +198,15 @@ struct Buddy_Allocator_State {
                 return result(nullptr, Allocator_Error::MODE_NOT_IMPLEMENTED);
 
             case Allocator_Mode::INFO: {
-                auto* info = static_cast<Allocator_Info*>(old_memory);
+                auto* info = cast(Allocator_Info*)old_memory;
                 if (info == nullptr || info->pointer == nullptr)
                     return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
 
                 auto scoped_lock = state->lock.scoped_irq_lock();
                 Allocation_Header header{};
-                kstd_memcpy(&header, reinterpret_cast<void*>(ptr_addr(info->pointer) - size_of(Allocation_Header)), size_of(header));
-                info->size      = static_cast<s64>(block_size_for_order(header.order));
-                info->alignment = static_cast<s64>(mem::PAGE_SIZE);
+                kstd_memcpy(&header, cast(void*)(ptr_addr(info->pointer) - size_of(Allocation_Header)), size_of(header));
+                info->size      = cast(s64)block_size_for_order(header.order);
+                info->alignment = cast(s64)mem::PAGE_SIZE;
 
                 return result(nullptr);
             } break;

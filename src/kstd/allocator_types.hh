@@ -36,13 +36,13 @@ enum struct Allocator_Features : u32 {
 };
 
 constexpr auto operator | (Allocator_Features left, Allocator_Features right) -> Allocator_Features {
-    auto value = static_cast<u32>(left) | static_cast<u32>(right);
-    return static_cast<Allocator_Features>(value);
+    auto value = cast(u32)left | cast(u32)right;
+    return cast(Allocator_Features)value;
 }
 
 constexpr auto operator & (Allocator_Features left, Allocator_Features right) -> Allocator_Features {
-    auto value = static_cast<u32>(left) & static_cast<u32>(right);
-    return static_cast<Allocator_Features>(value);
+    auto value = cast(u32)left & cast(u32)right;
+    return cast(Allocator_Features)value;
 }
 
 enum struct Allocator_Error : u8 {

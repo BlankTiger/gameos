@@ -25,6 +25,7 @@ target_compile_options(preprocessor PRIVATE
     -Wextra
     -Wno-sign-compare
     -Wno-narrowing
+    -Wno-int-to-pointer-cast
     -pedantic
 )
 

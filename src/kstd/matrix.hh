@@ -720,7 +720,7 @@ template <std::floating_point T>
 constexpr auto make_projection_matrix(T fov_vertical, T aspect_ratio_horizontal_over_vertical, T z_near, T z_far, T x_offset = T(0), T y_offset = T(0), bool depth_range_01 = false) -> Matrix4<T> {
     auto result = Matrix4<T>::identity();
 
-    T tan_theta = static_cast<T>(tan(static_cast<f32>(fov_vertical * T(0.5))));
+    T tan_theta = cast(T)(tan(cast(f32)(fov_vertical * T(0.5))));
     T cot_theta = T(1) / tan_theta;
 
     T f     = z_far;
@@ -872,10 +872,10 @@ constexpr auto inverse(const Matrix4<T>& m, @T(Matrix4<T>::Value_Type) epsilon =
 
 template <std::floating_point T>
 constexpr auto determinant(const Matrix4<T>& m) -> T {
-    Vector3<T> a = static_cast<Vector3<T>>(m.v[0]);
-    Vector3<T> b = static_cast<Vector3<T>>(m.v[1]);
-    Vector3<T> c = static_cast<Vector3<T>>(m.v[2]);
-    Vector3<T> d = static_cast<Vector3<T>>(m.v[3]);
+    Vector3<T> a = cast(Vector3<T>)m.v[0];
+    Vector3<T> b = cast(Vector3<T>)m.v[1];
+    Vector3<T> c = cast(Vector3<T>)m.v[2];
+    Vector3<T> d = cast(Vector3<T>)m.v[3];
 
     T x = m.v[0].w;
     T y = m.v[1].w;
@@ -1067,7 +1067,7 @@ TEST(Matrix, make_matrix4_from_matrix4x3_copies_translation) {
     EXPECT_EQ(m4._24, 2.0f);
     EXPECT_EQ(m4._34, 3.0f);
     EXPECT_EQ(m4._44, 1.0f);
-    (void)m4x3;
+    cast(void)m4x3;
 }
 
 TEST(Matrix, transpose_matrix4) {

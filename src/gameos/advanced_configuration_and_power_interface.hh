@@ -27,9 +27,9 @@ inline constexpr char XSDT_SIGNATURE[4] = { 'X', 'S', 'D', 'T' };
 // Every ACPI table: sum of all bytes in the structure is 0 mod 256.
 force_inline auto checksum_ok(const void* table, s64 size) -> bool {
     u8 sum = 0;
-    const auto* bytes = static_cast<const u8*>(table);
+    const auto* bytes = cast(const u8*)table;
     for (s64 i = 0; i < size; ++i) {
-        sum = static_cast<u8>(sum + bytes[i]);
+        sum = cast(u8)(sum + bytes[i]);
     }
     return sum == 0;
 }
@@ -234,7 +234,7 @@ auto find_rsdp_bios_scan() -> const RSDP* {
     kstd_memcpy(&extended_bios_data_area_segment, addr_as<const u8*>(0x40E), size_of(extended_bios_data_area_segment));
     // Word at 0x40E is a real-mode segment, not a byte address.
     // One segment unit is 16 bytes, so base = segment * 16.
-    const u64 extended_bios_data_area_base = static_cast<u64>(extended_bios_data_area_segment) << 4;
+    const u64 extended_bios_data_area_base = cast(u64)extended_bios_data_area_segment << 4;
     if (extended_bios_data_area_base != 0) {
         const auto* rsdp = find_rsdp_in_range(extended_bios_data_area_base, extended_bios_data_area_base + 1024);
         if (rsdp != nullptr) return rsdp;
@@ -300,7 +300,7 @@ auto find_madt_in_rsdt(const SDT_Header* rsdt) -> const MADT* {
         const auto* header = addr_as<const SDT_Header*>(entries[i]);
         if (!sdt_valid(header)) continue;
         if (kstd_memeq(header->signature, MADT_SIGNATURE)) {
-            return reinterpret_cast<const MADT*>(header);
+            return cast(const MADT*)header;
         }
     }
     return nullptr;
@@ -318,7 +318,7 @@ auto find_madt_in_xsdt(const SDT_Header* xsdt) -> const MADT* {
         const auto* header = addr_as<const SDT_Header*>(entries[i]);
         if (!sdt_valid(header)) continue;
         if (kstd_memeq(header->signature, MADT_SIGNATURE)) {
-            return reinterpret_cast<const MADT*>(header);
+            return cast(const MADT*)header;
         }
     }
     return nullptr;
@@ -340,7 +340,7 @@ auto find_madt(const RSDP* rsdp) -> const MADT* {
 }
 
 auto push_cpu(MADT_Info& info, u32 apic_id, u32 acpi_id, bool enabled) -> void {
-    if (info.cpus.size >= static_cast<s64>(MAX_CPUS)) {
+    if (info.cpus.size >= cast(s64)MAX_CPUS) {
         serial::println("MADT: cpu list full, dropping apic_id=%", apic_id);
         return;
     }
@@ -354,12 +354,12 @@ auto push_cpu(MADT_Info& info, u32 apic_id, u32 acpi_id, bool enabled) -> void {
 }
 
 auto parse_madt_entries(const MADT* table, MADT_Info& info) -> void {
-    const auto* bytes     = reinterpret_cast<const u8*>(table);
+    const auto* bytes     = cast(const u8*)table;
     const auto* entry     = bytes + size_of(MADT);
     const auto* table_end = bytes + table->header.length;
 
     while (entry + size_of(MADT_Entry_Header) <= table_end) {
-        const auto* header = reinterpret_cast<const MADT_Entry_Header*>(entry);
+        const auto* header = cast(const MADT_Entry_Header*)entry;
         const u8    length = header->length;
 
         if (length < size_of(MADT_Entry_Header)) {
@@ -372,17 +372,17 @@ auto parse_madt_entries(const MADT* table, MADT_Info& info) -> void {
         }
 
         using enum MADT_Entry_Type;
-        switch (static_cast<MADT_Entry_Type>(header->type)) {
+        switch (cast(MADT_Entry_Type)header->type) {
             case LOCAL_APIC: {
                 if (length < size_of(MADT_Local_APIC)) break;
-                const auto* e = reinterpret_cast<const MADT_Local_APIC*>(entry);
+                const auto* e = cast(const MADT_Local_APIC*)entry;
                 push_cpu(info, e->apic_id, e->acpi_processor_uid, e->flags.enabled);
             } break;
 
             case IOAPIC: {
                 if (length < size_of(MADT_IOAPIC)) break;
 
-                const auto* e = reinterpret_cast<const MADT_IOAPIC*>(entry);
+                const auto* e = cast(const MADT_IOAPIC*)entry;
                 info.ioapics.push_back({
                     .id        = e->ioapic_id,
                     .gsi_base  = e->gsi_base,
@@ -393,7 +393,7 @@ auto parse_madt_entries(const MADT* table, MADT_Info& info) -> void {
             case ISO: {
                 if (length < size_of(MADT_ISO)) break;
 
-                const auto* e = reinterpret_cast<const MADT_ISO*>(entry);
+                const auto* e = cast(const MADT_ISO*)entry;
                 info.overrides.push_back({
                     .isa_irq = e->source,
                     .gsi     = e->gsi,
@@ -403,7 +403,7 @@ auto parse_madt_entries(const MADT* table, MADT_Info& info) -> void {
 
             case LOCAL_X2APIC: {
                 if (length < size_of(MADT_Local_X2APIC)) break;
-                const auto* e = reinterpret_cast<const MADT_Local_X2APIC*>(entry);
+                const auto* e = cast(const MADT_Local_X2APIC*)entry;
                 push_cpu(info, e->x2apic_id, e->acpi_processor_uid, e->flags.enabled);
             } break;
         }

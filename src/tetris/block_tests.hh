@@ -38,9 +38,9 @@ auto make_block_test_meshes() -> Static_Array<gfx::Mesh, BLOCK_TEST_BODY_COUNT>&
         const auto center = calculate_center_of_body(create_new_falling_body(body));
         for (const auto& [row, col, layer] : body) {
             const Vector3<f32> offset{
-                static_cast<f32>(row) - static_cast<f32>(center.x),
-                static_cast<f32>(col) - static_cast<f32>(center.y),
-                static_cast<f32>(layer) - static_cast<f32>(center.z),
+                cast(f32)row - cast(f32)center.x,
+                cast(f32)col - cast(f32)center.y,
+                cast(f32)layer - cast(f32)center.z,
             };
 
             const usize vertex_offset = vertex_count;
@@ -52,9 +52,9 @@ auto make_block_test_meshes() -> Static_Array<gfx::Mesh, BLOCK_TEST_BODY_COUNT>&
 
             for (const auto& [i1, i2, i3] : gfx::DEBUG_CUBE.indices) {
                 body_storage.indices[index_count++] = {
-                    static_cast<u32>(vertex_offset + i1),
-                    static_cast<u32>(vertex_offset + i2),
-                    static_cast<u32>(vertex_offset + i3),
+                    cast(u32)(vertex_offset + i1),
+                    cast(u32)(vertex_offset + i2),
+                    cast(u32)(vertex_offset + i3),
                 };
             }
         }
@@ -117,11 +117,11 @@ auto blocks_tests_main() -> void {
         }
 
         if (input::mouse_button_held(input::Mouse_Button::LEFT)) {
-            body_instance.rotate({0.f, 1.f, 0.f}, MOUSE_ROTATION_SENSITIVITY * static_cast<f32>(mouse_delta.x));
-            body_instance.rotate({1.f, 0.f, 0.f}, MOUSE_ROTATION_SENSITIVITY * static_cast<f32>(mouse_delta.y));
+            body_instance.rotate({0.f, 1.f, 0.f}, MOUSE_ROTATION_SENSITIVITY * cast(f32)mouse_delta.x);
+            body_instance.rotate({1.f, 0.f, 0.f}, MOUSE_ROTATION_SENSITIVITY * cast(f32)mouse_delta.y);
         }
 
-        const f64 dt = static_cast<f64>(elapsed) / TICK_RATE;
+        const f64 dt = cast(f64)elapsed / TICK_RATE;
         const f64 fps = dt > 0.0 ? 1.0 / dt : 0.0;
 
         gfx::clear(gfx::BLACK);

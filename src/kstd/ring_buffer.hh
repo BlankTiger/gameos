@@ -14,7 +14,7 @@ struct Ring_Buffer {
     s64                size = 0;
 
     auto push_back(const T& element) -> void {
-        kstd_assert(size < static_cast<s64>(N), "push_back on full Ring_Buffer");
+        kstd_assert(size < cast(s64)N, "push_back on full Ring_Buffer");
 
         data[tail] = element;
         tail = (tail + 1) % N;

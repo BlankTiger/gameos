@@ -156,8 +156,8 @@ auto initialize() -> void {
     // Discard current IMRs.
     u8 mask1 = inb(PIC_DATA_PORT_MASTER);
     u8 mask2 = inb(PIC_DATA_PORT_SLAVE);
-    (void)mask1;
-    (void)mask2;
+    cast(void)mask1;
+    cast(void)mask2;
 
     // ICW1 starts initialization. The chip waits for three commands:
     // - ICW2. Sets vector offset.
@@ -220,13 +220,13 @@ auto set_interrupt_request_line_masked(u8 irq_line, bool masked) -> void {
 
     const bool is_slave  = irq_line >= 8;
     const u16  data_port = is_slave ? PIC_DATA_PORT_SLAVE : PIC_DATA_PORT_MASTER;
-    const u8   bit       = static_cast<u8>(1 << (irq_line & 7));
+    const u8   bit       = cast(u8)(1 << (irq_line & 7));
 
     u8 mask_register = inb(data_port);
     if (masked) {
-        mask_register = static_cast<u8>(mask_register | bit);
+        mask_register = cast(u8)(mask_register | bit);
     } else {
-        mask_register = static_cast<u8>(mask_register & ~bit);
+        mask_register = cast(u8)(mask_register & ~bit);
     }
     outb_with_delay(data_port, mask_register);
 }

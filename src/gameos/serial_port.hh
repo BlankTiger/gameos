@@ -55,7 +55,7 @@ auto initialize() -> void {
 auto put_char(char c) -> void {
     // If serial is somehow not available it's better to drop a byte than lock everything.
     for (int spins = 0; spins < 100000 && !transmit_empty(); ++spins) {}
-    low_level_io::outb(COM1, static_cast<u8>(c));
+    low_level_io::outb(COM1, cast(u8)c);
 }
 
 struct Backend {

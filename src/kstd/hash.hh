@@ -17,7 +17,7 @@ template <typename Key_Type>
 using Hash_Function = auto (*)(Key_Type&) -> u32;
 
 auto sdbm_hash(const void* data, s64 size, u32 hash = HASH_INIT) -> u32 {
-    auto* bytes = static_cast<const u8*>(data);
+    auto* bytes = cast(const u8*)data;
     for (s64 i = 0; i < size; ++i)
         hash = (hash << 16) + (hash << 6) - hash + bytes[i];
 
@@ -49,7 +49,7 @@ auto fnv1a_hash(u64 value, u64 hash = FNV_64_OFFSET_BIAS) -> u64 {
 }
 
 auto fnv1a_hash(const void* data, s64 size, u64 hash = FNV_64_OFFSET_BIAS) -> u64 {
-    auto* bytes = static_cast<const u8*>(data);
+    auto* bytes = cast(const u8*)data;
     for (s64 i = 0; i < size; ++i)
         hash = fnv1a_hash(bytes[i], hash);
 
@@ -67,16 +67,16 @@ auto compute(T& value) -> u32 {
 
     if constexpr (std::is_same_v<Value_Type, string>) {
         auto hash_value = fnv1a_hash(value.data, value.size);
-        return static_cast<u32>(hash_value ^ (hash_value >> 32));
+        return cast(u32)(hash_value ^ (hash_value >> 32));
     } else if constexpr (std::is_floating_point_v<Value_Type>) {
         return sdbm_hash(&value, size_of(value));
     } else if constexpr (std::is_enum_v<Value_Type>) {
         using Underlying_Type = std::underlying_type_t<Value_Type>;
-        return static_cast<u32>(knuth_hash(static_cast<u64>(static_cast<Underlying_Type>(value))) >> 32);
+        return cast(u32)(knuth_hash(cast(u64)cast(Underlying_Type)(value)) >> 32);
     } else if constexpr (std::is_integral_v<Value_Type>) {
-        return static_cast<u32>(knuth_hash(static_cast<u64>(value)) >> 32);
+        return cast(u32)(knuth_hash(cast(u64)value) >> 32);
     } else if constexpr (std::is_pointer_v<Value_Type>) {
-        return static_cast<u32>(knuth_hash(reinterpret_cast<u64>(value)) >> 32);
+        return cast(u32)(knuth_hash(cast(u64)value) >> 32);
     } else {
         static_assert(std::is_arithmetic_v<Value_Type>, "hash::compute does not support this type");
     }

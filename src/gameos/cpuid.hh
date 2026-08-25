@@ -64,7 +64,7 @@ force_inline auto cpuid(u32 leaf, u32 subleaf = 0) -> Cpuid_Result {
 }
 
 force_inline auto cpuid(Cpuid_Leaf leaf, Cpuid_Subleaf subleaf = Cpuid_Subleaf::NONE) -> Cpuid_Result {
-    return cpuid(static_cast<u32>(leaf), static_cast<u32>(subleaf));
+    return cpuid(cast(u32)leaf, cast(u32)subleaf);
 }
 
 force_inline auto bit(u32 value, u32 n) -> bool {
@@ -82,14 +82,14 @@ inline auto detect_features() -> void {
     // Vendor string is packed EBX, EDX, ECX.
     const u32 parts[3] = { leaf0.ebx, leaf0.edx, leaf0.ecx };
     for (usize i = 0; i < 3; i++) {
-        f.vendor[i * 4 + 0] = static_cast<char>( parts[i]        & 0xFF);
-        f.vendor[i * 4 + 1] = static_cast<char>((parts[i] >>  8) & 0xFF);
-        f.vendor[i * 4 + 2] = static_cast<char>((parts[i] >> 16) & 0xFF);
-        f.vendor[i * 4 + 3] = static_cast<char>((parts[i] >> 24) & 0xFF);
+        f.vendor[i * 4 + 0] = cast(char)( parts[i]        & 0xFF);
+        f.vendor[i * 4 + 1] = cast(char)((parts[i] >>  8) & 0xFF);
+        f.vendor[i * 4 + 2] = cast(char)((parts[i] >> 16) & 0xFF);
+        f.vendor[i * 4 + 3] = cast(char)((parts[i] >> 24) & 0xFF);
     }
     f.vendor[12] = '\0';
 
-    if (f.max_basic_leaf >= static_cast<u32>(FEATURE_BITS)) {
+    if (f.max_basic_leaf >= cast(u32)FEATURE_BITS) {
         const auto leaf1 = cpuid(FEATURE_BITS);
         f.fpu             = bit(leaf1.edx, 0);
         f.tsc             = bit(leaf1.edx, 4);
@@ -104,7 +104,7 @@ inline auto detect_features() -> void {
         f.initial_apic_id = (leaf1.ebx >> 24) & 0xFF;
     }
 
-    if (f.max_basic_leaf >= static_cast<u32>(STRUCTURED_EXTENDED_FEATURES)) {
+    if (f.max_basic_leaf >= cast(u32)STRUCTURED_EXTENDED_FEATURES) {
         const auto leaf7 = cpuid(
             STRUCTURED_EXTENDED_FEATURES,
             Cpuid_Subleaf::STRUCTURED_EXTENDED_FEATURES_MAIN
@@ -113,9 +113,9 @@ inline auto detect_features() -> void {
     }
 
     // Leaf 4: EBX[11:0]+1 = system coherency line size. Walk subleaves until type=0.
-    if (f.max_basic_leaf >= static_cast<u32>(CACHE_PARAMETERS)) {
+    if (f.max_basic_leaf >= cast(u32)CACHE_PARAMETERS) {
         for (u32 i = 0; ; i++) {
-            const auto c = cpuid(static_cast<u32>(CACHE_PARAMETERS), i);
+            const auto c = cpuid(cast(u32)CACHE_PARAMETERS, i);
             const u32 type = c.eax & 0x1F;
             if (type == 0) {
                 break;
@@ -128,13 +128,13 @@ inline auto detect_features() -> void {
     const auto ext0 = cpuid(MAX_EXTENDED);
     f.max_extended_leaf = ext0.eax;
 
-    if (f.max_extended_leaf >= static_cast<u32>(EXTENDED_FEATURE_BITS)) {
+    if (f.max_extended_leaf >= cast(u32)EXTENDED_FEATURE_BITS) {
         const auto ext1 = cpuid(EXTENDED_FEATURE_BITS);
         f.nx = bit(ext1.edx, 20);
     }
 
     // Leaf 0x80000006: ECX[7:0] = L2 cache line size. Fallback if leaf 4 missing.
-    if (f.cache_line_size == 0 && f.max_extended_leaf >= static_cast<u32>(EXTENDED_L2_CACHE_FEATURES)) {
+    if (f.cache_line_size == 0 && f.max_extended_leaf >= cast(u32)EXTENDED_L2_CACHE_FEATURES) {
         const auto l2 = cpuid(EXTENDED_L2_CACHE_FEATURES);
         f.cache_line_size = l2.ecx & 0xFF;
     }
@@ -143,7 +143,7 @@ inline auto detect_features() -> void {
         f.cache_line_size = 64;
     }
 
-    if (f.max_extended_leaf >= static_cast<u32>(ADVANCED_POWER_MANAGEMENT)) {
+    if (f.max_extended_leaf >= cast(u32)ADVANCED_POWER_MANAGEMENT) {
         const auto ext7 = cpuid(ADVANCED_POWER_MANAGEMENT);
         f.invariant_tsc = bit(ext7.edx, 8);
     }

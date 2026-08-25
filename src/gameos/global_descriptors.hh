@@ -169,24 +169,24 @@ constexpr u16 KERNEL_DATA_SEGMENT = 0x10;
 constexpr u16 TASK_STATE_SEGMENT  = 0x18;
 
 auto make_tss_descriptor(Task_State_Segment* tss_ptr) -> Task_State_Segment_Descriptor {
-    auto base  = reinterpret_cast<u64>(tss_ptr);
-    auto limit = static_cast<u32>(size_of(Task_State_Segment) - 1);
+    auto base  = cast(u64)tss_ptr;
+    auto limit = cast(u32)(size_of(Task_State_Segment) - 1);
 
     return Task_State_Segment_Descriptor{
-        .limit_low    = static_cast<u16>(limit),
-        .base_low     = static_cast<u16>(base),
-        .base_mid     = static_cast<u8>(base >> 16),
+        .limit_low    = cast(u16)limit,
+        .base_low     = cast(u16)base,
+        .base_mid     = cast(u8)(base >> 16),
         .type         = 0x9,
         .code_or_data = 0,
         .dpl          = 0,
         .present      = 1,
-        .limit_high   = static_cast<u8>((limit >> 16) & 0xF),
+        .limit_high   = cast(u8)((limit >> 16) & 0xF),
         .available    = 0,
         .long_mode    = 0,
         .op_size      = 0,
         .granularity  = 0,
-        .base_high    = static_cast<u8>(base >> 24),
-        .base_upper   = static_cast<u32>(base >> 32),
+        .base_high    = cast(u8)(base >> 24),
+        .base_upper   = cast(u32)(base >> 32),
         .reserved     = 0,
     };
 }
@@ -194,15 +194,15 @@ auto make_tss_descriptor(Task_State_Segment* tss_ptr) -> Task_State_Segment_Desc
 auto initialize() -> void {
     using namespace hidden;
 
-    tss.ist1       = reinterpret_cast<u64>(ist1_stack + IST1_STACK_SIZE);
-    tss.iomap_base = static_cast<u16>(size_of(Task_State_Segment));
+    tss.ist1       = cast(u64)(ist1_stack + IST1_STACK_SIZE);
+    tss.iomap_base = cast(u16)size_of(Task_State_Segment);
 
     global_descriptor_table.code = KERNEL_CODE_SEGMENT_DESCRIPTOR;
     global_descriptor_table.data = KERNEL_DATA_SEGMENT_DESCRIPTOR;
     global_descriptor_table.tss  = make_tss_descriptor(&tss);
 
     global_descriptor_table_register.limit = size_of(global_descriptor_table) - 1;
-    global_descriptor_table_register.base  = reinterpret_cast<psize>(&global_descriptor_table);
+    global_descriptor_table_register.base  = cast(psize)(&global_descriptor_table);
 
     asm volatile("lgdt %0" : : "m"(global_descriptor_table_register));
 

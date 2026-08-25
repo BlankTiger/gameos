@@ -10,6 +10,6 @@ force_inline auto has_flag(Enum value, Flags... flags) -> bool {
     static_assert(sizeof...(Flags) > 0);
 
     using Underlying = std::underlying_type_t<Enum>;
-    const Underlying mask = (static_cast<Underlying>(flags) | ...);
-    return (static_cast<Underlying>(value) & mask) == mask;
+    const Underlying mask = (cast(Underlying)flags | ...);
+    return (cast(Underlying)value & mask) == mask;
 }

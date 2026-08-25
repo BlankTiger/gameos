@@ -41,20 +41,20 @@ struct Multiboot2_Tag {
 
     template <typename T>
     auto as() const -> const T* {
-        return reinterpret_cast<const T*>(this);
+        return cast(const T*)this;
     }
 
     auto payload() const -> const void* {
-        return reinterpret_cast<const void*>(ptr_addr(this) + size_of(*this));
+        return cast(const void*)(ptr_addr(this) + size_of(*this));
     }
 
     template <typename T>
     auto payload_as() const -> const T* {
-        return reinterpret_cast<const T*>(payload());
+        return cast(const T*)payload();
     }
 
     auto next() const -> const Multiboot2_Tag* {
-        return reinterpret_cast<const Multiboot2_Tag*>(ptr_addr(this) + ((size + 7) & ~u32{7}));
+        return cast(const Multiboot2_Tag*)(ptr_addr(this) + ((size + 7) & ~u32{7}));
     }
 } __attribute__((packed));
 
@@ -63,11 +63,11 @@ struct Multiboot2_Info {
     u32 reserved;
 
     auto first_tag() const -> const Multiboot2_Tag* {
-        return reinterpret_cast<const Multiboot2_Tag*>(ptr_addr(this) + size_of(*this));
+        return cast(const Multiboot2_Tag*)(ptr_addr(this) + size_of(*this));
     }
 
     auto end_tag() const -> const Multiboot2_Tag* {
-        return reinterpret_cast<const Multiboot2_Tag*>(ptr_addr(this) + total_size);
+        return cast(const Multiboot2_Tag*)(ptr_addr(this) + total_size);
     }
 } __attribute__((packed));
 
@@ -79,11 +79,11 @@ struct Multiboot2_Memory_Map_Tag {
     u32 entry_version;
 
     auto first_entry() const -> const Multiboot2_Memory_Map_Entry* {
-        return reinterpret_cast<const Multiboot2_Memory_Map_Entry*>(ptr_addr(this) + size_of(*this));
+        return cast(const Multiboot2_Memory_Map_Entry*)(ptr_addr(this) + size_of(*this));
     }
 
     auto end_entry() const -> const Multiboot2_Memory_Map_Entry* {
-        return reinterpret_cast<const Multiboot2_Memory_Map_Entry*>(ptr_addr(this) + tag.size);
+        return cast(const Multiboot2_Memory_Map_Entry*)(ptr_addr(this) + tag.size);
     }
 } __attribute__((packed));
 
@@ -97,7 +97,7 @@ struct Multiboot2_Module_Tag {
     u32 reserved;
 
     auto string_ptr() const -> const char* {
-        return reinterpret_cast<const char*>(static_cast<uintptr_t>(string));
+        return cast(const char*)cast(uintptr_t)(string);
     }
 } __attribute__((packed));
 

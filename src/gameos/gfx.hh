@@ -28,19 +28,19 @@ struct Color {
 
     constexpr auto dim(f32 percent) const -> Color {
         return {
-            static_cast<u8>(r * percent),
-            static_cast<u8>(g * percent),
-            static_cast<u8>(b * percent),
+            cast(u8)(r * percent),
+            cast(u8)(g * percent),
+            cast(u8)(b * percent),
             a,
         };
     }
 
     constexpr auto modulate(Color other) const -> Color {
         return {
-            static_cast<u8>(r * other.r / 255),
-            static_cast<u8>(g * other.g / 255),
-            static_cast<u8>(b * other.b / 255),
-            static_cast<u8>(a * other.a / 255),
+            cast(u8)(r * other.r / 255),
+            cast(u8)(g * other.g / 255),
+            cast(u8)(b * other.b / 255),
+            cast(u8)(a * other.a / 255),
         };
     }
 };
@@ -53,10 +53,10 @@ force_inline auto blend_colors(Color background, Color foreground) -> Color {
     const u32 background_alpha = background.a;
     const u32 inverse_alpha = 255 - foreground_alpha;
     return {
-        static_cast<u8>((background.r * inverse_alpha + foreground.r * foreground_alpha) / 255),
-        static_cast<u8>((background.g * inverse_alpha + foreground.g * foreground_alpha) / 255),
-        static_cast<u8>((background.b * inverse_alpha + foreground.b * foreground_alpha) / 255),
-        static_cast<u8>(foreground_alpha + (background_alpha * inverse_alpha) / 255),
+        cast(u8)((background.r * inverse_alpha + foreground.r * foreground_alpha) / 255),
+        cast(u8)((background.g * inverse_alpha + foreground.g * foreground_alpha) / 255),
+        cast(u8)((background.b * inverse_alpha + foreground.b * foreground_alpha) / 255),
+        cast(u8)(foreground_alpha + (background_alpha * inverse_alpha) / 255),
     };
 }
 
@@ -90,18 +90,18 @@ struct Pixel {
 
     Pixel() : raw(0) {}
     Pixel(Color c) {
-        raw = (static_cast<u32>(c.r) << framebuffer_fmt.red_pos)   |
-              (static_cast<u32>(c.g) << framebuffer_fmt.green_pos) |
-              (static_cast<u32>(c.b) << framebuffer_fmt.blue_pos)  |
-              (static_cast<u32>(c.a) << Framebuffer_Format::alpha_pos);
+        raw = (cast(u32)c.r << framebuffer_fmt.red_pos)   |
+              (cast(u32)c.g << framebuffer_fmt.green_pos) |
+              (cast(u32)c.b << framebuffer_fmt.blue_pos)  |
+              (cast(u32)c.a << Framebuffer_Format::alpha_pos);
     }
 
     auto color() -> Color {
         return {
-            .r = static_cast<u8>((raw >> framebuffer_fmt.red_pos)   & 0xFF),
-            .g = static_cast<u8>((raw >> framebuffer_fmt.green_pos) & 0xFF),
-            .b = static_cast<u8>((raw >> framebuffer_fmt.blue_pos)  & 0xFF),
-            .a = static_cast<u8>((raw >> Framebuffer_Format::alpha_pos) & 0xFF),
+            .r = cast(u8)((raw >> framebuffer_fmt.red_pos)   & 0xFF),
+            .g = cast(u8)((raw >> framebuffer_fmt.green_pos) & 0xFF),
+            .b = cast(u8)((raw >> framebuffer_fmt.blue_pos)  & 0xFF),
+            .a = cast(u8)((raw >> Framebuffer_Format::alpha_pos) & 0xFF),
         };
     }
 
@@ -110,30 +110,30 @@ struct Pixel {
     force_inline auto blend_with(Color fg, const Framebuffer_Format& fmt = framebuffer_fmt) -> void {
         if (fg.a == 0) return;
         if (fg.a == 255) {
-            raw = (static_cast<u32>(fg.r) << fmt.red_pos)   |
-                  (static_cast<u32>(fg.g) << fmt.green_pos) |
-                  (static_cast<u32>(fg.b) << fmt.blue_pos)  |
-                  (static_cast<u32>(0xFF) << Framebuffer_Format::alpha_pos);
+            raw = (cast(u32)fg.r << fmt.red_pos)   |
+                  (cast(u32)fg.g << fmt.green_pos) |
+                  (cast(u32)fg.b << fmt.blue_pos)  |
+                  (cast(u32)(0xFF) << Framebuffer_Format::alpha_pos);
             return;
         }
 
-        u8 r = static_cast<u8>((raw >> fmt.red_pos)   & 0xFF);
-        u8 g = static_cast<u8>((raw >> fmt.green_pos) & 0xFF);
-        u8 b = static_cast<u8>((raw >> fmt.blue_pos)  & 0xFF);
+        u8 r = cast(u8)((raw >> fmt.red_pos)   & 0xFF);
+        u8 g = cast(u8)((raw >> fmt.green_pos) & 0xFF);
+        u8 b = cast(u8)((raw >> fmt.blue_pos)  & 0xFF);
 
         r = math::lerp(r, fg.r, fg.a, 255);
         g = math::lerp(g, fg.g, fg.a, 255);
         b = math::lerp(b, fg.b, fg.a, 255);
 
-        raw = (static_cast<u32>(r)    << fmt.red_pos)   |
-              (static_cast<u32>(g)    << fmt.green_pos) |
-              (static_cast<u32>(b)    << fmt.blue_pos)  |
-              (static_cast<u32>(0xFF) << Framebuffer_Format::alpha_pos);
+        raw = (cast(u32)r    << fmt.red_pos)   |
+              (cast(u32)g    << fmt.green_pos) |
+              (cast(u32)b    << fmt.blue_pos)  |
+              (cast(u32)(0xFF) << Framebuffer_Format::alpha_pos);
     }
 };
 
 using Depth = u32;
-constexpr Depth DEPTH_FAR = static_cast<Depth>(-1);
+constexpr Depth DEPTH_FAR = cast(Depth)(-1);
 
 using namespace math;
 
@@ -407,7 +407,7 @@ force_inline auto swap_buffers() -> void {
     const auto* framebuffer_tag = boot::find_multiboot2_tag<boot::Multiboot2_Framebuffer_Tag>(mbi);
     if (framebuffer_tag == nullptr || framebuffer_tag->framebuffer_addr == 0) return false;
 
-    auto* frontbuffer_pixels = reinterpret_cast<Pixel*>(framebuffer_tag->framebuffer_addr);
+    auto* frontbuffer_pixels = cast(Pixel*)framebuffer_tag->framebuffer_addr;
     front_buffer = {
         .pixels = Array_View<Pixel, GFX_PIXEL_COUNT>{frontbuffer_pixels},
         .pitch = framebuffer_tag->framebuffer_pitch,
@@ -469,7 +469,7 @@ auto clear(Color color) -> void {
 
 template <bool IMMEDIATE>
 auto inner_draw_char(u32 x, u32 y, char c, Color fg, Color bg, Depth depth = DEPTH_FAR) -> void {
-    const auto index = static_cast<u8>(c);
+    const auto index = cast(u8)c;
     const auto& glyph = font::DATA[index];
 
     for (u32 row = 0; row < font::GLYPH_HEIGHT; ++row) {
@@ -581,7 +581,7 @@ auto inner_draw_circle(u32 x, u32 y, u32 r, Color color, Depth depth = DEPTH_FAR
             .r = color.r,
             .g = color.g,
             .b = color.b,
-            .a = static_cast<u8>(color_alpha * i / AA_RES_POW2),
+            .a = cast(u8)(color_alpha * i / AA_RES_POW2),
         };
     }
 
@@ -649,11 +649,11 @@ force_inline s32 reverse_fractional_part(s32 x) {
 }
 
 force_inline u8 alpha(s32 x) {
-    return static_cast<u8>((x * 255) >> FIXED_POINT_SHIFT);
+    return cast(u8)((x * 255) >> FIXED_POINT_SHIFT);
 }
 
 auto inner_draw_line_endpoint(u32 x, u32 y, bool steep, Color color, Depth depth = DEPTH_FAR) -> s32 {
-    s32 sy = static_cast<s32>(y) << FIXED_POINT_SHIFT;
+    s32 sy = cast(s32)y << FIXED_POINT_SHIFT;
     s32 _y = fixed_point_floor(sy);
     s32 rev_frac_sy_alpha = alpha(reverse_fractional_part(sy));
     s32 frac_sy_alpha = alpha(fractional_part(sy));
@@ -681,8 +681,8 @@ auto inner_draw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color, Depth depth = 
         std::swap(y1, y2);
     }
 
-    s32 dx = static_cast<s32>(x2 - x1);
-    s32 dy = static_cast<s32>(y2) - static_cast<s32>(y1);
+    s32 dx = cast(s32)(x2 - x1);
+    s32 dy = cast(s32)y2 - cast(s32)y1;
 
     s32 gradient = 0;
     if (dx != 0) gradient = (dy << FIXED_POINT_SHIFT) / dx;
@@ -745,12 +745,12 @@ auto inner_draw_raw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color, Depth dept
         std::swap(y1, y2);
     }
 
-    s32 dx = static_cast<s32>(x2 - x1);
-    s32 dy = abs(static_cast<s32>(y2) - static_cast<s32>(y1));
+    s32 dx = cast(s32)(x2 - x1);
+    s32 dy = abs(cast(s32)y2 - cast(s32)y1);
 
     s32 y_step = y1 < y2 ? 1 : -1;
     s32 error = dx / 2;
-    s32 y = static_cast<s32>(y1);
+    s32 y = cast(s32)y1;
 
     for (u32 x = x1; x <= x2; ++x) {
         if (steep) {
@@ -811,7 +811,7 @@ auto draw_rect(u32 x, u32 y, u32 w, u32 h, Color color, u8 z = 1, Depth depth = 
 }
 
 auto inner_draw_sprite(const Resource_View res, u32 x, u32 y, u32 width, u32 height, Depth depth = DEPTH_FAR) -> void {
-    const Color* colors = reinterpret_cast<const Color*>(res.data.data);
+    const Color* colors = cast(const Color*)res.data.data;
     u32 clipped_width  = (x + width  >= gfx::width())  ? (gfx::width() - x)  : width;
     u32 clipped_height = (y + height >= gfx::height()) ? (gfx::height() - y) : height;
     for (u32 py = 0; py < clipped_height; ++py) {
@@ -994,14 +994,14 @@ auto map_nine_patch_coordinate(
 ) -> u32 {
     const u32 source_left_margin    = source_split1;
     const u32 source_right_margin   = source_length - source_split2;
-    const u64 source_margins_length = static_cast<u64>(source_left_margin) + source_right_margin;
+    const u64 source_margins_length = cast(u64)source_left_margin + source_right_margin;
 
     u32 destination_left_margin = source_left_margin;
     u32 destination_right_margin = source_right_margin;
 
     // Compress fixed margins proportionally when the destination is too small.
     if (source_margins_length > destination_length) {
-        destination_left_margin = static_cast<u32>(static_cast<u64>(source_left_margin) * destination_length / source_margins_length);
+        destination_left_margin = cast(u32)(cast(u64)source_left_margin * destination_length / source_margins_length);
         destination_right_margin = destination_length - destination_left_margin;
     }
 
@@ -1031,7 +1031,7 @@ auto inner_draw_nine_patch(const Nine_Patch& nine_patch, u32 x, u32 y, u32 width
     if (splits.x1 > splits.x2 || splits.y1 > splits.y2 || splits.x2 > res.width || splits.y2 > res.height) return;
     if (x >= gfx::width() || y >= gfx::height()) return;
 
-    const Color* colors = reinterpret_cast<const Color*>(res.data.data);
+    const Color* colors = cast(const Color*)res.data.data;
     const u32 clipped_width = std::min(width, gfx::width() - x);
     const u32 clipped_height = std::min(height, gfx::height() - y);
     for (u32 py = 0; py < clipped_height; ++py) {
@@ -1303,16 +1303,16 @@ namespace hidden {
 force_inline auto sample_texture(const Resource_View& res, f32 u, f32 v) -> Color {
     u = std::clamp(u, f32(0), f32(1));
     v = std::clamp(v, f32(0), f32(1));
-    const u32 tx = static_cast<u32>(u * static_cast<f32>(res.width  - 1));
-    const u32 ty = static_cast<u32>(v * static_cast<f32>(res.height - 1));
-    const Color* colors = reinterpret_cast<const Color*>(res.data.data);
+    const u32 tx = cast(u32)(u * cast(f32)(res.width  - 1));
+    const u32 ty = cast(u32)(v * cast(f32)(res.height - 1));
+    const Color* colors = cast(const Color*)res.data.data;
     return colors[ty * res.width + tx];
 }
 
 force_inline auto quantize_depth(f32 z) -> Depth {
     constexpr f32 DEPTH_3D_MAX = 0xFFFFFE;
     const f32 normalized = std::clamp((z + 1.f) * 0.5f, f32(0), f32(1));
-    return static_cast<Depth>(normalized * DEPTH_3D_MAX);
+    return cast(Depth)(normalized * DEPTH_3D_MAX);
 }
 
 auto inner_draw_triangle_3d(
@@ -1431,17 +1431,17 @@ auto inner_draw_triangle_3d(
                 is_inside(e31, tl31)) {
 
                 Color color{
-                    static_cast<u8>(std::clamp(r, f32(0), f32(255))),
-                    static_cast<u8>(std::clamp(g, f32(0), f32(255))),
-                    static_cast<u8>(std::clamp(b, f32(0), f32(255))),
-                    static_cast<u8>(std::clamp(a, f32(0), f32(255)))
+                    cast(u8)(std::clamp(r, f32(0), f32(255))),
+                    cast(u8)(std::clamp(g, f32(0), f32(255))),
+                    cast(u8)(std::clamp(b, f32(0), f32(255))),
+                    cast(u8)(std::clamp(a, f32(0), f32(255)))
                 };
 
                 if (textured) {
                     const u8 mesh_alpha = color.a;
                     f32 recip = 1.f / iw;
                     color = blend_colors(color, sample_texture(texture, u * recip, v * recip));
-                    color.a = static_cast<u8>(color.a * mesh_alpha / 255);
+                    color.a = cast(u8)(color.a * mesh_alpha / 255);
                     set_pixel(
                         x,
                         y,
@@ -1492,8 +1492,8 @@ auto clip_to_screen(Vector4<f32> clip) -> Vector4<f32> {
     f32 ndc_x = clip.x * inv_w;
     f32 ndc_y = clip.y * inv_w;
     f32 ndc_z = clip.z * inv_w;
-    f32 sx = (ndc_x * 0.5f + 0.5f) * static_cast<f32>(width());
-    f32 sy = (1.f - (ndc_y * 0.5f + 0.5f)) * static_cast<f32>(height());
+    f32 sx = (ndc_x * 0.5f + 0.5f) * cast(f32)width();
+    f32 sy = (1.f - (ndc_y * 0.5f + 0.5f)) * cast(f32)height();
     return Vector4<f32>{sx, sy, ndc_z, clip.w};
 }
 
@@ -1571,15 +1571,15 @@ auto inner_draw_raw_line_3d(
 ) -> void {
     if ((p1.x < 0.f && p2.x < 0.f) ||
         (p1.y < 0.f && p2.y < 0.f) ||
-        (p1.x >= static_cast<f32>(width()) && p2.x >= static_cast<f32>(width())) ||
-        (p1.y >= static_cast<f32>(height()) && p2.y >= static_cast<f32>(height()))) return;
+        (p1.x >= cast(f32)width() && p2.x >= cast(f32)width()) ||
+        (p1.y >= cast(f32)height() && p2.y >= cast(f32)height())) return;
 
-    const s32 max_x = static_cast<s32>(width()) - 1;
-    const s32 max_y = static_cast<s32>(height()) - 1;
-    u32 x1 = static_cast<u32>(std::clamp(static_cast<s32>(p1.x), s32(0), max_x));
-    u32 y1 = static_cast<u32>(std::clamp(static_cast<s32>(p1.y), s32(0), max_y));
-    u32 x2 = static_cast<u32>(std::clamp(static_cast<s32>(p2.x), s32(0), max_x));
-    u32 y2 = static_cast<u32>(std::clamp(static_cast<s32>(p2.y), s32(0), max_y));
+    const s32 max_x = cast(s32)width() - 1;
+    const s32 max_y = cast(s32)height() - 1;
+    u32 x1 = cast(u32)(std::clamp(cast(s32)p1.x, s32(0), max_x));
+    u32 y1 = cast(u32)(std::clamp(cast(s32)p1.y, s32(0), max_y));
+    u32 x2 = cast(u32)(std::clamp(cast(s32)p2.x, s32(0), max_x));
+    u32 y2 = cast(u32)(std::clamp(cast(s32)p2.y, s32(0), max_y));
 
     bool steep = abs_diff(y1, y2) > abs_diff(x1, x2);
     if (steep) {
@@ -1592,15 +1592,15 @@ auto inner_draw_raw_line_3d(
         std::swap(p1, p2);
     }
 
-    s32 dx = static_cast<s32>(x2 - x1);
-    s32 dy = abs(static_cast<s32>(y2) - static_cast<s32>(y1));
+    s32 dx = cast(s32)(x2 - x1);
+    s32 dy = abs(cast(s32)y2 - cast(s32)y1);
 
     s32 y_step = y1 < y2 ? 1 : -1;
     s32 error = dx / 2;
-    s32 y = static_cast<s32>(y1);
+    s32 y = cast(s32)y1;
 
     f32 dz = dx != 0
-        ? (p2.z - p1.z) / static_cast<f32>(dx)
+        ? (p2.z - p1.z) / cast(f32)dx
         : 0.f;
 
     f32 z = p1.z;

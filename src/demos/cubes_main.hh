@@ -55,8 +55,8 @@ auto cubes_main() -> void {
         const auto mouse_delta = input::mouse_motion();
         cursor_x += mouse_delta.x;
         cursor_y += mouse_delta.y;
-        cursor_x = std::clamp(cursor_x, 0, static_cast<s32>(gfx::width() - cursor_width));
-        cursor_y = std::clamp(cursor_y, 0, static_cast<s32>(gfx::height() - cursor_height));
+        cursor_x = std::clamp(cursor_x, 0, cast(s32)(gfx::width() - cursor_width));
+        cursor_y = std::clamp(cursor_y, 0, cast(s32)(gfx::height() - cursor_height));
 
         // @TODO(blanktiger): See if it's possible to extract any dragging logic to the input subsystem.
         if (input::mouse_button_pressed(input::Mouse_Button::LEFT)) {
@@ -64,8 +64,8 @@ auto cubes_main() -> void {
             f32 dragged_depth = 2.f;
             for (auto* candidate: {&cube, &cool_cube, &wireframe_cube}) {
                 auto projected = gfx::project(*candidate, camera);
-                f32 min_x = static_cast<f32>(gfx::width());
-                f32 min_y = static_cast<f32>(gfx::height());
+                f32 min_x = cast(f32)gfx::width();
+                f32 min_y = cast(f32)gfx::height();
                 f32 max_x = 0.f;
                 f32 max_y = 0.f;
                 f32 depth = 2.f;
@@ -78,10 +78,10 @@ auto cubes_main() -> void {
                     depth = std::min(depth, vertex.z);
                 }
 
-                const bool pointer_inside = static_cast<f32>(cursor_x) >= min_x &&
-                    static_cast<f32>(cursor_x) <= max_x &&
-                    static_cast<f32>(cursor_y) >= min_y &&
-                    static_cast<f32>(cursor_y) <= max_y;
+                const bool pointer_inside = cast(f32)cursor_x >= min_x &&
+                    cast(f32)cursor_x <= max_x &&
+                    cast(f32)cursor_y >= min_y &&
+                    cast(f32)cursor_y <= max_y;
                 if (pointer_inside && depth < dragged_depth) {
                     dragged_cube = candidate;
                     dragged_depth = depth;
@@ -93,19 +93,19 @@ auto cubes_main() -> void {
             dragged_cube = nullptr;
         } else if (dragged_cube != nullptr) {
             const f32 depth = -dragged_cube->translation.z;
-            const f32 aspect_ratio = static_cast<f32>(gfx::width()) / static_cast<f32>(gfx::height());
-            dragged_cube->translation.x += 2.f * depth * aspect_ratio * static_cast<f32>(mouse_delta.x) / static_cast<f32>(gfx::width());
-            dragged_cube->translation.y -= 2.f * depth * static_cast<f32>(mouse_delta.y) / static_cast<f32>(gfx::height());
+            const f32 aspect_ratio = cast(f32)gfx::width() / cast(f32)gfx::height();
+            dragged_cube->translation.x += 2.f * depth * aspect_ratio * cast(f32)mouse_delta.x / cast(f32)gfx::width();
+            dragged_cube->translation.y -= 2.f * depth * cast(f32)mouse_delta.y / cast(f32)gfx::height();
             dragged_cube->recompute_matrix();
         }
 
         const u64 frame_start = get_ticks();
         const u64 elapsed     = frame_start - last_tick;
         last_tick = frame_start;
-        const f64 dt  = static_cast<f64>(elapsed) / TICK_RATE;
+        const f64 dt  = cast(f64)elapsed / TICK_RATE;
         const f64 fps = dt > 0.0 ? 1.0 / dt : 0.0;
 
-        const f32 angle = RAD_PER_SEC * static_cast<f32>(elapsed) / static_cast<f32>(TICK_RATE);
+        const f32 angle = RAD_PER_SEC * cast(f32)elapsed / cast(f32)TICK_RATE;
 
         cube.rotate(SPIN_AXIS, angle);
         cool_cube.rotate(SPIN_AXIS, angle);
@@ -116,7 +116,7 @@ auto cubes_main() -> void {
         gfx::draw_mesh(cube, camera);
         gfx::draw_mesh(cool_cube, camera);
         gfx::draw_wireframe(wireframe_cube, camera);
-        gfx::draw_sprite_scaled(cursor, static_cast<u32>(cursor_x), static_cast<u32>(cursor_y), cursor_width, cursor_height);
+        gfx::draw_sprite_scaled(cursor, cast(u32)cursor_x, cast(u32)cursor_y, cursor_width, cursor_height);
         gfx::draw_frame();
 
         mem::temporary_allocator_rewind(temporary_allocator_mark);

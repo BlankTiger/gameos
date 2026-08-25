@@ -81,7 +81,7 @@ force_inline auto put_u32(u32 value) -> void {
         return;
     }
     while (value > 0) {
-        buf[i++] = static_cast<char>('0' + (value % 10));
+        buf[i++] = cast(char)('0' + (value % 10));
         value /= 10;
     }
     while (i > 0) put_char(buf[--i]);

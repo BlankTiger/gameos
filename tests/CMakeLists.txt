@@ -99,6 +99,7 @@ if(all_test_sources)
         -Wextra
         -Wno-sign-compare
         -Wno-narrowing
+        -Wno-int-to-pointer-cast
     )
     target_precompile_headers(kstd_tests PRIVATE
         <gtest/gtest.h>

@@ -11,7 +11,7 @@ struct Resource_View {
     auto data_as() const -> Array_View<const T> {
         kstd_assert(data.size % size_of(T) == 0, "resource size is not a multiple of target type size");
         kstd_assert(ptr_addr(data.data) % align_of(T) == 0, "resource data is not aligned for target type");
-        return { data.size / size_of(T), reinterpret_cast<const T*>(data.data) };
+        return { data.size / size_of(T), cast(const T*)data.data };
     }
 };
 

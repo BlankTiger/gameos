@@ -21,13 +21,13 @@ struct Array_View {
     T* data;
 
     auto operator [] (s64 index, const std::source_location& location = std::source_location::current()) -> T& {
-        kstd_assert(index >= 0 && index < static_cast<s64>(size), "index out of bounds", location);
+        kstd_assert(index >= 0 && index < cast(s64)size, "index out of bounds", location);
         return data[index];
     }
 
     constexpr auto operator [] (s64 index, const std::source_location& location = std::source_location::current()) const
         -> const T& {
-        kstd_assert(index >= 0 && index < static_cast<s64>(size), "index out of bounds", location);
+        kstd_assert(index >= 0 && index < cast(s64)size, "index out of bounds", location);
         return data[index];
     }
 
@@ -47,7 +47,7 @@ struct Array_View {
     // than as a string constructor) so string.hh does not need to know about arrays.
     // This header includes it for its own asserts.
     explicit operator string() const requires std::is_same_v<std::remove_const_t<T>, u8> {
-        return string(reinterpret_cast<const char*>(data), N);
+        return string(cast(const char*)data, N);
     }
 
     ARRAY_ITERATOR()
@@ -92,7 +92,7 @@ struct Array_View<T, DYNAMIC_EXTENT> {
     }
 
     explicit operator string() const requires std::is_same_v<std::remove_const_t<T>, u8> {
-        return string(reinterpret_cast<const char*>(data), size);
+        return string(cast(const char*)data, size);
     }
 
     ARRAY_ITERATOR()
@@ -108,15 +108,15 @@ struct Array_Allocation_Header {
 template <typename T>
 force_inline auto alloc_array_size(s64 count, s64 alignment = align_of(T)) -> s64 {
     if (count == 0) return 0;
-    if (count < 0 || count > S64_MAX / static_cast<s64>(size_of(T))) return 0;
+    if (count < 0 || count > S64_MAX / cast(s64)size_of(T)) return 0;
 
-    if (alignment < static_cast<s64>(align_of(T))) alignment = align_of(T);
+    if (alignment < cast(s64)align_of(T)) alignment = align_of(T);
     if (alignment <= 0 || (alignment & (alignment - 1)) != 0) return 0;
 
-    const s64 size = count * static_cast<s64>(size_of(T));
-    if (size > S64_MAX - static_cast<s64>(size_of(Array_Allocation_Header))) return 0;
+    const s64 size = count * cast(s64)size_of(T);
+    if (size > S64_MAX - cast(s64)size_of(Array_Allocation_Header)) return 0;
 
-    const s64 size_with_header = size + static_cast<s64>(size_of(Array_Allocation_Header));
+    const s64 size_with_header = size + cast(s64)size_of(Array_Allocation_Header);
     if (size_with_header > S64_MAX - (alignment - 1)) return 0;
 
     return size_with_header + alignment - 1;
@@ -128,7 +128,7 @@ force_inline auto alloc_array(
     s64 alignment = align_of(T),
     Allocator allocator = {}
 ) -> Array_View<T> {
-    if (alignment < static_cast<s64>(align_of(T))) alignment = align_of(T);
+    if (alignment < cast(s64)align_of(T)) alignment = align_of(T);
     if (count < 0 || alignment <= 0) return {0, nullptr};
 
     const s64 allocation_size = alloc_array_size<T>(count, alignment);
@@ -138,12 +138,12 @@ force_inline auto alloc_array(
     if (allocation.memory == nullptr) return {0, nullptr};
     void* base = allocation.memory;
 
-    auto* data = reinterpret_cast<T*>(align_up(
+    auto* data = cast(T*)(align_up(
         ptr_addr(base) + size_of(Array_Allocation_Header),
-        static_cast<psize>(alignment)
+        cast(psize)alignment
     ));
-    auto* header = reinterpret_cast<Array_Allocation_Header*>(
-        reinterpret_cast<u8*>(data) - size_of(Array_Allocation_Header)
+    auto* header = cast(Array_Allocation_Header*)(
+        cast(u8*)data - size_of(Array_Allocation_Header)
     );
     header->base = base;
     header->size = allocation_size;
@@ -159,10 +159,10 @@ template <typename T>
 force_inline auto free_array(void* pointer, Allocator allocator = {}) -> void {
     if (pointer == nullptr) return;
 
-    auto* header = reinterpret_cast<Array_Allocation_Header*>(
-        static_cast<u8*>(pointer) - size_of(Array_Allocation_Header)
+    auto* header = cast(Array_Allocation_Header*)(
+        cast(u8*)pointer - size_of(Array_Allocation_Header)
     );
-    (void)free(header->base, header->size, allocator);
+    cast(void)free(header->base, header->size, allocator);
 }
 
 template <typename T>
@@ -184,13 +184,13 @@ struct Static_Array {
     }
 
     constexpr auto operator [] (s64 index, const std::source_location& location = std::source_location::current()) -> T& {
-        kstd_assert(index >= 0 && index < static_cast<s64>(size), "index out of bounds", location);
+        kstd_assert(index >= 0 && index < cast(s64)size, "index out of bounds", location);
         return data[index];
     }
 
     constexpr auto operator [] (s64 index, const std::source_location& location = std::source_location::current()) const
         -> const T& {
-        kstd_assert(index >= 0 && index < static_cast<s64>(size), "index out of bounds", location);
+        kstd_assert(index >= 0 && index < cast(s64)size, "index out of bounds", location);
         return data[index];
     }
 
@@ -437,10 +437,10 @@ struct Bounded_Array {
 
 private:
     auto slot(s64 i) -> T* {
-        return reinterpret_cast<T*>(data + i * size_of(T));
+        return cast(T*)(data + i * size_of(T));
     }
     auto slot(s64 i) const -> const T* {
-        return reinterpret_cast<const T*>(data + i * size_of(T));
+        return cast(const T*)(data + i * size_of(T));
     }
 };
 
@@ -581,7 +581,7 @@ struct Array {
           size(0),
           data(allocate_storage(capacity)) {
         for (s64 index = 0; index < initial_size; ++index) {
-            ::new (static_cast<void*>(data + index)) T(initial_value);
+            ::new (cast(void*)(data + index)) T(initial_value);
             ++size;
         }
     }
@@ -771,13 +771,13 @@ private:
         if (count == 0) return nullptr;
         auto allocation = mem::alloc(size_of(T) * count, align_of(T), allocator);
         kstd_assert(allocation.memory != nullptr, "Array allocation failed");
-        return static_cast<T*>(allocation.memory);
+        return cast(T*)allocation.memory;
     }
 
     auto free_storage(T* pointer, s64 count) -> void {
         if (pointer == nullptr) return;
         ensure_allocator();
-        (void)mem::free(pointer, size_of(T) * count, align_of(T), allocator);
+        cast(void)mem::free(pointer, size_of(T) * count, align_of(T), allocator);
     }
 
     auto destroy_elements() -> void {

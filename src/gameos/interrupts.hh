@@ -360,7 +360,7 @@ auto isr_handle_local_apic_tlb_shootdown() -> void {
 }
 
 extern "C" auto isr_dispatch(Interrupt_Frame* frame) -> void {
-    auto type  = static_cast<Interrupt_Vector_Type>(frame->vector);
+    auto type  = cast(Interrupt_Vector_Type)frame->vector;
     u64  error = frame->error_code;
 
     using enum Interrupt_Vector_Type;
@@ -380,7 +380,7 @@ extern "C" auto isr_dispatch(Interrupt_Frame* frame) -> void {
         default: isr_unimplemented_handler(type, error); break;
     }
 
-    const u8 vector = static_cast<u8>(type);
+    const u8 vector = cast(u8)type;
     const bool is_io_vector = vector >= 32 && vector < 48;
     if (is_io_vector) {
         // Early boot: 8259 still drives ISA IRQs (PIT calibrate).
@@ -396,22 +396,22 @@ extern "C" auto isr_dispatch(Interrupt_Frame* frame) -> void {
 }
 
 auto set_gate(Interrupt_Vector_Type vector_type, auto (*handler_function)() -> void, u8 ist = 0) -> void {
-    auto& gate = table[static_cast<u8>(vector_type)];
+    auto& gate = table[cast(u8)vector_type];
     kstd_debug_assert(gate.selector == gdt::KERNEL_CODE_SEGMENT);
     kstd_debug_assert(gate.type.raw == GATE_PRESENT_RING0_INT.raw);
     kstd_debug_assert(ist <= 7);
 
-    auto handler_address = reinterpret_cast<psize>(handler_function);
-    gate.handler_address_low  = static_cast<u16>(handler_address);
-    gate.handler_address_mid  = static_cast<u16>(handler_address >> 16);
-    gate.handler_address_high = static_cast<u32>(handler_address >> 32);
+    auto handler_address = cast(psize)handler_function;
+    gate.handler_address_low  = cast(u16)handler_address;
+    gate.handler_address_mid  = cast(u16)(handler_address >> 16);
+    gate.handler_address_high = cast(u32)(handler_address >> 32);
     gate.ist                  = ist;
     gate.reserved             = 0;
 }
 
 auto load() -> void {
     interrupt_descriptor_table_register.limit = table.size * size_of(Gate) - 1;
-    interrupt_descriptor_table_register.base  = reinterpret_cast<psize>(&table[0]);
+    interrupt_descriptor_table_register.base  = cast(psize)(&table[0]);
     asm volatile("lidt %0" : : "m"(interrupt_descriptor_table_register));
 }
 

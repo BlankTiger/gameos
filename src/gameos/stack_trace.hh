@@ -69,7 +69,7 @@ auto get_stack_trace_from(Stack_Frame* start_frame, u32 max_frame_count = DEFAUL
         if (frame_index >= skip_frame_count) {
             auto function_name = dwarf::function_name_for_address(frame->rip);
             auto row_result    = dwarf::source_for_address(frame->rip);
-            traces.push_back({ reinterpret_cast<void*>(frame->rip), function_name, row_result.row.file_name, row_result.row.line });
+            traces.push_back({ cast(void*)frame->rip, function_name, row_result.row.file_name, row_result.row.line });
         }
         frame = frame->rbp;
     }

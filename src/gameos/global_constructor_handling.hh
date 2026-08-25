@@ -1,6 +1,6 @@
 #pragma once
 
-#include "kstd/numbers.hh"
+#include "kstd/basic.hh"
 
 using Init_Function = void (*)();
 
@@ -63,7 +63,7 @@ extern "C" auto run_global_constructors() -> void {
 
     for (Init_Function* fn = __ctors_end; fn != __ctors_start;) {
         --fn;
-        if (*fn == nullptr || *fn == reinterpret_cast<Init_Function>(-1)) continue;
+        if (*fn == nullptr || *fn == cast(Init_Function)(-1)) continue;
         (*fn)();
     }
 }
@@ -71,4 +71,3 @@ extern "C" auto run_global_constructors() -> void {
 extern "C" auto run_global_destructors() -> void {
     __cxa_finalize(nullptr);
 }
-

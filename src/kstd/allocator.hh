@@ -121,7 +121,7 @@ force_inline auto realloc(void* pointer, s64 old_size, s64 new_size, s64 alignme
         // @TODO(blanktiger): Transform Allocator_Error into enum_flags an then
         // OR the flags here. Think of how to make it intuitive, cause then you
         // can't just switch on the error to check what happened.
-        (void)free(allocation.memory, new_size, alignment, allocator);
+        cast(void)free(allocation.memory, new_size, alignment, allocator);
         return result(nullptr, error);
     }
 
@@ -186,7 +186,7 @@ struct Temporary_Allocator_State {
     explicit Temporary_Allocator_State(s64 size) : Temporary_Allocator_State(context.allocator, size) {}
 
     Temporary_Allocator_State(void* memory, s64 size)
-        : base(static_cast<u8*>(memory)),
+        : base(cast(u8*)memory),
           current(base),
           end(base + size) {
         kstd_assert(base != nullptr);
@@ -201,7 +201,7 @@ struct Temporary_Allocator_State {
         kstd_assert(allocation.memory != nullptr);
         kstd_assert(allocation.error == Allocator_Error::NONE);
 
-        base    = static_cast<u8*>(allocation.memory);
+        base    = cast(u8*)allocation.memory;
         current = base;
         end     = base + size;
     }
@@ -225,7 +225,7 @@ struct Temporary_Allocator_State {
 
     ~Temporary_Allocator_State() {
         if (backing_allocator.valid() && base != nullptr) {
-            auto error = mem::free(base, static_cast<s64>(end - base), backing_allocator);
+            auto error = mem::free(base, cast(s64)(end - base), backing_allocator);
             kstd_debug_assert(error == Allocator_Error::NONE);
         }
     }
@@ -239,11 +239,11 @@ struct Temporary_Allocator_State {
     }
 
     auto bytes_used() const -> s64 {
-        return static_cast<s64>(current - base);
+        return cast(s64)(current - base);
     }
 
     auto bytes_left() const -> s64 {
-        return static_cast<s64>(end - current);
+        return cast(s64)(end - current);
     }
 
     auto mark() const -> void* {
@@ -252,11 +252,11 @@ struct Temporary_Allocator_State {
 
     auto rewind(const void* mark_point) -> void {
         kstd_assert(mark_point >= base && mark_point <= end);
-        current = const_cast<u8*>(static_cast<const u8*>(mark_point));
+        current = cast(u8*)cast(const u8*)(mark_point);
     }
 
     static auto proc(Allocator_Mode mode, s64 size, s64 alignment, s64 old_size, void* old_memory, void* temporary_allocator_state) -> Allocator_Result {
-        auto* state = static_cast<Temporary_Allocator_State*>(temporary_allocator_state);
+        auto* state = cast(Temporary_Allocator_State*)temporary_allocator_state;
 
         switch (mode) {
             case Allocator_Mode::ALLOCATE: {
@@ -268,7 +268,7 @@ struct Temporary_Allocator_State {
 
                 if (size == 0) return result(nullptr);
 
-                auto* aligned = reinterpret_cast<u8*>(align_up(ptr_addr(state->current), static_cast<psize>(alignment)));
+                auto* aligned = cast(u8*)(align_up(ptr_addr(state->current), cast(psize)alignment));
                 auto* next = aligned + size;
                 if (next < aligned || next > state->end)
                     return result(nullptr, Allocator_Error::OUT_OF_MEMORY);
@@ -295,7 +295,7 @@ struct Temporary_Allocator_State {
             } break;
 
             case Allocator_Mode::FEATURES: {
-                auto* features = static_cast<Allocator_Features*>(old_memory);
+                auto* features = cast(Allocator_Features*)old_memory;
                 if (features != nullptr) *features = FEATURES;
                 else                     return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
 
@@ -361,7 +361,7 @@ struct Arena_Allocator_State {
         kstd_assert(allocation.memory != nullptr);
         kstd_assert(allocation.error == Allocator_Error::NONE);
 
-        memory_base   = static_cast<u8*>(allocation.memory);
+        memory_base   = cast(u8*)allocation.memory;
         current_point = memory_base;
         address_limit = memory_base + allocated;
     }
@@ -370,7 +370,7 @@ struct Arena_Allocator_State {
     Arena_Allocator_State(void* memory, s64 size)
         : backing_allocator({}),
           allocated(size),
-          memory_base(static_cast<u8*>(memory)),
+          memory_base(cast(u8*)memory),
           current_point(memory_base),
           address_limit(memory_base + allocated) {
         kstd_assert(memory != nullptr);
@@ -402,7 +402,7 @@ struct Arena_Allocator_State {
         kstd_debug_assert(error == Allocator_Error::NONE);
 
         allocated     = reserve;
-        memory_base   = static_cast<u8*>(allocation.memory);
+        memory_base   = cast(u8*)allocation.memory;
         current_point = memory_base;
         address_limit = memory_base + allocated;
     }
@@ -416,15 +416,15 @@ struct Arena_Allocator_State {
     }
 
     auto bytes_left() const -> s64 {
-        return static_cast<s64>(address_limit - current_point);
+        return cast(s64)(address_limit - current_point);
     }
 
     auto bytes_used() const -> s64 {
-        return static_cast<s64>(current_point - memory_base);
+        return cast(s64)(current_point - memory_base);
     }
 
     static auto proc(Allocator_Mode mode, s64 size, s64 alignment, s64 old_size, void* old_memory, void* arena_state) -> Allocator_Result {
-        auto* state = static_cast<Arena_Allocator_State*>(arena_state);
+        auto* state = cast(Arena_Allocator_State*)arena_state;
 
         switch (mode) {
             case Allocator_Mode::ALLOCATE: {
@@ -437,7 +437,7 @@ struct Arena_Allocator_State {
                 if (size == 0)
                     return result(nullptr);
 
-                auto* aligned = reinterpret_cast<u8*>(align_up(ptr_addr(state->current_point), static_cast<psize>(alignment)));
+                auto* aligned = cast(u8*)(align_up(ptr_addr(state->current_point), cast(psize)alignment));
                 auto* next = aligned + size;
                 if (next < aligned || next > state->address_limit)
                     return result(nullptr, Allocator_Error::OUT_OF_MEMORY);
@@ -464,7 +464,7 @@ struct Arena_Allocator_State {
             } break;
 
             case Allocator_Mode::FEATURES: {
-                auto* features = static_cast<Allocator_Features*>(old_memory);
+                auto* features = cast(Allocator_Features*)old_memory;
                 if (features != nullptr) *features = FEATURES;
                 else                     return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
 
@@ -532,7 +532,7 @@ struct Debug_Allocator_State {
                 if (record_allocation.memory == nullptr) {
                     // @TODO(blanktiger): Merge errors once they are enum_flags.
                     auto error = free(allocation.memory, size, alignment, state->backing);
-                    (void)error;
+                    cast(void)error;
                     return result(nullptr, Allocator_Error::OUT_OF_MEMORY);
                 }
 
@@ -543,7 +543,7 @@ struct Debug_Allocator_State {
                     .next = state->live_head
                 };
 
-                state->live_head = static_cast<Allocation_Record*>(record_allocation.memory);
+                state->live_head = cast(Allocation_Record*)record_allocation.memory;
                 state->live_count++;
                 return allocation;
             } break;
@@ -571,7 +571,7 @@ struct Debug_Allocator_State {
                         .alignment = alignment,
                         .next      = state->live_head
                     };
-                    state->live_head = static_cast<Allocation_Record*>(record_allocation.memory);
+                    state->live_head = cast(Allocation_Record*)record_allocation.memory;
                     state->live_count++;
                     return allocation;
                 }
@@ -584,7 +584,7 @@ struct Debug_Allocator_State {
 
                     *link = record->next;
                     state->live_count--;
-                    (void)free(record, size_of(Allocation_Record), align_of(Allocation_Record), state->backing);
+                    cast(void)free(record, size_of(Allocation_Record), align_of(Allocation_Record), state->backing);
                     return allocation;
                 }
 
@@ -609,7 +609,7 @@ struct Debug_Allocator_State {
 
                         auto free_result        = free(record->pointer, record->size, record->alignment, state->backing);
                         auto record_free_result = free(record, size_of(Allocation_Record), align_of(Allocation_Record), state->backing);
-                        (void)record_free_result;
+                        cast(void)record_free_result;
                         return result(nullptr, free_result);
                     }
 
@@ -627,14 +627,14 @@ struct Debug_Allocator_State {
             } break;
 
             case Allocator_Mode::INFO: {
-                auto* info = static_cast<Allocator_Info*>(old_memory);
+                auto* info = cast(Allocator_Info*)old_memory;
                 if (info == nullptr)
                     return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
 
                 for (auto* record = state->live_head; record != nullptr; record = record->next) {
                     if (record->pointer == info->pointer) {
-                        info->size      = static_cast<s64>(record->size);
-                        info->alignment = static_cast<s64>(record->alignment);
+                        info->size      = cast(s64)record->size;
+                        info->alignment = cast(s64)record->alignment;
                         return result(nullptr);
                     }
                 }
@@ -649,7 +649,7 @@ struct Debug_Allocator_State {
     }
 
     static auto proc(Allocator_Mode mode, s64 size, s64 alignment, s64 old_size, void* old_memory, void* debug_state) -> Allocator_Result {
-        auto* state = static_cast<Debug_Allocator_State*>(debug_state);
+        auto* state = cast(Debug_Allocator_State*)debug_state;
 
         switch (mode) {
             case Allocator_Mode::ALLOCATE:
@@ -669,7 +669,7 @@ struct Debug_Allocator_State {
             } break;
 
             case Allocator_Mode::FEATURES: {
-                auto* features = static_cast<Allocator_Features*>(old_memory);
+                auto* features = cast(Allocator_Features*)old_memory;
                 if (features == nullptr)
                     return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
 
@@ -694,7 +694,7 @@ struct Null_Allocator_State {
     static auto proc(Allocator_Mode mode, s64 size, s64, s64, void* old_memory, void*) -> Allocator_Result {
         switch (mode) {
             case Allocator_Mode::FEATURES: {
-                auto* features = static_cast<Allocator_Features*>(old_memory);
+                auto* features = cast(Allocator_Features*)old_memory;
                 if (features != nullptr) *features = FEATURES;
                 else                     return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
 
@@ -796,7 +796,7 @@ TEST(Allocator, dispatches_to_state_data) {
         s64 free_alignment = 0;
 
         static auto proc(mem::Allocator_Mode mode, s64, s64 alignment, s64, void*, void* data) -> mem::Allocator_Result {
-            auto* state = static_cast<State*>(data);
+            auto* state = cast(State*)data;
             if (mode == mem::Allocator_Mode::ALLOCATE) state->calls++;
             if (mode == mem::Allocator_Mode::FREE)     state->free_alignment = alignment;
             return {
@@ -857,9 +857,9 @@ TEST(Allocator, realloc_moves_and_preserves_memory) {
 
     ASSERT_NE(resized.memory, nullptr);
     ASSERT_EQ(resized.error, mem::Allocator_Error::NONE);
-    auto* bytes = static_cast<u8*>(resized.memory);
+    auto* bytes = cast(u8*)resized.memory;
     for (usize i = 0; i < 8; ++i)
-        ASSERT_EQ(bytes[i], static_cast<u8>(0xAB));
+        ASSERT_EQ(bytes[i], cast(u8)(0xAB));
     ASSERT_EQ(ptr_addr(resized.memory) % 16, 0);
     ASSERT_EQ(mem::free(resized.memory, 32, 16), mem::Allocator_Error::NONE);
 }
@@ -957,7 +957,7 @@ TEST(Debug_Allocator_State, detects_leaked_allocations) {
         {
             mem::Hosted_Allocator_State hosted{};
             mem::Debug_Allocator_State debug{hosted.get_allocator()};
-            (void)mem::alloc(32, debug.get_allocator());
+            cast(void)mem::alloc(32, debug.get_allocator());
         },
         "Debug_Allocator_State: Leaked allocations."
     );
@@ -969,8 +969,8 @@ TEST(Debug_Allocator_State, detects_double_frees) {
             mem::Hosted_Allocator_State hosted{};
             mem::Debug_Allocator_State debug{hosted.get_allocator()};
             auto allocation = mem::alloc(32, debug.get_allocator());
-            (void)mem::free(allocation.memory, 32, debug.get_allocator());
-            (void)mem::free(allocation.memory, 32, debug.get_allocator());
+            cast(void)mem::free(allocation.memory, 32, debug.get_allocator());
+            cast(void)mem::free(allocation.memory, 32, debug.get_allocator());
         },
         "Debug_Allocator_State: Double free."
     );
@@ -1014,9 +1014,9 @@ TEST(Debug_Allocator_State, tracks_resize_to_new_pointer) {
     ASSERT_NE(resized.memory, allocation.memory);
     ASSERT_EQ(resized.error, mem::Allocator_Error::NONE);
 
-    auto* bytes = static_cast<u8*>(resized.memory);
+    auto* bytes = cast(u8*)resized.memory;
     for (usize i = 0; i < 8; ++i)
-        ASSERT_EQ(bytes[i], static_cast<u8>(0xAB));
+        ASSERT_EQ(bytes[i], cast(u8)(0xAB));
 
     auto info = mem::get_info(resized.memory, debug.get_allocator());
     ASSERT_EQ(info.error, mem::Allocator_Query_Error::NONE);
@@ -1032,7 +1032,7 @@ TEST(Debug_Allocator_State, resize_of_unknown_pointer_asserts) {
             mem::Temporary_Allocator_State backing{256};
             mem::Debug_Allocator_State debug{backing.get_allocator()};
             auto backing_allocation = mem::alloc(16, 16, backing.get_allocator());
-            (void)mem::realloc(backing_allocation.memory, 16, 8, 16, debug.get_allocator());
+            cast(void)mem::realloc(backing_allocation.memory, 16, 8, 16, debug.get_allocator());
         },
         "Debug_Allocator_State: Resize of unknown pointer."
     );
@@ -1042,7 +1042,7 @@ TEST(Null_Allocator_State, alloc_is_unreachable) {
     EXPECT_DEATH(
         {
             mem::Null_Allocator_State null{};
-            (void)mem::alloc(16, null.get_allocator());
+            cast(void)mem::alloc(16, null.get_allocator());
         },
         "Null_Allocator: Operation called."
     );
@@ -1052,7 +1052,7 @@ TEST(Null_Allocator_State, free_is_unreachable) {
     EXPECT_DEATH(
         {
             mem::Null_Allocator_State null{};
-            (void)mem::free(reinterpret_cast<void*>(1), 0, null.get_allocator());
+            cast(void)mem::free(cast(void*)1, 0, null.get_allocator());
         },
         "Null_Allocator: Operation called."
     );
@@ -1105,8 +1105,8 @@ TEST(Arena_Allocator_State, debug_stamps_used_memory_on_reset) {
     ASSERT_NE(allocation.memory, nullptr);
     kstd_memset(allocation.memory, 0x11, 32);
     arena.reset();
-    auto* bytes = static_cast<u8*>(allocation.memory);
-    for (usize i = 0; i < 32; ++i) ASSERT_EQ(bytes[i], static_cast<u8>(0xCC));
+    auto* bytes = cast(u8*)allocation.memory;
+    for (usize i = 0; i < 32; ++i) ASSERT_EQ(bytes[i], cast(u8)(0xCC));
 }
 
 #endif

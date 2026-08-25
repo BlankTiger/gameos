@@ -64,8 +64,8 @@ auto create(const Context& inherited_context) -> Block* {
     kstd_assert(block_allocation.error == mem::Allocator_Error::NONE);
     kstd_assert(image_allocation.error == mem::Allocator_Error::NONE);
 
-    auto* block = static_cast<Block*>(block_allocation.memory);
-    auto* image = static_cast<u8*>(image_allocation.memory);
+    auto* block = cast(Block*)block_allocation.memory;
+    auto* image = cast(u8*)image_allocation.memory;
 
     void* temporary_storage = nullptr;
     if (inherited_context.temporary_state != nullptr) {
@@ -124,10 +124,10 @@ auto activate(Block* block) -> void {
     kstd_assert(block != nullptr);
 
     auto* thread_pointer = ptr_offset(block->allocation, block_size());
-    *reinterpret_cast<psize*>(thread_pointer) = ptr_addr(thread_pointer);
+    *cast(psize*)thread_pointer = ptr_addr(thread_pointer);
 
     auto* block_pointer_storage = ptr_offset(thread_pointer, size_of(psize));
-    *reinterpret_cast<Block**>(block_pointer_storage) = block;
+    *cast(Block**)block_pointer_storage = block;
 
     set_base(thread_pointer);
     context = block->context;
@@ -168,8 +168,8 @@ extern "C" auto __cxa_thread_atexit(
     void*               object,
     void*               dso_handle
 ) -> int {
-    auto* thread_pointer = static_cast<u8*>(base());
-    auto* block = *reinterpret_cast<Block**>(thread_pointer + size_of(psize));
+    auto* thread_pointer = cast(u8*)base();
+    auto* block = *cast(Block**)(thread_pointer + size_of(psize));
     if (block->destructors.size == MAX_DESTRUCTORS) return -1;
 
     block->destructors.push_back({function, object, dso_handle});

@@ -25,7 +25,7 @@
 namespace threads {
 
 using Thread_Procedure = auto (*)(void*) -> void;
-constexpr u32 ANY_CPU = static_cast<u32>(-1);
+constexpr u32 ANY_CPU = cast(u32)(-1);
 
 namespace hidden {
 
@@ -310,7 +310,7 @@ auto yield() -> void {
         kstd_assert(current->state.load(std::memory_order_relaxed) == State::RUNNING);
         kstd_assert(!ready_queue.full());
 
-        u32 handle = static_cast<u32>(current - threads.elements());
+        u32 handle = cast(u32)(current - threads.elements());
 
         current->state.store(State::READY, std::memory_order_relaxed);
         ready_queue.push_back(handle);
@@ -389,14 +389,14 @@ struct Typed_Control {
     bool                                   result_ready = false;
 
     auto result() -> Result_Type* {
-        return reinterpret_cast<Result_Type*>(result_storage);
+        return cast(Result_Type*)result_storage;
     }
 };
 
 template <typename Procedure, typename Result_Type, typename... Arguments>
 auto run_typed_control(void* raw) -> void {
     using Control = Typed_Control<Procedure, Result_Type, Arguments...>;
-    auto& control = *static_cast<Control*>(raw);
+    auto& control = *cast(Control*)raw;
 
     new (control.result_storage) Result_Type(std::apply(
         [&](auto&... arguments) -> Result_Type {
@@ -422,7 +422,7 @@ auto typed_thread_start() -> void {
 template <typename Procedure, typename Result_Type, typename... Arguments>
 auto destroy_typed_control(void* raw) -> void {
     using Control = Typed_Control<Procedure, Result_Type, Arguments...>;
-    auto* control = static_cast<Control*>(raw);
+    auto* control = cast(Control*)raw;
 
     if (control->result_ready)
         control->result()->~Result_Type();
@@ -453,7 +453,7 @@ auto spawn(Procedure procedure, Arguments&&... args) -> Thread_Handle<hidden::Pr
 
     auto storage_allocation = mem::alloc(storage_size, control_alignment, context.allocator);
     auto* storage = storage_allocation.memory;
-    auto* control = static_cast<Control*>(storage);
+    auto* control = cast(Control*)storage;
     kstd_assert(control != nullptr, "Typed thread control allocation failed");
 
     new (control) Control {
@@ -535,7 +535,7 @@ auto join(Thread_Handle<Result_Type> handle) -> Result_Type {
         kstd_assert(thread.typed_result  != nullptr, "Thread has no typed result");
         kstd_assert(thread.typed_destroy != nullptr, "Thread has no typed destructor");
 
-        auto* result = static_cast<Result_Type*>(thread.typed_result);
+        auto* result = cast(Result_Type*)thread.typed_result;
         Result_Type value = std::move(*result);
 
         reclaim(thread);
@@ -570,7 +570,7 @@ auto smoke_test() -> void {
     PUSH_ALLOCATOR(dbg_allocator_state.get_allocator());
 
     const auto smoke_proc = [](void* data) -> void {
-        auto* sum = reinterpret_cast<u32*>(data);
+        auto* sum = cast(u32*)data;
         for (u32 index = 0; index < 100; ++index) {
             *sum += index;
         }
@@ -588,7 +588,7 @@ auto smoke_test() -> void {
     // Verify yielding allows for switching tasks on the same cores.
     {
         const auto yield_test_proc = [](void* u32_id) -> void {
-            auto id = *static_cast<u32*>(u32_id);
+            auto id = *cast(u32*)u32_id;
 
             for (u32 step = 0; step < 3; ++step) {
                 serial::println("yield test task=% step=%", id, step);
@@ -614,7 +614,7 @@ auto smoke_test() -> void {
         } data_a{41, 0}, data_b{82, 0};
 
         const auto tls_test_proc = [](void* raw_data) -> void {
-            auto* data = static_cast<Tls_Test_Data*>(raw_data);
+            auto* data = cast(Tls_Test_Data*)raw_data;
             kstd_assert(smoke_tests::tls_value == 0);
             kstd_assert(smoke_tests::tls_object.value == 7);
             smoke_tests::tls_value = data->value;
