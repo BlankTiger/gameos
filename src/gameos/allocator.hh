@@ -31,7 +31,7 @@ struct Buddy_Allocator_State {
         Allocation_State state;
         u8               reserved[6];
     };
-    static_assert(sizeof(Allocation_Header) == 2 * sizeof(u64));
+    static_assert(size_of(Allocation_Header) == 2 * size_of(u64));
 
     static constexpr usize MIN_ORDER = 12;   // 4 KiB pages.
     static constexpr usize MAX_ORDER = 63;
@@ -120,7 +120,7 @@ struct Buddy_Allocator_State {
 
                 const u64 requested_size      = static_cast<u64>(size);
                 const u64 requested_alignment = static_cast<u64>(alignment);
-                const u64 required_size       = requested_size + requested_alignment + sizeof(Allocation_Header);
+                const u64 required_size       = requested_size + requested_alignment + size_of(Allocation_Header);
                 if (required_size < requested_size)
                     return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
 
@@ -145,13 +145,13 @@ struct Buddy_Allocator_State {
                 }
 
                 const u64 block_size = block_size_for_order(order);
-                const u64 user_ptr = align_up(block_base + sizeof(Allocation_Header), requested_alignment);
+                const u64 user_ptr = align_up(block_base + size_of(Allocation_Header), requested_alignment);
                 if (user_ptr + requested_size < user_ptr || user_ptr + requested_size > block_base + block_size) {
                     state->push_free_block(block_base, order);
                     return result(nullptr, Allocator_Error::OUT_OF_MEMORY);
                 }
 
-                auto* header = reinterpret_cast<Allocation_Header*>(user_ptr - sizeof(Allocation_Header));
+                auto* header = reinterpret_cast<Allocation_Header*>(user_ptr - size_of(Allocation_Header));
                 new (header) Allocation_Header {
                     .block_base = block_base,
                     .order      = static_cast<u8>(order),
@@ -165,9 +165,9 @@ struct Buddy_Allocator_State {
                 if (old_memory == nullptr) return result(nullptr);
 
                 auto scoped_lock = state->lock.scoped_irq_lock();
-                auto* header_pointer = reinterpret_cast<Allocation_Header*>(ptr_addr(old_memory) - sizeof(Allocation_Header));
+                auto* header_pointer = reinterpret_cast<Allocation_Header*>(ptr_addr(old_memory) - size_of(Allocation_Header));
                 Allocation_Header header{};
-                kstd_memcpy(&header, header_pointer, sizeof(header));
+                kstd_memcpy(&header, header_pointer, size_of(header));
                 kstd_assert(header.state == Allocation_State::LIVE, "Buddy allocator: double free");
                 header_pointer->state = Allocation_State::FREED;
 
@@ -204,7 +204,7 @@ struct Buddy_Allocator_State {
 
                 auto scoped_lock = state->lock.scoped_irq_lock();
                 Allocation_Header header{};
-                kstd_memcpy(&header, reinterpret_cast<void*>(ptr_addr(info->pointer) - sizeof(Allocation_Header)), sizeof(header));
+                kstd_memcpy(&header, reinterpret_cast<void*>(ptr_addr(info->pointer) - size_of(Allocation_Header)), size_of(header));
                 info->size      = static_cast<s64>(block_size_for_order(header.order));
                 info->alignment = static_cast<s64>(mem::PAGE_SIZE);
 

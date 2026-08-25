@@ -47,7 +47,7 @@ struct RSDP {
     u8   reserved[3];
 } __attribute__((packed));
 
-static_assert(sizeof(RSDP) == 36);
+static_assert(size_of(RSDP) == 36);
 
 struct SDT_Header {
     char signature[4];
@@ -61,7 +61,7 @@ struct SDT_Header {
     u32  creator_revision;
 } __attribute__((packed));
 
-static_assert(sizeof(SDT_Header) == 36);
+static_assert(size_of(SDT_Header) == 36);
 
 // MADT Multiple APIC Flags.
 union MADT_Flags {
@@ -72,7 +72,7 @@ union MADT_Flags {
     u32 raw;
 } __attribute__((packed));
 
-static_assert(sizeof(MADT_Flags) == 4);
+static_assert(size_of(MADT_Flags) == 4);
 
 // Local APIC / Local x2APIC Processor Local APIC Flags.
 union Local_APIC_Flags {
@@ -84,7 +84,7 @@ union Local_APIC_Flags {
     u32 raw;
 } __attribute__((packed));
 
-static_assert(sizeof(Local_APIC_Flags) == 4);
+static_assert(size_of(Local_APIC_Flags) == 4);
 
 enum struct Polarity : u16 {
     BUS_DEFAULT = 0b00,
@@ -110,7 +110,7 @@ union MPS_INTI_Flags {
     u16 raw;
 } __attribute__((packed));
 
-static_assert(sizeof(MPS_INTI_Flags) == 2);
+static_assert(size_of(MPS_INTI_Flags) == 2);
 
 struct MADT {
     SDT_Header header;
@@ -118,7 +118,7 @@ struct MADT {
     MADT_Flags flags;
 } __attribute__((packed));
 
-static_assert(sizeof(MADT) == 44);
+static_assert(size_of(MADT) == 44);
 
 enum struct MADT_Entry_Type : u8 {
     LOCAL_APIC   = 0,
@@ -139,7 +139,7 @@ struct MADT_Local_APIC {
     Local_APIC_Flags  flags;
 } __attribute__((packed));
 
-static_assert(sizeof(MADT_Local_APIC) == 8);
+static_assert(size_of(MADT_Local_APIC) == 8);
 
 struct MADT_IOAPIC {
     MADT_Entry_Header header;
@@ -149,7 +149,7 @@ struct MADT_IOAPIC {
     u32               gsi_base;
 } __attribute__((packed));
 
-static_assert(sizeof(MADT_IOAPIC) == 12);
+static_assert(size_of(MADT_IOAPIC) == 12);
 
 struct MADT_ISO {
     MADT_Entry_Header header;
@@ -159,7 +159,7 @@ struct MADT_ISO {
     MPS_INTI_Flags    flags;
 } __attribute__((packed));
 
-static_assert(sizeof(MADT_ISO) == 10);
+static_assert(size_of(MADT_ISO) == 10);
 
 struct MADT_Local_X2APIC {
     MADT_Entry_Header header;
@@ -169,7 +169,7 @@ struct MADT_Local_X2APIC {
     u32               acpi_processor_uid;
 } __attribute__((packed));
 
-static_assert(sizeof(MADT_Local_X2APIC) == 16);
+static_assert(size_of(MADT_Local_X2APIC) == 16);
 
 struct CPU_Desc {
     u32  apic_id;
@@ -231,7 +231,7 @@ auto find_rsdp_in_range(u64 start, u64 end) -> const RSDP* {
 
 auto find_rsdp_bios_scan() -> const RSDP* {
     u16 extended_bios_data_area_segment = 0;
-    kstd_memcpy(&extended_bios_data_area_segment, addr_as<const u8*>(0x40E), sizeof(extended_bios_data_area_segment));
+    kstd_memcpy(&extended_bios_data_area_segment, addr_as<const u8*>(0x40E), size_of(extended_bios_data_area_segment));
     // Word at 0x40E is a real-mode segment, not a byte address.
     // One segment unit is 16 bytes, so base = segment * 16.
     const u64 extended_bios_data_area_base = static_cast<u64>(extended_bios_data_area_segment) << 4;
@@ -284,7 +284,7 @@ auto find_rsdp(const boot::Multiboot2_Info* mbi) -> const RSDP* {
 
 auto sdt_valid(const SDT_Header* header) -> bool {
     if (header == nullptr) return false;
-    if (header->length < sizeof(SDT_Header)) return false;
+    if (header->length < size_of(SDT_Header)) return false;
     return checksum_ok(header, header->length);
 }
 
@@ -292,9 +292,9 @@ auto find_madt_in_rsdt(const SDT_Header* rsdt) -> const MADT* {
     if (!sdt_valid(rsdt)) return nullptr;
     if (!kstd_memeq(rsdt->signature, RSDT_SIGNATURE)) return nullptr;
 
-    const usize entry_bytes = rsdt->length - sizeof(SDT_Header);
-    const usize entry_count = entry_bytes / sizeof(u32);
-    const auto* entries = addr_as<const u32*>(ptr_addr(rsdt) + sizeof(SDT_Header));
+    const usize entry_bytes = rsdt->length - size_of(SDT_Header);
+    const usize entry_count = entry_bytes / size_of(u32);
+    const auto* entries = addr_as<const u32*>(ptr_addr(rsdt) + size_of(SDT_Header));
 
     for (usize i = 0; i < entry_count; ++i) {
         const auto* header = addr_as<const SDT_Header*>(entries[i]);
@@ -310,9 +310,9 @@ auto find_madt_in_xsdt(const SDT_Header* xsdt) -> const MADT* {
     if (!sdt_valid(xsdt)) return nullptr;
     if (!kstd_memeq(xsdt->signature, XSDT_SIGNATURE)) return nullptr;
 
-    const usize entry_bytes = xsdt->length - sizeof(SDT_Header);
-    const usize entry_count = entry_bytes / sizeof(u64);
-    const auto* entries = addr_as<const u64*>(ptr_addr(xsdt) + sizeof(SDT_Header));
+    const usize entry_bytes = xsdt->length - size_of(SDT_Header);
+    const usize entry_count = entry_bytes / size_of(u64);
+    const auto* entries = addr_as<const u64*>(ptr_addr(xsdt) + size_of(SDT_Header));
 
     for (usize i = 0; i < entry_count; ++i) {
         const auto* header = addr_as<const SDT_Header*>(entries[i]);
@@ -355,14 +355,14 @@ auto push_cpu(MADT_Info& info, u32 apic_id, u32 acpi_id, bool enabled) -> void {
 
 auto parse_madt_entries(const MADT* table, MADT_Info& info) -> void {
     const auto* bytes     = reinterpret_cast<const u8*>(table);
-    const auto* entry     = bytes + sizeof(MADT);
+    const auto* entry     = bytes + size_of(MADT);
     const auto* table_end = bytes + table->header.length;
 
-    while (entry + sizeof(MADT_Entry_Header) <= table_end) {
+    while (entry + size_of(MADT_Entry_Header) <= table_end) {
         const auto* header = reinterpret_cast<const MADT_Entry_Header*>(entry);
         const u8    length = header->length;
 
-        if (length < sizeof(MADT_Entry_Header)) {
+        if (length < size_of(MADT_Entry_Header)) {
             serial::println("MADT: corrupt entry length < 2");
             break;
         }
@@ -374,13 +374,13 @@ auto parse_madt_entries(const MADT* table, MADT_Info& info) -> void {
         using enum MADT_Entry_Type;
         switch (static_cast<MADT_Entry_Type>(header->type)) {
             case LOCAL_APIC: {
-                if (length < sizeof(MADT_Local_APIC)) break;
+                if (length < size_of(MADT_Local_APIC)) break;
                 const auto* e = reinterpret_cast<const MADT_Local_APIC*>(entry);
                 push_cpu(info, e->apic_id, e->acpi_processor_uid, e->flags.enabled);
             } break;
 
             case IOAPIC: {
-                if (length < sizeof(MADT_IOAPIC)) break;
+                if (length < size_of(MADT_IOAPIC)) break;
 
                 const auto* e = reinterpret_cast<const MADT_IOAPIC*>(entry);
                 info.ioapics.push_back({
@@ -391,7 +391,7 @@ auto parse_madt_entries(const MADT* table, MADT_Info& info) -> void {
             } break;
 
             case ISO: {
-                if (length < sizeof(MADT_ISO)) break;
+                if (length < size_of(MADT_ISO)) break;
 
                 const auto* e = reinterpret_cast<const MADT_ISO*>(entry);
                 info.overrides.push_back({
@@ -402,7 +402,7 @@ auto parse_madt_entries(const MADT* table, MADT_Info& info) -> void {
             } break;
 
             case LOCAL_X2APIC: {
-                if (length < sizeof(MADT_Local_X2APIC)) break;
+                if (length < size_of(MADT_Local_X2APIC)) break;
                 const auto* e = reinterpret_cast<const MADT_Local_X2APIC*>(entry);
                 push_cpu(info, e->x2apic_id, e->acpi_processor_uid, e->flags.enabled);
             } break;

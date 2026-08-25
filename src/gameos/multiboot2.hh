@@ -45,7 +45,7 @@ struct Multiboot2_Tag {
     }
 
     auto payload() const -> const void* {
-        return reinterpret_cast<const void*>(ptr_addr(this) + sizeof(*this));
+        return reinterpret_cast<const void*>(ptr_addr(this) + size_of(*this));
     }
 
     template <typename T>
@@ -63,7 +63,7 @@ struct Multiboot2_Info {
     u32 reserved;
 
     auto first_tag() const -> const Multiboot2_Tag* {
-        return reinterpret_cast<const Multiboot2_Tag*>(ptr_addr(this) + sizeof(*this));
+        return reinterpret_cast<const Multiboot2_Tag*>(ptr_addr(this) + size_of(*this));
     }
 
     auto end_tag() const -> const Multiboot2_Tag* {
@@ -79,7 +79,7 @@ struct Multiboot2_Memory_Map_Tag {
     u32 entry_version;
 
     auto first_entry() const -> const Multiboot2_Memory_Map_Entry* {
-        return reinterpret_cast<const Multiboot2_Memory_Map_Entry*>(ptr_addr(this) + sizeof(*this));
+        return reinterpret_cast<const Multiboot2_Memory_Map_Entry*>(ptr_addr(this) + size_of(*this));
     }
 
     auto end_entry() const -> const Multiboot2_Memory_Map_Entry* {

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>
+
 #include "numbers.hh"
 
 #define GAMEOS 1
@@ -28,6 +30,12 @@
 #define NAME_CONCAT_IMPL(x, y) x##y
 #define NAME_CONCAT(x, y) NAME_CONCAT_IMPL(x, y)
 #define DEFER_UNIQ(prefix) NAME_CONCAT(prefix, __COUNTER__)
+
+#define cast(type) (type)
+
+#define size_of(value) cast(isize)sizeof(value)
+#define align_of(value) cast(isize)alignof(value)
+#define offset_of(type, member) cast(isize)offsetof(type, member)
 
 template <typename F>
 struct Defer {

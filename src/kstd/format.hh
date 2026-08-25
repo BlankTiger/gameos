@@ -535,7 +535,7 @@ struct Capture_Backend {
     s64   length      = 0;
 
     auto put_char(char c) -> void {
-        if (length + 1 < sizeof(buffer)) buffer[length++] = c;
+        if (length + 1 < size_of(buffer)) buffer[length++] = c;
     }
 
     auto new_line() -> void { put_char('\n'); }
@@ -618,7 +618,7 @@ struct Owned_Format {
     auto format() const -> string {
         constexpr usize n = 5;
         // Can't include string_builder.hh here..
-        auto* data = static_cast<char*>(mem::alloc(n, alignof(char)).memory);
+        auto* data = static_cast<char*>(mem::alloc(n, align_of(char)).memory);
         data[0] = 'o';
         data[1] = 'w';
         data[2] = 'n';

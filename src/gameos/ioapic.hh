@@ -144,7 +144,7 @@ auto read_redirection_entry(u32 pin) -> Redirection_Entry {
 
 template <typename Register>
 auto read_register() -> Register {
-    static_assert(sizeof(Register) == sizeof(u32));
+    static_assert(size_of(Register) == size_of(u32));
 
     using namespace hidden;
 

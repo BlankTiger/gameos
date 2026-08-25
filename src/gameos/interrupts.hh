@@ -44,7 +44,7 @@ union Gate_Type_Attributes {
     u8 raw;
 } __attribute__((packed));
 
-static_assert(sizeof(Gate_Type_Attributes) == 1);
+static_assert(size_of(Gate_Type_Attributes) == 1);
 
 constexpr Gate_Type_Attributes GATE_PRESENT_RING0_INT = {
     .gate_type                  = 0xE,
@@ -63,14 +63,14 @@ struct Gate {
     u32                  reserved = 0;
 } __attribute__((packed));
 
-static_assert(sizeof(Gate) == 16);
+static_assert(size_of(Gate) == 16);
 
 struct Interrupt_Descriptor_Table_Register {
     u16   limit;
     psize base;
 } __attribute__((packed));
 
-static_assert(sizeof(Interrupt_Descriptor_Table_Register) == 10);
+static_assert(size_of(Interrupt_Descriptor_Table_Register) == 10);
 
 constexpr auto NUM_VECTORS = 256;
 inline Static_Array<Gate, NUM_VECTORS>     table;
@@ -410,7 +410,7 @@ auto set_gate(Interrupt_Vector_Type vector_type, auto (*handler_function)() -> v
 }
 
 auto load() -> void {
-    interrupt_descriptor_table_register.limit = table.size * sizeof(Gate) - 1;
+    interrupt_descriptor_table_register.limit = table.size * size_of(Gate) - 1;
     interrupt_descriptor_table_register.base  = reinterpret_cast<psize>(&table[0]);
     asm volatile("lidt %0" : : "m"(interrupt_descriptor_table_register));
 }

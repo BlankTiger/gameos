@@ -396,8 +396,8 @@ force_inline auto swap_buffers() -> void {
     kstd_memcpy(front_buffer.pixels.data, current.back_buffer.data, front_buffer.pixels.size_in_bytes);
     ++frame_number;
     auto& next = current_frame();
-    kstd_memset32(next.back_buffer.data, 0, next.back_buffer.size_in_bytes / sizeof(Pixel));
-    kstd_memset32(next.depth_buffer.data, DEPTH_FAR, next.depth_buffer.size_in_bytes / sizeof(Depth));
+    kstd_memset32(next.back_buffer.data, 0, next.back_buffer.size_in_bytes / size_of(Pixel));
+    kstd_memset32(next.depth_buffer.data, DEPTH_FAR, next.depth_buffer.size_in_bytes / size_of(Depth));
 }
 
 [[nodiscard]] auto initialize(const boot::Multiboot2_Info* mbi) -> bool {
@@ -415,7 +415,7 @@ force_inline auto swap_buffers() -> void {
         .height = framebuffer_tag->framebuffer_height,
         .bits_per_pixel = framebuffer_tag->framebuffer_bpp,
         .type = framebuffer_tag->framebuffer_type,
-        .stride = framebuffer_tag->framebuffer_pitch / sizeof(u32),
+        .stride = framebuffer_tag->framebuffer_pitch / size_of(u32),
     };
     kstd_assert(front_buffer.bits_per_pixel == 32, "Only 32BPP supported.");
     kstd_assert(GFX_PIXEL_COUNT == front_buffer.width * front_buffer.height);
@@ -423,11 +423,11 @@ force_inline auto swap_buffers() -> void {
     kstd_assert(!(framebuffer_fmt.red_pos == 0 && framebuffer_fmt.green_pos == 0 && framebuffer_fmt.blue_pos == 0),
                 "Framebuffer_Format was not initialized");
 
-    static_assert(sizeof(Pixel) == sizeof(u32));
-    static_assert(sizeof(Depth) == sizeof(u32));
+    static_assert(size_of(Pixel) == size_of(u32));
+    static_assert(size_of(Depth) == size_of(u32));
     for (auto& frame : frames) {
-        kstd_memset32(frame.back_buffer.data, 0, frame.back_buffer.size_in_bytes / sizeof(Pixel));
-        kstd_memset32(frame.depth_buffer.data, DEPTH_FAR, frame.depth_buffer.size_in_bytes / sizeof(Depth));
+        kstd_memset32(frame.back_buffer.data, 0, frame.back_buffer.size_in_bytes / size_of(Pixel));
+        kstd_memset32(frame.depth_buffer.data, DEPTH_FAR, frame.depth_buffer.size_in_bytes / size_of(Depth));
         frame.arena.reset();
     }
     kstd_memcpy(front_buffer.pixels.data, frames[0].back_buffer.data, front_buffer.pixels.size_in_bytes);
@@ -460,7 +460,7 @@ auto clear(Color color) -> void {
         for (u32 x = 0; x < width(); ++x)
             set_pixel(x, y, color, DEPTH_FAR);
     auto& depth_buffer = current_frame().depth_buffer;
-    kstd_memset32(depth_buffer.data, DEPTH_FAR, depth_buffer.size_in_bytes / sizeof(Depth));
+    kstd_memset32(depth_buffer.data, DEPTH_FAR, depth_buffer.size_in_bytes / size_of(Depth));
 }
 
 //

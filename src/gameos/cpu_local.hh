@@ -36,7 +36,7 @@ struct Core_Info {
 #define CPU_LOCAL_FPU_IRQ_SAVE_OFFSET 32
 #define CPU_LOCAL_ASM_STR_HELPER(x) #x
 #define CPU_LOCAL_ASM_STR(x) CPU_LOCAL_ASM_STR_HELPER(x)
-static_assert(offsetof(Core_Info, fpu_irq_save) == CPU_LOCAL_FPU_IRQ_SAVE_OFFSET);
+static_assert(offset_of(Core_Info, fpu_irq_save) == CPU_LOCAL_FPU_IRQ_SAVE_OFFSET);
 
 force_inline auto current() -> Core_Info& {
     Core_Info* self;

@@ -263,7 +263,7 @@ auto resolve_strx(
 ) -> string {
     auto section_offset = normalize_section_offset(debug_str_offsets_bytes, str_offsets_base);
     Byte_Reader reader(debug_str_offsets_bytes);
-    auto skip_ok = reader.skip(section_offset + index * sizeof(u32));
+    auto skip_ok = reader.skip(section_offset + index * size_of(u32));
     kstd_assert(skip_ok, "dwarf: strx index out of range");
 
     auto [str_offset, str_offset_ok] = reader.read_u32();
@@ -743,7 +743,7 @@ auto parse_subprograms(Byte_Reader& debug_info, Sections& sections) -> Parse_Com
 
         auto compilation_unit_start = debug_info.current_offset;
         auto header                 = parse_compilation_unit_header(debug_info);
-        auto compilation_unit_end   = compilation_unit_start + sizeof(u32) + header.length;
+        auto compilation_unit_end   = compilation_unit_start + size_of(u32) + header.length;
 
         auto abbreviation_offset = normalize_section_offset(
             sections.debug_abbrev_bytes,
@@ -1025,7 +1025,7 @@ auto parse_line_table(const Sections& sections, u32 debug_line_offset, usize pre
     const auto unit_start = debug_line.current_offset;
     const auto header     = parse_debug_line_header(debug_line, sections);
 
-    auto payload_start = unit_start + sizeof(u32);
+    auto payload_start = unit_start + size_of(u32);
     kstd_assert(payload_start <= debug_line.size);
     kstd_assert(header.unit_length <= debug_line.size - payload_start);
 

@@ -19,7 +19,7 @@ force_inline auto kstd_memeq(const void* a, const void* b, s64 length) -> bool {
 
 template <typename T, usize N>
 force_inline auto kstd_memeq(const void* bytes, const T (&array)[N]) -> bool {
-    return kstd_memcmp(bytes, array, sizeof(T) * N) == 0;
+    return kstd_memcmp(bytes, array, size_of(T) * N) == 0;
 }
 
 #if OS == GAMEOS

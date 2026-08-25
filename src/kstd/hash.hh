@@ -27,17 +27,17 @@ auto sdbm_hash(const void* data, s64 size, u32 hash = HASH_INIT) -> u32 {
 template <typename Float_Type>
 auto sdbm_float_hash(const Float_Type* data, s64 count, u32 hash = HASH_INIT) -> u32 {
     static_assert(std::is_floating_point_v<Float_Type>);
-    static_assert(sizeof(Float_Type) == sizeof(u32) || sizeof(Float_Type) == sizeof(u64));
+    static_assert(size_of(Float_Type) == size_of(u32) || size_of(Float_Type) == size_of(u64));
 
     for (s64 i = 0; i < count; ++i) {
-        if constexpr (sizeof(Float_Type) == sizeof(u32)) {
+        if constexpr (size_of(Float_Type) == size_of(u32)) {
             auto bits = std::bit_cast<u32>(data[i]);
             if (bits == 0x80000000) bits = 0;
-            hash = sdbm_hash(&bits, sizeof(bits), hash);
+            hash = sdbm_hash(&bits, size_of(bits), hash);
         } else {
             auto bits = std::bit_cast<u64>(data[i]);
             if (bits == 0x8000000000000000) bits = 0;
-            hash = sdbm_hash(&bits, sizeof(bits), hash);
+            hash = sdbm_hash(&bits, size_of(bits), hash);
         }
     }
 
@@ -69,7 +69,7 @@ auto compute(T& value) -> u32 {
         auto hash_value = fnv1a_hash(value.data, value.size);
         return static_cast<u32>(hash_value ^ (hash_value >> 32));
     } else if constexpr (std::is_floating_point_v<Value_Type>) {
-        return sdbm_hash(&value, sizeof(value));
+        return sdbm_hash(&value, size_of(value));
     } else if constexpr (std::is_enum_v<Value_Type>) {
         using Underlying_Type = std::underlying_type_t<Value_Type>;
         return static_cast<u32>(knuth_hash(static_cast<u64>(static_cast<Underlying_Type>(value))) >> 32);

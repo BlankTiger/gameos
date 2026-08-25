@@ -51,7 +51,7 @@ union IA32_Apic_Base_Model_Specific_Register {
     u64 raw;
 } __attribute__((packed));
 
-static_assert(sizeof(IA32_Apic_Base_Model_Specific_Register) == 8);
+static_assert(size_of(IA32_Apic_Base_Model_Specific_Register) == 8);
 
 // At Register_Offset::ID
 union Identification_Register {
@@ -62,7 +62,7 @@ union Identification_Register {
     u32 raw;
 } __attribute__((packed));
 
-static_assert(sizeof(Identification_Register) == 4);
+static_assert(size_of(Identification_Register) == 4);
 
 // At Register_Offset::VERSION
 union Version_Register {
@@ -76,7 +76,7 @@ union Version_Register {
     u32 raw;
 } __attribute__((packed));
 
-static_assert(sizeof(Version_Register) == 4);
+static_assert(size_of(Version_Register) == 4);
 
 // At Register_Offset::TASK_PRIORITY
 union Task_Priority_Register {
@@ -88,7 +88,7 @@ union Task_Priority_Register {
     u32 raw;
 } __attribute__((packed));
 
-static_assert(sizeof(Task_Priority_Register) == 4);
+static_assert(size_of(Task_Priority_Register) == 4);
 
 // At Register_Offset::SPURIOUS_INTERRUPT_VECTOR
 union Spurious_Interrupt_Vector_Register {
@@ -103,7 +103,7 @@ union Spurious_Interrupt_Vector_Register {
     u32 raw;
 } __attribute__((packed));
 
-static_assert(sizeof(Spurious_Interrupt_Vector_Register) == 4);
+static_assert(size_of(Spurious_Interrupt_Vector_Register) == 4);
 
 enum struct Timer_Mode : u32 {
     ONE_SHOT                   = 0b00,
@@ -125,7 +125,7 @@ union Local_Vector_Table_Timer_Register {
     u32 raw;
 } __attribute__((packed));
 
-static_assert(sizeof(Local_Vector_Table_Timer_Register) == 4);
+static_assert(size_of(Local_Vector_Table_Timer_Register) == 4);
 
 enum struct Delivery_Mode : u32 {
     FIXED                       = 0b000,
@@ -163,7 +163,7 @@ union Local_Vector_Table_Lint_Register {
     u32 raw;
 } __attribute__((packed));
 
-static_assert(sizeof(Local_Vector_Table_Lint_Register) == 4);
+static_assert(size_of(Local_Vector_Table_Lint_Register) == 4);
 
 // Local Vector Table error entry at offset 0x370.
 union Local_Vector_Table_Error_Register {
@@ -178,7 +178,7 @@ union Local_Vector_Table_Error_Register {
     u32 raw;
 } __attribute__((packed));
 
-static_assert(sizeof(Local_Vector_Table_Error_Register) == 4);
+static_assert(size_of(Local_Vector_Table_Error_Register) == 4);
 
 //
 // At Register_Offset::TIMER_DIVIDE_CONFIGURATION
@@ -196,7 +196,7 @@ union Timer_Divide_Configuration_Register {
     u32 raw;
 } __attribute__((packed));
 
-static_assert(sizeof(Timer_Divide_Configuration_Register) == 4);
+static_assert(size_of(Timer_Divide_Configuration_Register) == 4);
 
 // divide_select_high:low = 0b011 selects divide by 16.
 constexpr Timer_Divide_Configuration_Register TIMER_DIVIDE_BY_16 = {
@@ -240,7 +240,7 @@ union Interrupt_Command_Register_Low {
     u32 raw;
 } __attribute__((packed));
 
-static_assert(sizeof(Interrupt_Command_Register_Low) == 4);
+static_assert(size_of(Interrupt_Command_Register_Low) == 4);
 
 // At Register_Offset::INTERRUPT_COMMAND_HIGH (xAPIC).
 union Interrupt_Command_Register_High {
@@ -251,7 +251,7 @@ union Interrupt_Command_Register_High {
     u32 raw;
 } __attribute__((packed));
 
-static_assert(sizeof(Interrupt_Command_Register_High) == 4);
+static_assert(size_of(Interrupt_Command_Register_High) == 4);
 
 namespace hidden {
     inline volatile u32* memory_mapped_registers = nullptr;

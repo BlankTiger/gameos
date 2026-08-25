@@ -48,7 +48,7 @@ force_inline auto call_allocator(Allocator allocator, Allocator_Mode mode, s64 s
     return allocator.proc(mode, size, alignment, old_size, old_memory, allocator.data);
 }
 
-force_inline auto alloc(s64 size, s64 alignment = alignof(std::max_align_t), Allocator allocator = {}) -> Allocator_Result {
+force_inline auto alloc(s64 size, s64 alignment = align_of(std::max_align_t), Allocator allocator = {}) -> Allocator_Result {
     if (size < 0)
         return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
 
@@ -60,7 +60,7 @@ force_inline auto alloc(s64 size, s64 alignment = alignof(std::max_align_t), All
 }
 
     force_inline auto alloc(s64 size, Allocator allocator) -> Allocator_Result {
-    return alloc(size, alignof(std::max_align_t), allocator);
+    return alloc(size, align_of(std::max_align_t), allocator);
 }
 
 force_inline auto free(void* pointer, s64 size, s64 alignment, Allocator allocator = {}) -> Allocator_Error {
@@ -319,7 +319,7 @@ inline Temporary_Allocator_State temporary_allocator_state{};
 // @Important: Don't use the global temporary_allocator_state directly in the
 // functions below. They are meant to work with the one set in the context.
 
-force_inline auto talloc(s64 size, s64 alignment = alignof(std::max_align_t)) -> void* {
+force_inline auto talloc(s64 size, s64 alignment = align_of(std::max_align_t)) -> void* {
     auto allocation = alloc(size, alignment, context.temporary_allocator);
     kstd_assert(allocation.memory != nullptr, "Temporary allocator exhausted.");
     return allocation.memory;
@@ -528,7 +528,7 @@ struct Debug_Allocator_State {
                     return allocation;
 
                 // @TODO(blanktiger): Merge this with the original allocation.
-                auto record_allocation = alloc(sizeof(Allocation_Record), alignof(Allocation_Record), state->backing);
+                auto record_allocation = alloc(size_of(Allocation_Record), align_of(Allocation_Record), state->backing);
                 if (record_allocation.memory == nullptr) {
                     // @TODO(blanktiger): Merge errors once they are enum_flags.
                     auto error = free(allocation.memory, size, alignment, state->backing);
@@ -561,7 +561,7 @@ struct Debug_Allocator_State {
                     if (allocation.memory == nullptr)
                         return allocation;
 
-                    auto record_allocation = alloc(sizeof(Allocation_Record), alignof(Allocation_Record), state->backing);
+                    auto record_allocation = alloc(size_of(Allocation_Record), align_of(Allocation_Record), state->backing);
                     if (record_allocation.memory == nullptr)
                         return result(nullptr, Allocator_Error::OUT_OF_MEMORY);
 
@@ -584,7 +584,7 @@ struct Debug_Allocator_State {
 
                     *link = record->next;
                     state->live_count--;
-                    (void)free(record, sizeof(Allocation_Record), alignof(Allocation_Record), state->backing);
+                    (void)free(record, size_of(Allocation_Record), align_of(Allocation_Record), state->backing);
                     return allocation;
                 }
 
@@ -608,7 +608,7 @@ struct Debug_Allocator_State {
                         state->live_count--;
 
                         auto free_result        = free(record->pointer, record->size, record->alignment, state->backing);
-                        auto record_free_result = free(record, sizeof(Allocation_Record), alignof(Allocation_Record), state->backing);
+                        auto record_free_result = free(record, size_of(Allocation_Record), align_of(Allocation_Record), state->backing);
                         (void)record_free_result;
                         return result(nullptr, free_result);
                     }
@@ -811,7 +811,7 @@ TEST(Allocator, dispatches_to_state_data) {
     } state;
 
     PUSH_ALLOCATOR(state.get_allocator());
-    auto allocation = mem::alloc(16, alignof(u64));
+    auto allocation = mem::alloc(16, align_of(u64));
 
     ASSERT_EQ(allocation.memory, &state);
     ASSERT_EQ(state.calls, 1);

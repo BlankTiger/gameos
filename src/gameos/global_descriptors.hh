@@ -48,7 +48,7 @@ struct Segment_Descriptor {
     u8 base_high;
 } __attribute__((packed));
 
-static_assert(sizeof(Segment_Descriptor) == 8);
+static_assert(size_of(Segment_Descriptor) == 8);
 static_assert(std::bit_cast<u64>(Segment_Descriptor{}) == 0);
 
 constexpr Segment_Descriptor KERNEL_CODE_SEGMENT_DESCRIPTOR = {
@@ -111,7 +111,7 @@ struct Task_State_Segment {
     u16 iomap_base;
 } __attribute__((packed));
 
-static_assert(sizeof(Task_State_Segment) == 104);
+static_assert(size_of(Task_State_Segment) == 104);
 
 // 16-byte system descriptor (occupies two GDT slots).
 struct Task_State_Segment_Descriptor {
@@ -135,14 +135,14 @@ struct Task_State_Segment_Descriptor {
     u32 reserved;
 } __attribute__((packed));
 
-static_assert(sizeof(Task_State_Segment_Descriptor) == 16);
+static_assert(size_of(Task_State_Segment_Descriptor) == 16);
 
 struct Global_Descriptor_Table_Register {
     u16   limit;
     psize base;
 } __attribute__((packed));
 
-static_assert(sizeof(Global_Descriptor_Table_Register) == 10);
+static_assert(size_of(Global_Descriptor_Table_Register) == 10);
 
 struct Global_Descriptor_Table {
     Segment_Descriptor null{};
@@ -151,7 +151,7 @@ struct Global_Descriptor_Table {
     Task_State_Segment_Descriptor tss{};
 } __attribute__((packed));
 
-static_assert(sizeof(Global_Descriptor_Table) == 40);
+static_assert(size_of(Global_Descriptor_Table) == 40);
 
 namespace hidden {
     constexpr usize IST1_STACK_SIZE = 4 * 1024;
@@ -170,7 +170,7 @@ constexpr u16 TASK_STATE_SEGMENT  = 0x18;
 
 auto make_tss_descriptor(Task_State_Segment* tss_ptr) -> Task_State_Segment_Descriptor {
     auto base  = reinterpret_cast<u64>(tss_ptr);
-    auto limit = static_cast<u32>(sizeof(Task_State_Segment) - 1);
+    auto limit = static_cast<u32>(size_of(Task_State_Segment) - 1);
 
     return Task_State_Segment_Descriptor{
         .limit_low    = static_cast<u16>(limit),
@@ -195,13 +195,13 @@ auto initialize() -> void {
     using namespace hidden;
 
     tss.ist1       = reinterpret_cast<u64>(ist1_stack + IST1_STACK_SIZE);
-    tss.iomap_base = static_cast<u16>(sizeof(Task_State_Segment));
+    tss.iomap_base = static_cast<u16>(size_of(Task_State_Segment));
 
     global_descriptor_table.code = KERNEL_CODE_SEGMENT_DESCRIPTOR;
     global_descriptor_table.data = KERNEL_DATA_SEGMENT_DESCRIPTOR;
     global_descriptor_table.tss  = make_tss_descriptor(&tss);
 
-    global_descriptor_table_register.limit = sizeof(global_descriptor_table) - 1;
+    global_descriptor_table_register.limit = size_of(global_descriptor_table) - 1;
     global_descriptor_table_register.base  = reinterpret_cast<psize>(&global_descriptor_table);
 
     asm volatile("lgdt %0" : : "m"(global_descriptor_table_register));

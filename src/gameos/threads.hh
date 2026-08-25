@@ -48,7 +48,7 @@ struct alignas(16) FPU_State {
     u8  reserved_3[96]{};
 };
 
-static_assert(sizeof(FPU_State) == 512);
+static_assert(size_of(FPU_State) == 512);
 
 struct Context {
     u64 rbx, rbp, r12, r13, r14, r15;
@@ -56,16 +56,16 @@ struct Context {
     FPU_State fpu_state{};
 };
 
-static_assert(sizeof(Context) == 576);
-static_assert(offsetof(Context, rbx)       == CONTEXT_SWITCH_OFFSET_RBX);
-static_assert(offsetof(Context, rbp)       == CONTEXT_SWITCH_OFFSET_RBP);
-static_assert(offsetof(Context, r12)       == CONTEXT_SWITCH_OFFSET_R12);
-static_assert(offsetof(Context, r13)       == CONTEXT_SWITCH_OFFSET_R13);
-static_assert(offsetof(Context, r14)       == CONTEXT_SWITCH_OFFSET_R14);
-static_assert(offsetof(Context, r15)       == CONTEXT_SWITCH_OFFSET_R15);
-static_assert(offsetof(Context, rsp)       == CONTEXT_SWITCH_OFFSET_RSP);
-static_assert(offsetof(Context, rip)       == CONTEXT_SWITCH_OFFSET_RIP);
-static_assert(offsetof(Context, fpu_state) == CONTEXT_SWITCH_OFFSET_FPU);
+static_assert(size_of(Context) == 576);
+static_assert(offset_of(Context, rbx)       == CONTEXT_SWITCH_OFFSET_RBX);
+static_assert(offset_of(Context, rbp)       == CONTEXT_SWITCH_OFFSET_RBP);
+static_assert(offset_of(Context, r12)       == CONTEXT_SWITCH_OFFSET_R12);
+static_assert(offset_of(Context, r13)       == CONTEXT_SWITCH_OFFSET_R13);
+static_assert(offset_of(Context, r14)       == CONTEXT_SWITCH_OFFSET_R14);
+static_assert(offset_of(Context, r15)       == CONTEXT_SWITCH_OFFSET_R15);
+static_assert(offset_of(Context, rsp)       == CONTEXT_SWITCH_OFFSET_RSP);
+static_assert(offset_of(Context, rip)       == CONTEXT_SWITCH_OFFSET_RIP);
+static_assert(offset_of(Context, fpu_state) == CONTEXT_SWITCH_OFFSET_FPU);
 
 extern "C" auto threads_context_switch(Context* previous, Context* next) -> void;
 
@@ -385,7 +385,7 @@ template <typename Procedure, typename Result_Type, typename... Arguments>
 struct Typed_Control {
     Procedure                              procedure;
     std::tuple<std::decay_t<Arguments>...> arguments;
-    alignas(Result_Type) u8                result_storage[sizeof(Result_Type)];
+    alignas(Result_Type) u8                result_storage[size_of(Result_Type)];
     bool                                   result_ready = false;
 
     auto result() -> Result_Type* {
@@ -447,8 +447,8 @@ auto spawn(Procedure procedure, Arguments&&... args) -> Thread_Handle<hidden::Pr
 
     // To reduce allocations we allocate only once for Control and for the thread's stack.
     using Control = Typed_Control<Procedure, Result_Type, Arguments...>;
-    constexpr usize control_alignment = alignof(Control) > AP_STACK_ALIGNMENT ? alignof(Control) : AP_STACK_ALIGNMENT;
-    constexpr usize stack_offset      = (sizeof(Control) + AP_STACK_ALIGNMENT - 1) & ~(AP_STACK_ALIGNMENT - 1);
+    constexpr usize control_alignment = align_of(Control) > AP_STACK_ALIGNMENT ? align_of(Control) : AP_STACK_ALIGNMENT;
+    constexpr usize stack_offset      = (size_of(Control) + AP_STACK_ALIGNMENT - 1) & ~(AP_STACK_ALIGNMENT - 1);
     constexpr usize storage_size      = stack_offset + THREAD_STACK_SIZE;
 
     auto storage_allocation = mem::alloc(storage_size, control_alignment, context.allocator);

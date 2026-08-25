@@ -205,17 +205,17 @@ struct Temp_Descriptor_Table {
     };
 };
 
-static_assert(sizeof(Temp_Descriptor_Table) == 40);
-static_assert(offsetof(Temp_Descriptor_Table, code32) == SMP_SEGMENT_OFFSET_IN_GDT_PM32_CODE);
-static_assert(offsetof(Temp_Descriptor_Table, data)   == SMP_SEGMENT_OFFSET_IN_GDT_PM32_DATA);
-static_assert(offsetof(Temp_Descriptor_Table, code64) == SMP_SEGMENT_OFFSET_IN_GDT_LM64_CODE);
+static_assert(size_of(Temp_Descriptor_Table) == 40);
+static_assert(offset_of(Temp_Descriptor_Table, code32) == SMP_SEGMENT_OFFSET_IN_GDT_PM32_CODE);
+static_assert(offset_of(Temp_Descriptor_Table, data)   == SMP_SEGMENT_OFFSET_IN_GDT_PM32_DATA);
+static_assert(offset_of(Temp_Descriptor_Table, code64) == SMP_SEGMENT_OFFSET_IN_GDT_LM64_CODE);
 
 auto copy_gdtr_to_the_expected_place() -> void {
     using namespace gdt;
 
     constexpr Temp_Descriptor_Table temp_gdt{};
     constexpr Global_Descriptor_Table_Register temp_gdtr{
-        .limit = static_cast<u16>(sizeof(Temp_Descriptor_Table)) - 1,
+        .limit = static_cast<u16>(size_of(Temp_Descriptor_Table)) - 1,
         .base  = TRAMPOLINE_PHYSICAL_ADDRESS + SMP_OFFSET_GDT,
     };
 

@@ -32,16 +32,16 @@ struct Hosted_Allocator_State {
                 if (size == 0) return result(nullptr);
 
                 const s64 requested_alignment = alignment;
-                const s64 raw_alignment       = requested_alignment < static_cast<s64>(alignof(std::max_align_t)) ? alignof(std::max_align_t) : requested_alignment;
+                const s64 raw_alignment       = requested_alignment < static_cast<s64>(align_of(std::max_align_t)) ? align_of(std::max_align_t) : requested_alignment;
                 const s64 requested_size      = size;
-                if (requested_size > S64_MAX - static_cast<s64>(sizeof(Allocation_Header)) - requested_alignment + 1)
+                if (requested_size > S64_MAX - static_cast<s64>(size_of(Allocation_Header)) - requested_alignment + 1)
                     return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
 
-                const s64 total_size = requested_size + sizeof(Allocation_Header) + requested_alignment - 1;
+                const s64 total_size = requested_size + size_of(Allocation_Header) + requested_alignment - 1;
 
                 void* raw = ::operator new(static_cast<usize>(total_size), std::align_val_t{static_cast<usize>(raw_alignment)});
-                auto* aligned = reinterpret_cast<u8*>(align_up(ptr_addr(raw) + sizeof(Allocation_Header), static_cast<psize>(requested_alignment)));
-                auto* header  = aligned - sizeof(Allocation_Header);
+                auto* aligned = reinterpret_cast<u8*>(align_up(ptr_addr(raw) + size_of(Allocation_Header), static_cast<psize>(requested_alignment)));
+                auto* header  = aligned - size_of(Allocation_Header);
                 new (header) Allocation_Header {
                     .raw = raw,
                     .size = requested_size,
@@ -56,7 +56,7 @@ struct Hosted_Allocator_State {
             case Allocator_Mode::FREE: {
                 if (old_memory == nullptr) return result(nullptr);
 
-                auto* header = reinterpret_cast<Allocation_Header*>(static_cast<u8*>(old_memory) - sizeof(Allocation_Header));
+                auto* header = reinterpret_cast<Allocation_Header*>(static_cast<u8*>(old_memory) - size_of(Allocation_Header));
                 if (header->magic != HEADER_MAGIC)
                     return result(nullptr, Allocator_Error::INVALID_POINTER);
 
@@ -83,7 +83,7 @@ struct Hosted_Allocator_State {
                 if (info == nullptr || info->pointer == nullptr)
                     return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
 
-                auto* header = reinterpret_cast<Allocation_Header*>(static_cast<u8*>(info->pointer) - sizeof(Allocation_Header));
+                auto* header = reinterpret_cast<Allocation_Header*>(static_cast<u8*>(info->pointer) - size_of(Allocation_Header));
                 if (header->magic != HEADER_MAGIC)
                     return result(nullptr, Allocator_Error::INVALID_POINTER);
 

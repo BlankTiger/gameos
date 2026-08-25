@@ -23,8 +23,8 @@ struct String_Builder {
         Buffer* next      = nullptr;
     };
 
-    static_assert(STRING_BUILDER_BUFFER_SIZE > sizeof(Buffer));
-    static constexpr s64 INITIAL_DATA_SIZE = STRING_BUILDER_BUFFER_SIZE - sizeof(Buffer);
+    static_assert(STRING_BUILDER_BUFFER_SIZE > size_of(Buffer));
+    static constexpr s64 INITIAL_DATA_SIZE = STRING_BUILDER_BUFFER_SIZE - size_of(Buffer);
 
     mem::Allocator  allocator{};
     Buffer*         current_buffer         = nullptr;
@@ -127,7 +127,7 @@ struct String_Builder {
             return string{};
         }
 
-        auto* out = static_cast<char*>(mem::alloc(count, alignof(char), destination_allocator).memory);
+        auto* out = static_cast<char*>(mem::alloc(count, align_of(char), destination_allocator).memory);
         kstd_assert(out != nullptr, "String_Builder::to_string allocation failed");
 
         char* cursor = out;
@@ -148,7 +148,7 @@ struct String_Builder {
     auto to_c_string(mem::Allocator destination_allocator = {}, bool do_reset = true) -> const char* {
         s64 count = length();
 
-        auto* out = static_cast<char*>(mem::alloc(count + 1, alignof(char), destination_allocator).memory);
+        auto* out = static_cast<char*>(mem::alloc(count + 1, align_of(char), destination_allocator).memory);
         kstd_assert(out != nullptr, "String_Builder::to_c_string allocation failed");
 
         char* cursor = out;
@@ -174,7 +174,7 @@ private:
     }
 
     static auto buffer_data(Buffer* buffer) -> char* {
-        return reinterpret_cast<char*>(buffer) + sizeof(Buffer);
+        return reinterpret_cast<char*>(buffer) + size_of(Buffer);
     }
 
     auto get_current_buffer() -> Buffer* {
@@ -188,8 +188,8 @@ private:
         Buffer* buffer = base->next;
         while (buffer != nullptr) {
             Buffer* next = buffer->next;
-            s64 block_size = sizeof(Buffer) + buffer->allocated;
-            (void)mem::free(buffer, block_size, alignof(Buffer), allocator);
+            s64 block_size = size_of(Buffer) + buffer->allocated;
+            (void)mem::free(buffer, block_size, align_of(Buffer), allocator);
             buffer = next;
         }
         base->next = nullptr;
@@ -199,8 +199,8 @@ private:
         kstd_assert(allocator.valid(), "String_Builder expand without a valid allocator.");
 
             s64 subsequent = subsequent_buffer_size > 0 ? subsequent_buffer_size : INITIAL_DATA_SIZE;
-            s64 block_size = sizeof(Buffer) + subsequent;
-        auto allocation = mem::alloc(block_size, alignof(Buffer), allocator);
+            s64 block_size = size_of(Buffer) + subsequent;
+        auto allocation = mem::alloc(block_size, align_of(Buffer), allocator);
         auto* bytes = static_cast<u8*>(allocation.memory);
         if (bytes == nullptr) return false;
 
@@ -348,9 +348,9 @@ TEST(sprint, explicit_allocator_grows_past_inline_buffer) {
     mem::Debug_Allocator_State  debug{hosted.get_allocator()};
 
     char payload[STRING_BUILDER_BUFFER_SIZE * 2];
-    kstd_memset(payload, 'x', sizeof(payload));
-    auto formatted = sprint(debug.get_allocator(), "%", string(payload, sizeof(payload)));
-    EXPECT_EQ(formatted.size, sizeof(payload));
+    kstd_memset(payload, 'x', size_of(payload));
+    auto formatted = sprint(debug.get_allocator(), "%", string(payload, size_of(payload)));
+    EXPECT_EQ(formatted.size, size_of(payload));
     for (s64 i = 0; i < formatted.size; ++i)
         EXPECT_EQ(formatted.data[i], 'x');
     free_string(formatted, debug.get_allocator());
@@ -382,12 +382,12 @@ TEST(csprint, explicit_allocator_grows_past_inline_buffer) {
     mem::Debug_Allocator_State  debug{hosted.get_allocator()};
 
     char payload[STRING_BUILDER_BUFFER_SIZE * 2];
-    kstd_memset(payload, 'x', sizeof(payload));
-    auto* formatted = csprint(debug.get_allocator(), "%", string(payload, sizeof(payload)));
-    EXPECT_EQ(kstd_strlen(formatted), sizeof(payload));
-    for (usize i = 0; i < sizeof(payload); ++i)
+    kstd_memset(payload, 'x', size_of(payload));
+    auto* formatted = csprint(debug.get_allocator(), "%", string(payload, size_of(payload)));
+    EXPECT_EQ(kstd_strlen(formatted), size_of(payload));
+    for (usize i = 0; i < size_of(payload); ++i)
         EXPECT_EQ(formatted[i], 'x');
-    EXPECT_EQ(formatted[sizeof(payload)], '\0');
+    EXPECT_EQ(formatted[size_of(payload)], '\0');
     free_c_string(formatted, debug.get_allocator());
 }
 

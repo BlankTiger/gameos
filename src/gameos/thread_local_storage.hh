@@ -44,7 +44,7 @@ force_inline auto block_size() -> usize {
 }
 
 force_inline auto allocation_size() -> usize {
-    return block_size() + 2 * sizeof(psize);
+    return block_size() + 2 * size_of(psize);
 }
 
 force_inline auto set_base(void* base) -> void {
@@ -59,7 +59,7 @@ auto create(const Context& inherited_context) -> Block* {
     auto allocator = inherited_context.allocator;
     kstd_assert(allocator.valid());
 
-    auto block_allocation = mem::alloc(sizeof(Block), alignof(Block), allocator);
+    auto block_allocation = mem::alloc(size_of(Block), align_of(Block), allocator);
     auto image_allocation = mem::alloc(allocation_size(), TLS_ALIGNMENT, allocator);
     kstd_assert(block_allocation.error == mem::Allocator_Error::NONE);
     kstd_assert(image_allocation.error == mem::Allocator_Error::NONE);
@@ -126,7 +126,7 @@ auto activate(Block* block) -> void {
     auto* thread_pointer = ptr_offset(block->allocation, block_size());
     *reinterpret_cast<psize*>(thread_pointer) = ptr_addr(thread_pointer);
 
-    auto* block_pointer_storage = ptr_offset(thread_pointer, sizeof(psize));
+    auto* block_pointer_storage = ptr_offset(thread_pointer, size_of(psize));
     *reinterpret_cast<Block**>(block_pointer_storage) = block;
 
     set_base(thread_pointer);
@@ -159,7 +159,7 @@ auto destroy(Block* block) -> void {
     kstd_debug_assert(error_free_alloc == mem::Allocator_Error::NONE);
 
     block->~Block();
-    auto error_free_block = mem::free(block, sizeof(Block), alignof(Block), allocator);
+    auto error_free_block = mem::free(block, size_of(Block), align_of(Block), allocator);
     kstd_debug_assert(error_free_block == mem::Allocator_Error::NONE);
 }
 
@@ -169,7 +169,7 @@ extern "C" auto __cxa_thread_atexit(
     void*               dso_handle
 ) -> int {
     auto* thread_pointer = static_cast<u8*>(base());
-    auto* block = *reinterpret_cast<Block**>(thread_pointer + sizeof(psize));
+    auto* block = *reinterpret_cast<Block**>(thread_pointer + size_of(psize));
     if (block->destructors.size == MAX_DESTRUCTORS) return -1;
 
     block->destructors.push_back({function, object, dso_handle});

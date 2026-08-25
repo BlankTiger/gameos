@@ -91,20 +91,20 @@ struct string {
 // allocator null -> current global allocator at free time (must match alloc heap).
 inline auto free_string(string s, mem::Allocator allocator = {}) -> void {
     if (s.data == nullptr || s.size == 0) return;
-    (void)mem::free(s.data, s.size, alignof(char), allocator);
+    (void)mem::free(s.data, s.size, align_of(char), allocator);
 }
 
 // Free heap bytes from String_Builder::to_c_string / csprint.
 // allocator null -> current global allocator at free time (must match alloc heap).
 inline auto free_c_string(const char* s, mem::Allocator allocator = {}) -> void {
     if (s == nullptr) return;
-    (void)mem::free(const_cast<char*>(s), kstd_strlen(s) + 1, alignof(char), allocator);
+    (void)mem::free(const_cast<char*>(s), kstd_strlen(s) + 1, align_of(char), allocator);
 }
 
 inline auto copy_string(string s, mem::Allocator allocator = {}) -> string {
     if (s.size == 0) return string{};
 
-    auto allocation = mem::alloc(s.size, alignof(char), allocator);
+    auto allocation = mem::alloc(s.size, align_of(char), allocator);
     auto* data = static_cast<char*>(allocation.memory);
     kstd_assert(data != nullptr, "copy_string allocation failed");
     kstd_memcpy(data, s.data, s.size);
@@ -117,7 +117,7 @@ force_inline auto tcopy(string s) -> string {
 
 // Null-terminated copy in temp (for C APIs). Not counted in the string length.
 inline auto temp_c_string(string s) -> const char* {
-    auto* data = static_cast<char*>(mem::talloc(s.size + 1, alignof(char)));
+    auto* data = static_cast<char*>(mem::talloc(s.size + 1, align_of(char)));
     if (s.size > 0) kstd_memcpy(data, s.data, s.size);
     data[s.size] = '\0';
     return data;

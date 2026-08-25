@@ -40,9 +40,9 @@ struct Byte_Reader {
     }
 
     auto read_u8() -> Read_Result<u8> {
-        if (size - current_offset < static_cast<s64>(sizeof(u8))) return { u8{}, false };
+        if (size - current_offset < static_cast<s64>(size_of(u8))) return { u8{}, false };
         Read_Result<u8> result(source[current_offset], true);
-        current_offset += sizeof(u8);
+        current_offset += size_of(u8);
         return result;
     }
 
@@ -57,7 +57,7 @@ struct Byte_Reader {
     }
 
     auto read_u16() -> Read_Result<u16> {
-        if (size - current_offset < static_cast<s64>(sizeof(u16))) return { u16{}, false };
+        if (size - current_offset < static_cast<s64>(size_of(u16))) return { u16{}, false };
 
         u16 result = 0;
         @for (int i = 0; i < 2; ++i) {
@@ -66,13 +66,13 @@ struct Byte_Reader {
             constexpr u32 shift = i * 8;
             result |= (byte << shift);
         }
-        current_offset += sizeof(u16);
+        current_offset += size_of(u16);
 
         return { result, true };
     }
 
     auto read_u32() -> Read_Result<u32> {
-        if (size - current_offset < static_cast<s64>(sizeof(u32))) return { u32{}, false };
+        if (size - current_offset < static_cast<s64>(size_of(u32))) return { u32{}, false };
 
         u32 result = 0;
         @for (int i = 0; i < 4; ++i) {
@@ -81,13 +81,13 @@ struct Byte_Reader {
             constexpr u32 shift = i * 8;
             result |= (byte << shift);
         }
-        current_offset += sizeof(u32);
+        current_offset += size_of(u32);
 
         return { result, true };
     }
 
     auto read_u64() -> Read_Result<u64> {
-        if (size - current_offset < static_cast<s64>(sizeof(u64))) return { u64{}, false };
+        if (size - current_offset < static_cast<s64>(size_of(u64))) return { u64{}, false };
 
         u64 result = 0;
         @for (int i = 0; i < 8; ++i) {
@@ -96,7 +96,7 @@ struct Byte_Reader {
             constexpr u32 shift = i * 8;
             result |= (byte << shift);
         }
-        current_offset += sizeof(u64);
+        current_offset += size_of(u64);
 
         return { result, true };
     }
