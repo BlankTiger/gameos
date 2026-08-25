@@ -31,6 +31,7 @@ struct Buddy_Allocator_State {
         Allocation_State state;
         u8               reserved[6];
     };
+    static_assert(sizeof(Allocation_Header) == 2 * sizeof(u64));
 
     static constexpr usize MIN_ORDER = 12;
     static constexpr usize MAX_ORDER = 63;

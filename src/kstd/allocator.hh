@@ -4,6 +4,7 @@
 #include <new>
 #include <type_traits>
 
+#include "allocator_types.hh"
 #include "kstd/allocator_types.hh"
 #include "kstd/context.hh"
 #include "kstd/basic.hh"
@@ -475,9 +476,7 @@ struct Arena_Allocator_State {
                 return result(address >= ptr_addr(state->memory_base) && address < ptr_addr(state->address_limit) ? old_memory : nullptr);
             } break;
 
-            default: {
-                return result(nullptr, Allocator_Error::MODE_NOT_IMPLEMENTED);
-            } break;
+            default: return result(nullptr, Allocator_Error::MODE_NOT_IMPLEMENTED);
         }
 
         unreachable();
@@ -829,6 +828,23 @@ TEST(Allocator, features_are_queried_through_dispatch) {
     ASSERT_TRUE(has_flag(features, mem::Allocator_Features::PER_FRAME_TEMPORARY_STORAGE));
 }
 
+TEST(Allocator, unimplemented_query_result) {
+    struct State {
+        static auto proc(mem::Allocator_Mode, s64, s64, s64, void*, void*) -> mem::Allocator_Result {
+            return mem::result(nullptr, mem::Allocator_Error::MODE_NOT_IMPLEMENTED);
+        }
+
+        auto get_allocator() -> mem::Allocator {
+            return { .proc = proc, .data = this };
+        }
+    } state;
+
+    auto allocator = state.get_allocator();
+
+    auto info = mem::get_info(nullptr, allocator);
+    ASSERT_EQ(info.error, mem::Allocator_Query_Error::QUERY_NOT_IMPLEMENTED);
+}
+
 TEST(Allocator, realloc_moves_and_preserves_memory) {
     mem::Hosted_Allocator_State state{};
     PUSH_ALLOCATOR(state.get_allocator());
@@ -887,7 +903,7 @@ TEST(Allocator, hosted_info_reports_allocation_metadata) {
 
     auto info = mem::get_info(allocation.memory, state.get_allocator());
     ASSERT_EQ(info.value.pointer, allocation.memory);
-    ASSERT_EQ(info.value.size, 24);
+    ASSERT_EQ(info.value.size,      24);
     ASSERT_EQ(info.value.alignment, 64);
     ASSERT_EQ(mem::free(allocation.memory, 24, 64), mem::Allocator_Error::NONE);
 }
@@ -978,6 +994,7 @@ TEST(Debug_Allocator_State, tracks_resize_in_place) {
     ASSERT_EQ(resized.error,  mem::Allocator_Error::NONE);
 
     auto info = mem::get_info(resized.memory, debug.get_allocator());
+    ASSERT_EQ(info.error, mem::Allocator_Query_Error::NONE);
     ASSERT_EQ(info.value.size,      8);
     ASSERT_EQ(info.value.alignment, 16);
     // Temporary_Allocator_State doesn't implement FREE, but Debug_Allocator tracks the call.
@@ -1002,7 +1019,8 @@ TEST(Debug_Allocator_State, tracks_resize_to_new_pointer) {
         ASSERT_EQ(bytes[i], static_cast<u8>(0xAB));
 
     auto info = mem::get_info(resized.memory, debug.get_allocator());
-    ASSERT_EQ(info.value.size, 32);
+    ASSERT_EQ(info.error, mem::Allocator_Query_Error::NONE);
+    ASSERT_EQ(info.value.size,      32);
     ASSERT_EQ(info.value.alignment, 16);
     // Temporary_Allocator_State doesn't implement FREE, but Debug_Allocator tracks the call.
     ASSERT_EQ(mem::free(resized.memory, 32, 16), mem::Allocator_Error::MODE_NOT_IMPLEMENTED);
