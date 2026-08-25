@@ -73,10 +73,10 @@ base layer:
 - [x] RAII push_allocator(Allocator* allocator) that sets an allocator for the current scope
 - [ ] get rid of ensure_allocator from Array, there should always be a valid allocator on a live heap backed Array
 - [ ] Debug_Allocator try to match as much of the zigs debug allocator as possible
-- [ ] MarkAndRestore for temporary allocations?
-- [ ] realloc on Allocator
-- [x] query_features on Allocator
-- [x] set_temporary_allocator
+- [x] MarkAndRestore for temporary allocations?
+- [x] realloc on Allocator
+- [x] query_capabilities on Allocator
+- [x] set_temporary_allocator (also make it wrappable with Debug_Allocator)
 - [ ] extract programmable_interval_timer.hh from time.hh
 - [x] extract interrupts.hh vector ids to a constants.hh type of file (currently they are duplicated throughout the file)
 - [ ] somehow deduplicate all the declarations that are made per an interrupt vector in interrupts.hh
@@ -100,13 +100,17 @@ base layer:
 - [x] thread_local storage
 - [x] keyboard handling
 - [x] mouse handling
-- [ ] remove all the integer postfix conversions and replace them with explicit typing u32{}, u64{}, etc
+- [x] remove all the integer postfix conversions and replace them with explicit typing u32{}, u64{}, etc
 - [ ] move dragging logic to input.hh
 - [ ] get rid of passing allocators to functions and use context exclusively
-- [ ] one allocator proc, get rid of vtable
+- [x] one allocator proc, get rid of vtable
 - [ ] return Receipt values from functions that you have to pass to other functions that expect those previous functions to be called before them
 - [ ] also when expecting that a lock is held while doing something require the lock itself to be passed in
 - [ ] reorder generated debug information in memory for faster lookups
+- [x] buddy info lock
+- [x] buddy double free
+- [x] debug allocator resize tracking
+- [x] debug allocator threadsafe flag should be only set when the backing has it set and then it should use the lock, otherwise it shouldn't.
 
 
 
