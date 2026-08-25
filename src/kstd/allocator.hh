@@ -766,12 +766,18 @@ struct Push_Temporary_Allocator {
     }
 };
 
+struct Auto_Rewind_Temporary {
+    void* mark;
+
+    Auto_Rewind_Temporary() : mark(temporary_allocator_mark()) {}
+    ~Auto_Rewind_Temporary() { temporary_allocator_rewind(mark); }
+};
+
 }  // namespace mem
 
 #define PUSH_ALLOCATOR(allocator) mem::Push_Allocator DEFER_UNIQ(_push_allocator_)(allocator)
 #define PUSH_TEMPORARY_ALLOCATOR(allocator) mem::Push_Temporary_Allocator DEFER_UNIQ(_push_temporary_allocator_)(allocator)
-
-// @TODO(blanktiger): Macro for automatically getting the temp mark and deferring the unwind to it.
+#define AUTO_REWIND_TEMPORARY() mem::Auto_Rewind_Temporary DEFER_UNIQ(_auto_rewind_temporary_)
 
 #if OS == GAMEOS
 #include "gameos/allocator.hh"

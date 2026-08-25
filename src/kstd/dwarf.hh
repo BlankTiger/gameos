@@ -738,9 +738,7 @@ auto parse_subprograms(Byte_Reader& debug_info, Sections& sections) -> Parse_Com
     bool has_debug_line_offset = false;
 
     while (debug_info.remaining() > 0) {
-        auto* temp_mark = mem::temporary_allocator_mark();
-        defer(mem::temporary_allocator_rewind(temp_mark));
-
+        AUTO_REWIND_TEMPORARY();
         PUSH_ALLOCATOR(context.temporary_allocator);
 
         auto compilation_unit_start = debug_info.current_offset;
