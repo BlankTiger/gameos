@@ -33,10 +33,11 @@ struct Buddy_Allocator_State {
     };
     static_assert(sizeof(Allocation_Header) == 2 * sizeof(u64));
 
-    static constexpr usize MIN_ORDER = 12;
+    static constexpr usize MIN_ORDER = 12;   // 4 KiB pages.
     static constexpr usize MAX_ORDER = 63;
 
     Free_Block* free_lists[MAX_ORDER + 1]{};
+    // It's the main global allocator, so it has to have a lock on `alloc` and `free`.
     synchronization::Spinlock lock;
 
     auto get_allocator() -> Allocator {
