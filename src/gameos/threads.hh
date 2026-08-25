@@ -334,7 +334,7 @@ auto idle_poll() -> bool {
 
         bool found = false;
         const auto queued = ready_queue.size;
-        for (usize index = 0; index < queued; ++index) {
+        for (s64 index = 0; index < queued; ++index) {
             auto candidate = ready_queue.pop_front();
             auto& candidate_thread = threads[candidate];
             if (!found && (candidate_thread.cpu_affinity == ANY_CPU || candidate_thread.cpu_affinity == cpu)) {

@@ -23,6 +23,8 @@ target_include_directories(preprocessor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../s
 target_compile_options(preprocessor PRIVATE
     -Wall
     -Wextra
+    -Wno-sign-compare
+    -Wno-narrowing
     -pedantic
 )
 

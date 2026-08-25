@@ -19,8 +19,8 @@ struct Hash_Table {
         Value_Type value;
     };
 
-    usize count;         // Valid entry count.
-    usize slots_filled;  // Count of slots that are unusable for new entries.
+    s64 count;         // Valid entry count.
+    s64 slots_filled;  // Count of slots that are unusable for new entries.
 
     mem::Allocator    allocator;
     Array_View<Entry> entries;
@@ -31,7 +31,7 @@ struct Hash_Table {
     static constexpr auto TOMBSTONE_HASH   = 1;
     static constexpr auto FIRST_VALID_HASH = 2;
 
-    Hash_Table(usize initial_size = MIN_SIZE, mem::Allocator backing_allocator = {})
+    Hash_Table(s64 initial_size = MIN_SIZE, mem::Allocator backing_allocator = {})
         : count(0),
           slots_filled(0),
           allocator(mem::resolve_allocator(backing_allocator)),
@@ -94,7 +94,7 @@ struct Hash_Table {
         u32 hash = hash::compute(key);
         if (hash < FIRST_VALID_HASH) hash += FIRST_VALID_HASH;
 
-        usize index = hash & mask;
+        s64 index = hash & mask;
         u32 probe_increment = 1;
 
         while (table.entries[index].hash != EMPTY_HASH) {
@@ -124,7 +124,7 @@ struct Hash_Table {
         u32 hash = hash::compute(key);
         if (hash < FIRST_VALID_HASH) hash += FIRST_VALID_HASH;
 
-        usize index = hash & mask;
+        s64 index = hash & mask;
         u32 probe_increment = 1;
 
         while (entries[index].hash != EMPTY_HASH) {
@@ -195,7 +195,7 @@ struct Hash_Table {
         for (auto& entry: entries) entry.hash = 0;
     }
 
-    auto ensure_has_space_for(usize item_count) {
+    auto ensure_has_space_for(s64 item_count) {
         if ((slots_filled + item_count) * 100 < entries.size * LOAD_FACTOR_PERCENT) return;
 
         //
@@ -210,16 +210,20 @@ struct Hash_Table {
         expand(new_slot_count);
     }
 
-    auto expand(usize new_slot_count = USIZE_MAX) {
-        usize to_allocate = new_slot_count;
-        if (to_allocate == USIZE_MAX) {
-            if ((count * 2 + 1) * 100 < entries.size * LOAD_FACTOR_PERCENT) {
-                // If we have a lot of tombstones then we don't need to necessarily grow.
-                to_allocate = entries.size;
-            } else {
-                to_allocate = entries.size * 2;
-            }
+    auto expand() {
+        s64 to_allocate;
+        if ((count * 2 + 1) * 100 < entries.size * LOAD_FACTOR_PERCENT) {
+            // If we have a lot of tombstones then we don't need to necessarily grow.
+            to_allocate = entries.size;
         } else {
+            to_allocate = entries.size * 2;
+        }
+        expand(to_allocate);
+    }
+
+    auto expand(s64 new_slot_count) {
+        s64 to_allocate = new_slot_count;
+        {
             kstd_assert(
                 math::is_power_of_two(to_allocate),
                 ctprint("If you pass in a value yourself it must be a power of 2. You gave: %", to_allocate)
@@ -242,13 +246,13 @@ struct Hash_Table {
     //
     // Returns the old entries. Caller is responsible for freeing them.
     //
-    [[nodiscard]] auto _resize_entries(usize new_slot_count = MIN_SIZE) -> Array_View<Entry> {
-        auto slot_count_to_allocate = new_slot_count;
+    [[nodiscard]] auto _resize_entries(s64 new_slot_count = MIN_SIZE) -> Array_View<Entry> {
+        s64 slot_count_to_allocate = new_slot_count;
         if (slot_count_to_allocate < MIN_SIZE) slot_count_to_allocate = MIN_SIZE;
 
         slot_count_to_allocate = math::next_power_of_two(slot_count_to_allocate);
         auto new_entries = mem::alloc_array<Entry>(slot_count_to_allocate, allocator);
-        for (usize i = 0; i < new_entries.size; ++i)
+        for (s64 i = 0; i < new_entries.size; ++i)
             ::new (static_cast<void*>(new_entries.data + i)) Entry{};
 
         auto old_entries = entries;

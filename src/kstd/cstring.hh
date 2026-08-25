@@ -2,18 +2,18 @@
 
 #include "basic.hh"
 
-constexpr auto kstd_strlen(const char* str) -> usize {
-    usize len = 0;
+constexpr auto kstd_strlen(const char* str) -> s64 {
+    s64 len = 0;
     while (str[len]) len++;
     return len;
 }
 
-force_inline auto kstd_memcpy(void* __restrict destination, const void* __restrict source, usize length) -> void*;
-force_inline auto kstd_memset(void* buffer, int value, usize length) -> void*;
-force_inline auto kstd_memset32(void* buffer, u32 value, usize count) -> void*;
-force_inline auto kstd_memcmp(const void* a, const void* b, usize length) -> int;
+force_inline auto kstd_memcpy(void* __restrict destination, const void* __restrict source, s64 length) -> void*;
+force_inline auto kstd_memset(void* buffer, int value, s64 length) -> void*;
+force_inline auto kstd_memset32(void* buffer, u32 value, s64 count) -> void*;
+force_inline auto kstd_memcmp(const void* a, const void* b, s64 length) -> int;
 
-force_inline auto kstd_memeq(const void* a, const void* b, usize length) -> bool {
+force_inline auto kstd_memeq(const void* a, const void* b, s64 length) -> bool {
     return kstd_memcmp(a, b, length) == 0;
 }
 

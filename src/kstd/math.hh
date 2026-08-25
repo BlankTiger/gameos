@@ -390,8 +390,8 @@ struct Vector2 {
           y(static_cast<T>(other.y))
     {}
 
-    constexpr auto operator [] (usize i) -> T& { return data[i]; }
-    constexpr auto operator [] (usize i) const -> const T& { return data[i]; }
+    constexpr auto operator [] (s64 i) -> T& { return data[i]; }
+    constexpr auto operator [] (s64 i) const -> const T& { return data[i]; }
     [[nodiscard]] static constexpr auto zero() -> Vector2 { return Vector2{ T(0), T(0) }; }
     [[nodiscard]] static constexpr auto one()  -> Vector2 { return Vector2{ T(1), T(1) }; }
 };
@@ -415,8 +415,8 @@ struct Vector3 {
           z(static_cast<T>(other.z))
     {}
 
-    constexpr auto operator [] (usize i) -> T& { return data[i]; }
-    constexpr auto operator [] (usize i) const -> const T& { return data[i]; }
+    constexpr auto operator [] (s64 i) -> T& { return data[i]; }
+    constexpr auto operator [] (s64 i) const -> const T& { return data[i]; }
     [[nodiscard]] static constexpr auto zero() -> Vector3 { return Vector3{ T(0), T(0), T(0) }; }
     [[nodiscard]] static constexpr auto one()  -> Vector3 { return Vector3{ T(1), T(1), T(1) }; }
 };
@@ -442,8 +442,8 @@ struct Vector4 {
           z(static_cast<T>(other.w))
     {}
 
-    constexpr auto operator [] (usize i) -> T& { return data[i]; }
-    constexpr auto operator [] (usize i) const -> const T& { return data[i]; }
+    constexpr auto operator [] (s64 i) -> T& { return data[i]; }
+    constexpr auto operator [] (s64 i) const -> const T& { return data[i]; }
     explicit constexpr operator Vector3<T>() const { return Vector3<T>{ x, y, z }; }
     [[nodiscard]] static constexpr auto zero() -> Vector4 { return Vector4{ T(0), T(0), T(0), T(0) }; }
     [[nodiscard]] static constexpr auto one()  -> Vector4 { return Vector4{ T(1), T(1), T(1), T(1) }; }

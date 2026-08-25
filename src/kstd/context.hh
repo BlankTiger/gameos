@@ -10,7 +10,7 @@ namespace ctx {
 
 struct Formatting_Config {
     bool  newline_after_each_array_element = false;
-    usize array_element_indent_spaces      = 4;
+    s64 array_element_indent_spaces        = 4;
 };
 
 } // namespace context

@@ -15,7 +15,7 @@
 // Array_View<T, N> is a view of exactly N elements.
 // Array_View<T> with N=DYNAMIC_EXTENT carries its own runtime size.
 //
-template <typename T, usize N = DYNAMIC_EXTENT>
+template <typename T, s64 N = DYNAMIC_EXTENT>
 struct Array_View;
 
 struct string;
@@ -30,11 +30,11 @@ struct string;
 //
 struct string {
     char* data = nullptr;
-    usize size = 0;
+    s64 size = 0;
 
     constexpr string() = default;
-    constexpr string(char* data, usize size) : data(data), size(size) {}
-    constexpr string(const char* data, usize size)
+    constexpr string(char* data, s64 size) : data(data), size(size) {}
+    constexpr string(const char* data, s64 size)
         : data(const_cast<char*>(data)), size(size) {}
 
     // Construction from an Array_View<u8> lives on the Array_View side (see
@@ -45,13 +45,13 @@ struct string {
     constexpr string(const char* cstr)
         : data(const_cast<char*>(cstr)), size(cstr != nullptr ? kstd_strlen(cstr) : 0) {}
 
-    auto operator [] (usize index) const -> char {
-        kstd_assert(index < size, "string index out of bounds", std::source_location::current());
+    auto operator [] (s64 index) const -> char {
+        kstd_assert(index >= 0 && index < size, "string index out of bounds", std::source_location::current());
         return data[index];
     }
 
-    force_inline auto slice(usize index, usize count) const -> string {
-        if (index >= size)
+    force_inline auto slice(s64 index, s64 count) const -> string {
+        if (index < 0 || index >= size)
             return {};
 
         auto remaining = size - index;
@@ -61,7 +61,7 @@ struct string {
 
     auto operator == (const string& other) const -> bool {
         if (size != other.size) return false;
-        for (usize i = 0; i < size; ++i) {
+        for (s64 i = 0; i < size; ++i) {
             if (data[i] != other.data[i]) return false;
         }
         return true;
@@ -165,7 +165,7 @@ TEST(string, index_out_of_bounds_assert) {
 TEST(string, iterator) {
     string s = "abc";
     char buf[4] = {};
-    usize i = 0;
+    s64 i = 0;
     for (char c : s) buf[i++] = c;
     EXPECT_STREQ(buf, "abc");
 }

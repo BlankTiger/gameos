@@ -20,7 +20,7 @@
 //   auto new_line() -> void;
 //
 // Optional (used for bulk literal runs when present):
-//   auto append(const char* bytes, usize length) -> void;
+//   auto append(const char* bytes, s64 length) -> void;
 //
 // put_char/new_line may be static (stateless backends, e.g. serial::Backend)
 // or regular instance methods backed by member data (stateful backends,
@@ -251,28 +251,28 @@ static force_inline auto print_value(Backend& backend, T&& value) -> int {
         // u8 buffer, so walking `data` would print bytes, not typed elements.
         if constexpr (std::is_convertible_v<decltype(value.elements()), const char*>) {
             const char* data_ptr = value.elements();
-            usize sz = (usize)value.size;
-            for (usize i = 0; i < sz; ++i) { backend.put_char(data_ptr[i]); }
+            s64 sz = value.size;
+            for (s64 i = 0; i < sz; ++i) { backend.put_char(data_ptr[i]); }
             return (int)sz;
         } else {
             backend.put_char('[');
             int written = 1;
             const bool newline_after_each = context.formatting_config.newline_after_each_array_element;
-            const usize indent_spaces     = context.formatting_config.array_element_indent_spaces;
+            const s64 indent_spaces       = context.formatting_config.array_element_indent_spaces;
             auto* data_ptr = value.elements();
-            usize sz = (usize)value.size;
+            s64 sz = value.size;
             if (newline_after_each && sz > 0) {
                 backend.new_line();
                 ++written;
             }
-            for (usize i = 0; i < sz; ++i) {
+            for (s64 i = 0; i < sz; ++i) {
                 if (i > 0 && !newline_after_each) {
                     backend.put_char(',');
                     backend.put_char(' ');
                     written += 2;
                 }
                 if (newline_after_each) {
-                    for (usize j = 0; j < indent_spaces; ++j) {
+                    for (s64 j = 0; j < indent_spaces; ++j) {
                         backend.put_char(' ');
                     }
                     written += (int)indent_spaces;
@@ -293,28 +293,28 @@ static force_inline auto print_value(Backend& backend, T&& value) -> int {
     } else if constexpr (requires { value.data; value.size; } && !requires { value.data(); }) {
         if constexpr (std::is_convertible_v<decltype(value.data), const char*>) {
             const char* data_ptr = value.data;
-            usize sz = (usize)value.size;
-            for (usize i = 0; i < sz; ++i) { backend.put_char(data_ptr[i]); }
+            s64 sz = value.size;
+            for (s64 i = 0; i < sz; ++i) { backend.put_char(data_ptr[i]); }
             return (int)sz;
         } else {
             backend.put_char('[');
             int written = 1;
             const bool newline_after_each = context.formatting_config.newline_after_each_array_element;
-            const usize indent_spaces     = context.formatting_config.array_element_indent_spaces;
+            const s64 indent_spaces       = context.formatting_config.array_element_indent_spaces;
             auto* data_ptr = value.data;
-            usize sz = (usize)value.size;
+            s64 sz = value.size;
             if (newline_after_each && sz > 0) {
                 backend.new_line();
                 ++written;
             }
-            for (usize i = 0; i < sz; ++i) {
+            for (s64 i = 0; i < sz; ++i) {
                 if (i > 0 && !newline_after_each) {
                     backend.put_char(',');
                     backend.put_char(' ');
                     written += 2;
                 }
                 if (newline_after_each) {
-                    for (usize j = 0; j < indent_spaces; ++j) {
+                    for (s64 j = 0; j < indent_spaces; ++j) {
                         backend.put_char(' ');
                     }
                     written += (int)indent_spaces;
@@ -335,8 +335,8 @@ static force_inline auto print_value(Backend& backend, T&& value) -> int {
     } else if constexpr (requires { value.data(); value.size; }) {
         if constexpr (std::is_convertible_v<decltype(value.data()), const char*>) {
             const char* data = value.data();
-            usize size = (usize)value.size;
-            for (usize i = 0; i < size; ++i) {
+            s64 size = value.size;
+            for (s64 i = 0; i < size; ++i) {
                 backend.put_char(data[i]);
             }
             return (int)size;
@@ -346,8 +346,8 @@ static force_inline auto print_value(Backend& backend, T&& value) -> int {
     } else if constexpr (requires { value.data(); value.size(); }) {
         if constexpr (std::is_convertible_v<decltype(value.data()), const char*>) {
             const char* data = value.data();
-            usize size = (usize)value.size();
-            for (usize i = 0; i < size; ++i) {
+            s64 size = value.size();
+            for (s64 i = 0; i < size; ++i) {
                 backend.put_char(data[i]);
             }
             return (int)size;
@@ -362,12 +362,12 @@ static force_inline auto print_value(Backend& backend, T&& value) -> int {
 // -- format string parsing --
 
 template <typename Backend>
-force_inline auto write_literal(Backend& backend, const char* data, usize length) -> int {
+force_inline auto write_literal(Backend& backend, const char* data, s64 length) -> int {
     if (length == 0) return 0;
     if constexpr (requires { backend.append(data, length); }) {
         backend.append(data, length);
     } else {
-        for (usize i = 0; i < length; ++i)
+        for (s64 i = 0; i < length; ++i)
             backend.put_char(data[i]);
     }
     return static_cast<int>(length);
@@ -378,7 +378,7 @@ force_inline auto is_digit(char c) -> bool {
 }
 
 template <usize I = 0, typename Backend, typename Tuple>
-force_inline auto print_arg_at(Backend& backend, Tuple& args, usize index) -> int {
+force_inline auto print_arg_at(Backend& backend, Tuple& args, s64 index) -> int {
     if constexpr (I < std::tuple_size_v<Tuple>) {
         if (I == index)
             return print_value(backend, std::get<I>(args));
@@ -389,11 +389,11 @@ force_inline auto print_arg_at(Backend& backend, Tuple& args, usize index) -> in
 
 template <typename Backend, typename Tuple>
 auto print_impl(Backend& backend, string format, Tuple& args) -> int {
-    constexpr usize arg_count = std::tuple_size_v<Tuple>;
+    constexpr s64 arg_count = std::tuple_size_v<Tuple>;
 
-    usize implicit_index_cursor = 0;
-    usize cursor                = 0;
-    usize printed               = 0;
+    s64 implicit_index_cursor = 0;
+    s64 cursor                = 0;
+    s64 printed               = 0;
     int   written               = 0;
 
     while (cursor < format.size) {
@@ -416,7 +416,7 @@ auto print_impl(Backend& backend, string format, Tuple& args) -> int {
         written += write_literal(backend, format.data + printed, cursor - printed);
         cursor += 1;  // skip '%'
 
-        usize value = implicit_index_cursor;
+        s64 value = implicit_index_cursor;
 
         if (cursor < format.size) {
             char next = format.data[cursor];
@@ -429,13 +429,13 @@ auto print_impl(Backend& backend, string format, Tuple& args) -> int {
                 continue;
             }
             if (is_digit(next)) {
-                usize start = cursor;
-                usize sum   = 0;
+                s64 start = cursor;
+                s64 sum   = 0;
                 while (cursor < format.size && is_digit(format.data[cursor])) {
-                    sum = sum * 10 + static_cast<usize>(format.data[cursor] - '0');
+                    sum = sum * 10 + static_cast<s64>(format.data[cursor] - '0');
                     cursor += 1;
                 }
-                usize digit_count = cursor - start;
+                s64 digit_count = cursor - start;
                 if (sum == 0) {
                     if (digit_count >= 2) {
                         // %00, %000, ... -> empty insert
@@ -532,7 +532,7 @@ namespace fmt_test {
 
 struct Capture_Backend {
     char  buffer[256] = {};
-    usize length      = 0;
+    s64   length      = 0;
 
     auto put_char(char c) -> void {
         if (length + 1 < sizeof(buffer)) buffer[length++] = c;

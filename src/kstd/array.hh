@@ -14,20 +14,20 @@
 #include "kstd/array_iterator.hh"
 
 
-template <typename T, usize N>
+template <typename T, s64 N>
 struct Array_View {
     static constexpr auto size = N;
     static constexpr auto size_in_bytes = sizeof(T) * N;
     T* data;
 
-    auto operator [] (u64 index, const std::source_location& location = std::source_location::current()) -> T& {
-        kstd_assert(index < size, "index out of bounds", location);
+    auto operator [] (s64 index, const std::source_location& location = std::source_location::current()) -> T& {
+        kstd_assert(index >= 0 && index < static_cast<s64>(size), "index out of bounds", location);
         return data[index];
     }
 
-    constexpr auto operator [] (u64 index, const std::source_location& location = std::source_location::current()) const
+    constexpr auto operator [] (s64 index, const std::source_location& location = std::source_location::current()) const
         -> const T& {
-        kstd_assert(index < size, "index out of bounds", location);
+        kstd_assert(index >= 0 && index < static_cast<s64>(size), "index out of bounds", location);
         return data[index];
     }
 
@@ -35,11 +35,11 @@ struct Array_View {
     constexpr auto elements() const -> const T* { return data; }
     constexpr auto empty() const -> bool { return size == 0; }
 
-    force_inline auto slice(usize index, usize count) -> Array_View<T> {
+    force_inline auto slice(s64 index, s64 count) -> Array_View<T> {
         return Array_View<T>{N, data}.slice(index, count);
     }
 
-    force_inline auto slice(usize index, usize count) const -> Array_View<const T> {
+    force_inline auto slice(s64 index, s64 count) const -> Array_View<const T> {
         return Array_View<const T>{N, data}.slice(index, count);
     }
 
@@ -55,17 +55,17 @@ struct Array_View {
 
 template <typename T>
 struct Array_View<T, DYNAMIC_EXTENT> {
-    usize size;
+    s64 size;
     T* data;
 
-    auto operator [] (u64 index, const std::source_location& location = std::source_location::current()) -> T& {
-        kstd_assert(index < size, "index out of bounds", location);
+    auto operator [] (s64 index, const std::source_location& location = std::source_location::current()) -> T& {
+        kstd_assert(index >= 0 && index < size, "index out of bounds", location);
         return data[index];
     }
 
-    constexpr auto operator [] (u64 index, const std::source_location& location = std::source_location::current()) const
+    constexpr auto operator [] (s64 index, const std::source_location& location = std::source_location::current()) const
         -> const T& {
-        kstd_assert(index < size, "index out of bounds", location);
+        kstd_assert(index >= 0 && index < size, "index out of bounds", location);
         return data[index];
     }
 
@@ -73,8 +73,8 @@ struct Array_View<T, DYNAMIC_EXTENT> {
     constexpr auto elements() const -> const T* { return data; }
     auto empty() const -> bool { return size == 0; }
 
-    force_inline auto slice(usize index, usize count) -> Array_View<T> {
-        if (index >= size)
+    force_inline auto slice(s64 index, s64 count) -> Array_View<T> {
+        if (index < 0 || index >= size)
             return {0, data};
 
         auto remaining = size - index;
@@ -82,8 +82,8 @@ struct Array_View<T, DYNAMIC_EXTENT> {
         return {length, data + index};
     }
 
-    force_inline auto slice(usize index, usize count) const -> Array_View<const T> {
-        if (index >= size)
+    force_inline auto slice(s64 index, s64 count) const -> Array_View<const T> {
+        if (index < 0 || index >= size)
             return {0, data};
 
         auto remaining = size - index;
@@ -102,35 +102,36 @@ namespace mem {
 
 struct Array_Allocation_Header {
     void* base;
-    usize size;
+    s64 size;
 };
 
 template <typename T>
-force_inline auto alloc_array_size(usize count, usize alignment = alignof(T)) -> usize {
+force_inline auto alloc_array_size(s64 count, s64 alignment = alignof(T)) -> s64 {
     if (count == 0) return 0;
-    if (count > static_cast<usize>(-1) / sizeof(T)) return 0;
+    if (count < 0 || count > S64_MAX / static_cast<s64>(sizeof(T))) return 0;
 
-    if (alignment < alignof(T)) alignment = alignof(T);
-    if ((alignment & (alignment - 1)) != 0) return 0;
+    if (alignment < static_cast<s64>(alignof(T))) alignment = alignof(T);
+    if (alignment <= 0 || (alignment & (alignment - 1)) != 0) return 0;
 
-    const usize size = count * sizeof(T);
-    if (size > static_cast<usize>(-1) - sizeof(Array_Allocation_Header)) return 0;
+    const s64 size = count * static_cast<s64>(sizeof(T));
+    if (size > S64_MAX - static_cast<s64>(sizeof(Array_Allocation_Header))) return 0;
 
-    const usize size_with_header = size + sizeof(Array_Allocation_Header);
-    if (size_with_header > static_cast<usize>(-1) - (alignment - 1)) return 0;
+    const s64 size_with_header = size + static_cast<s64>(sizeof(Array_Allocation_Header));
+    if (size_with_header > S64_MAX - (alignment - 1)) return 0;
 
     return size_with_header + alignment - 1;
 }
 
 template <typename T>
 force_inline auto alloc_array(
-    usize count,
-    usize alignment = alignof(T),
+    s64 count,
+    s64 alignment = alignof(T),
     Allocator allocator = {}
 ) -> Array_View<T> {
-    if (alignment < alignof(T)) alignment = alignof(T);
+    if (alignment < static_cast<s64>(alignof(T))) alignment = alignof(T);
+    if (count < 0 || alignment <= 0) return {0, nullptr};
 
-    const usize allocation_size = alloc_array_size<T>(count, alignment);
+    const s64 allocation_size = alloc_array_size<T>(count, alignment);
     if (allocation_size == 0) return {0, nullptr};
 
     auto allocation = alloc(allocation_size, alignof(std::max_align_t), allocator);
@@ -150,7 +151,7 @@ force_inline auto alloc_array(
 }
 
 template <typename T>
-force_inline auto alloc_array(usize count, Allocator allocator) -> Array_View<T> {
+force_inline auto alloc_array(s64 count, Allocator allocator) -> Array_View<T> {
     return alloc_array<T>(count, alignof(T), allocator);
 }
 
@@ -171,25 +172,25 @@ force_inline auto free_array(Array_View<T> array, Allocator allocator = {}) -> v
 
 }  // namespace mem
 
-template <typename T, usize N>
+template <typename T, s64 N>
 struct Static_Array {
     static constexpr auto size = N;
     static constexpr auto size_in_bytes = sizeof(T) * N;
     T data[N];
 
     auto fill(const T&& value) -> void {
-        for (usize i = 0; i < N; ++i)
+        for (s64 i = 0; i < N; ++i)
             data[i] = value;
     }
 
-    constexpr auto operator [] (u64 index, const std::source_location& location = std::source_location::current()) -> T& {
-        kstd_assert(index < size, "index out of bounds", location);
+    constexpr auto operator [] (s64 index, const std::source_location& location = std::source_location::current()) -> T& {
+        kstd_assert(index >= 0 && index < static_cast<s64>(size), "index out of bounds", location);
         return data[index];
     }
 
-    constexpr auto operator [] (u64 index, const std::source_location& location = std::source_location::current()) const
+    constexpr auto operator [] (s64 index, const std::source_location& location = std::source_location::current()) const
         -> const T& {
-        kstd_assert(index < size, "index out of bounds", location);
+        kstd_assert(index >= 0 && index < static_cast<s64>(size), "index out of bounds", location);
         return data[index];
     }
 
@@ -202,11 +203,11 @@ struct Static_Array {
         return std::move(data[N - 1]);
     }
 
-    force_inline auto slice(usize index, usize count) -> Array_View<T> {
+    force_inline auto slice(s64 index, s64 count) -> Array_View<T> {
         return Array_View<T, N>{data}.slice(index, count);
     }
 
-    force_inline auto slice(usize index, usize count) const -> Array_View<const T> {
+    force_inline auto slice(s64 index, s64 count) const -> Array_View<const T> {
         return Array_View<const T, N>{data}.slice(index, count);
     }
 
@@ -299,11 +300,11 @@ TEST(Static_Array, passes_implicitly_to_function_taking_array_view) {
 //
 // Use as a normal Array. The exception is this can't grow, because it's backed by static memory.
 //
-template <typename T, usize N>
+template <typename T, s64 N>
 struct Bounded_Array {
-    static constexpr auto MAX_SIZE = N;
+    static constexpr s64 MAX_SIZE = N;
     static constexpr auto size_in_bytes = sizeof(T) * N;
-    usize size = 0;
+    s64 size = 0;
     // Raw byte storage avoids default-constructing every slot up front.
     // Without this, push_back placement-new would run a second constructor
     // over an already-live object. It is UB for any non-trivial T.
@@ -311,24 +312,24 @@ struct Bounded_Array {
 
     Bounded_Array() = default;
 
-    Bounded_Array(usize initial_size, const T& initial_value) : size(initial_size) {
-        kstd_assert(initial_size <= MAX_SIZE, "initial_size exceeds MAX_SIZE");
-        for (usize i = 0; i < size; ++i)
+    Bounded_Array(s64 initial_size, const T& initial_value) : size(initial_size) {
+        kstd_assert(initial_size >= 0 && initial_size <= MAX_SIZE, "initial_size exceeds MAX_SIZE");
+        for (s64 i = 0; i < size; ++i)
             ::new (slot(i)) T(initial_value);
     }
 
     ~Bounded_Array() {
-        for (usize i = 0; i < size; ++i)
+        for (s64 i = 0; i < size; ++i)
             slot(i)->~T();
     }
 
     Bounded_Array(const Bounded_Array& from) : size(from.size) {
-        for (usize i = 0; i < size; ++i)
+        for (s64 i = 0; i < size; ++i)
             ::new (slot(i)) T(*from.slot(i));
     }
 
     Bounded_Array(Bounded_Array&& from) noexcept : size(from.size) {
-        for (usize i = 0; i < size; ++i) {
+        for (s64 i = 0; i < size; ++i) {
             ::new (slot(i)) T(std::move(*from.slot(i)));
             from.slot(i)->~T();
         }
@@ -339,11 +340,11 @@ struct Bounded_Array {
         if (this == &from)
             return *this;
 
-        for (usize i = 0; i < size; ++i)
+        for (s64 i = 0; i < size; ++i)
             slot(i)->~T();
 
         size = from.size;
-        for (usize i = 0; i < size; ++i)
+        for (s64 i = 0; i < size; ++i)
             ::new (slot(i)) T(*from.slot(i));
 
         return *this;
@@ -353,11 +354,11 @@ struct Bounded_Array {
         if (this == &from)
             return *this;
 
-        for (usize i = 0; i < size; ++i)
+        for (s64 i = 0; i < size; ++i)
             slot(i)->~T();
 
         size = from.size;
-        for (usize i = 0; i < size; ++i) {
+        for (s64 i = 0; i < size; ++i) {
             ::new (slot(i)) T(std::move(*from.slot(i)));
             from.slot(i)->~T();
         }
@@ -366,14 +367,14 @@ struct Bounded_Array {
         return *this;
     }
 
-    auto operator [] (u64 index, const std::source_location& location = std::source_location::current()) -> T& {
-        kstd_assert(index < size, "index out of bounds", location);
+    auto operator [] (s64 index, const std::source_location& location = std::source_location::current()) -> T& {
+        kstd_assert(index >= 0 && index < size, "index out of bounds", location);
         return *slot(index);
     }
 
-    auto operator [] (u64 index, const std::source_location& location = std::source_location::current()) const
+    auto operator [] (s64 index, const std::source_location& location = std::source_location::current()) const
         -> const T& {
-        kstd_assert(index < size, "index out of bounds", location);
+        kstd_assert(index >= 0 && index < size, "index out of bounds", location);
         return *slot(index);
     }
 
@@ -389,7 +390,7 @@ struct Bounded_Array {
         ++size;
     }
 
-    auto ensure_space_for(usize new_elements_count) -> void {
+    auto ensure_space_for(s64 new_elements_count) -> void {
         kstd_assert(
             new_elements_count <= MAX_SIZE - size,
             "not enough space in Bounded_Array"
@@ -397,16 +398,16 @@ struct Bounded_Array {
     }
 
     auto extend(const Array_View<T> from) -> void {
-        const usize source_size = from.size;
+        const s64 source_size = from.size;
         ensure_space_for(source_size);
-        for (usize i = 0; i < source_size; ++i)
+        for (s64 i = 0; i < source_size; ++i)
             push_back(from[i]);
     }
 
     auto extend(const Array_View<const T> from) -> void {
-        const usize source_size = from.size;
+        const s64 source_size = from.size;
         ensure_space_for(source_size);
-        for (usize i = 0; i < source_size; ++i)
+        for (s64 i = 0; i < source_size; ++i)
             push_back(from[i]);
     }
 
@@ -422,11 +423,11 @@ struct Bounded_Array {
     auto elements() const -> const T* { return slot(0); }
     auto empty() const -> bool { return size == 0; }
 
-    force_inline auto slice(usize index, usize count) -> Array_View<T> {
+    force_inline auto slice(s64 index, s64 count) -> Array_View<T> {
         return Array_View<T>{size, slot(0)}.slice(index, count);
     }
 
-    force_inline auto slice(usize index, usize count) const -> Array_View<const T> {
+    force_inline auto slice(s64 index, s64 count) const -> Array_View<const T> {
         return Array_View<const T>{size, slot(0)}.slice(index, count);
     }
 
@@ -435,10 +436,10 @@ struct Bounded_Array {
     ARRAY_ITERATOR()
 
 private:
-    auto slot(usize i) -> T* {
+    auto slot(s64 i) -> T* {
         return reinterpret_cast<T*>(data + i * sizeof(T));
     }
-    auto slot(usize i) const -> const T* {
+    auto slot(s64 i) const -> const T* {
         return reinterpret_cast<const T*>(data + i * sizeof(T));
     }
 };
@@ -539,7 +540,7 @@ TEST(Bounded_Array, passes_implicitly_to_function_taking_array_view) {
 
     auto sum = [](Array_View<int> view) {
         int total = 0;
-        for (usize i = 0; i < view.size; ++i)
+        for (s64 i = 0; i < view.size; ++i)
             total += view[i];
         return total;
     };
@@ -558,8 +559,8 @@ template <typename T>
 struct Array {
     // Allocator first. Member init order follows declaration order.
     mem::Allocator allocator{};
-    usize           capacity  = 0;
-    usize           size      = 0;
+    s64             capacity  = 0;
+    s64             size      = 0;
     T*              data      = nullptr;
 
     Array(mem::Allocator allocator = {})
@@ -568,18 +569,18 @@ struct Array {
           size(0),
           data(allocate_storage(1)) {}
 
-    Array(usize initial_capacity, mem::Allocator allocator = {})
+    Array(s64 initial_capacity, mem::Allocator allocator = {})
         : allocator(mem::resolve_allocator(allocator)),
           capacity(initial_capacity == 0 ? 1 : initial_capacity),
           size(0),
           data(allocate_storage(capacity)) {}
 
-    Array(usize initial_size, const T& initial_value, mem::Allocator allocator = {})
+    Array(s64 initial_size, const T& initial_value, mem::Allocator allocator = {})
         : allocator(mem::resolve_allocator(allocator)),
           capacity(initial_size == 0 ? 1 : initial_size),
           size(0),
           data(allocate_storage(capacity)) {
-        for (usize index = 0; index < initial_size; ++index) {
+        for (s64 index = 0; index < initial_size; ++index) {
             ::new (static_cast<void*>(data + index)) T(initial_value);
             ++size;
         }
@@ -595,7 +596,7 @@ struct Array {
           capacity(from.capacity == 0 ? 1 : from.capacity),
           size(from.size),
           data(allocate_storage(capacity)) {
-        for (usize i = 0; i < size; ++i)
+        for (s64 i = 0; i < size; ++i)
             ::new (data + i) T(from.data[i]);
     }
 
@@ -612,7 +613,7 @@ struct Array {
         size      = from.size;
         data      = allocate_storage(capacity);
 
-        for (usize i = 0; i < size; ++i)
+        for (s64 i = 0; i < size; ++i)
             ::new (data + i) T(from.data[i]);
 
         return *this;
@@ -649,23 +650,23 @@ struct Array {
         return *this;
     }
 
-    auto operator [] (u64 index, const std::source_location& location = std::source_location::current()) -> T& {
-        kstd_assert(index < size, "index out of bounds", location);
+    auto operator [] (s64 index, const std::source_location& location = std::source_location::current()) -> T& {
+        kstd_assert(index >= 0 && index < size, "index out of bounds", location);
         return data[index];
     }
 
-    auto operator [] (u64 index, const std::source_location& location = std::source_location::current()) const
+    auto operator [] (s64 index, const std::source_location& location = std::source_location::current()) const
         -> const T& {
-        kstd_assert(index < size, "index out of bounds", location);
+        kstd_assert(index >= 0 && index < size, "index out of bounds", location);
         return data[index];
     }
 
-    auto reserve(usize min_capacity) -> void {
+    auto reserve(s64 min_capacity) -> void {
         if (min_capacity <= capacity) return;
 
         ensure_allocator();
 
-        usize new_capacity = capacity == 0 ? 16 : capacity;
+        s64 new_capacity = capacity == 0 ? 16 : capacity;
         while (new_capacity < min_capacity) new_capacity *= 2;
 
         T* new_data = allocate_storage(new_capacity);
@@ -673,7 +674,7 @@ struct Array {
             if (data != nullptr && size > 0)
                 kstd_memcpy(new_data, data, sizeof(T) * size);
         } else {
-            for (usize i = 0; i < size; ++i) {
+            for (s64 i = 0; i < size; ++i) {
                 ::new (new_data + i) T(std::move(data[i]));
                 data[i].~T();
             }
@@ -684,8 +685,8 @@ struct Array {
         capacity = new_capacity;
     }
 
-    auto ensure_space_for(usize new_elements_count) -> void {
-        kstd_assert(new_elements_count <= static_cast<usize>(-1) - size, "Array size overflow");
+    auto ensure_space_for(s64 new_elements_count) -> void {
+        kstd_assert(new_elements_count >= 0 && new_elements_count <= S64_MAX - size, "Array size overflow");
         reserve(size + new_elements_count);
     }
 
@@ -702,18 +703,18 @@ struct Array {
     }
 
     auto extend(const Array_View<T> from) -> void {
-        const usize source_size = from.size;
+        const s64 source_size = from.size;
         const bool source_is_self = from.data == data;
         ensure_space_for(source_size);
-        for (usize i = 0; i < source_size; ++i)
+        for (s64 i = 0; i < source_size; ++i)
             push_back(source_is_self ? data[i] : from[i]);
     }
 
     auto extend(const Array_View<const T> from) -> void {
-        const usize source_size = from.size;
+        const s64 source_size = from.size;
         const bool source_is_self = from.data == data;
         ensure_space_for(source_size);
-        for (usize i = 0; i < source_size; ++i)
+        for (s64 i = 0; i < source_size; ++i)
             push_back(source_is_self ? data[i] : from[i]);
     }
 
@@ -730,7 +731,7 @@ struct Array {
         kstd_assert(size > 0, "pop_front on empty Array");
         auto element = std::move(data[0]);
         data[0].~T();
-        for (usize i = 1; i < size; ++i) {
+        for (s64 i = 1; i < size; ++i) {
             ::new (data + i - 1) T(std::move(data[i]));
             data[i].~T();
         }
@@ -747,11 +748,11 @@ struct Array {
     auto elements() const -> const T* { return data; }
     auto empty() const -> bool { return size == 0; }
 
-    force_inline auto slice(usize index, usize count) -> Array_View<T> {
+    force_inline auto slice(s64 index, s64 count) -> Array_View<T> {
         return Array_View<T>{size, data}.slice(index, count);
     }
 
-    force_inline auto slice(usize index, usize count) const -> Array_View<const T> {
+    force_inline auto slice(s64 index, s64 count) const -> Array_View<const T> {
         return Array_View<const T>{size, data}.slice(index, count);
     }
 
@@ -765,7 +766,7 @@ private:
             allocator = context.allocator;
     }
 
-    auto allocate_storage(usize count) -> T* {
+    auto allocate_storage(s64 count) -> T* {
         ensure_allocator();
         if (count == 0) return nullptr;
         auto allocation = mem::alloc(sizeof(T) * count, alignof(T), allocator);
@@ -773,14 +774,14 @@ private:
         return static_cast<T*>(allocation.memory);
     }
 
-    auto free_storage(T* pointer, usize count) -> void {
+    auto free_storage(T* pointer, s64 count) -> void {
         if (pointer == nullptr) return;
         ensure_allocator();
         (void)mem::free(pointer, sizeof(T) * count, alignof(T), allocator);
     }
 
     auto destroy_elements() -> void {
-        for (usize i = 0; i < size; ++i)
+        for (s64 i = 0; i < size; ++i)
             data[i].~T();
     }
 };
@@ -1028,7 +1029,7 @@ TEST(Array, passes_implicitly_to_function_taking_array_view) {
 
     auto sum = [](Array_View<int> view) {
         int total = 0;
-        for (usize i = 0; i < view.size; ++i)
+        for (s64 i = 0; i < view.size; ++i)
             total += view[i];
         return total;
     };

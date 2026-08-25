@@ -25,10 +25,10 @@ inline constexpr char RSDT_SIGNATURE[4] = { 'R', 'S', 'D', 'T' };
 inline constexpr char XSDT_SIGNATURE[4] = { 'X', 'S', 'D', 'T' };
 
 // Every ACPI table: sum of all bytes in the structure is 0 mod 256.
-force_inline auto checksum_ok(const void* table, usize size) -> bool {
+force_inline auto checksum_ok(const void* table, s64 size) -> bool {
     u8 sum = 0;
     const auto* bytes = static_cast<const u8*>(table);
-    for (usize i = 0; i < size; ++i) {
+    for (s64 i = 0; i < size; ++i) {
         sum = static_cast<u8>(sum + bytes[i]);
     }
     return sum == 0;
@@ -340,7 +340,7 @@ auto find_madt(const RSDP* rsdp) -> const MADT* {
 }
 
 auto push_cpu(MADT_Info& info, u32 apic_id, u32 acpi_id, bool enabled) -> void {
-    if (info.cpus.size >= MAX_CPUS) {
+    if (info.cpus.size >= static_cast<s64>(MAX_CPUS)) {
         serial::println("MADT: cpu list full, dropping apic_id=%", apic_id);
         return;
     }
@@ -422,7 +422,7 @@ auto print_madt(const MADT_Info& info) -> void {
         info.overrides.size
     );
 
-    for (usize i = 0; i < info.cpus.size; ++i) {
+    for (s64 i = 0; i < info.cpus.size; ++i) {
         const auto& cpu = info.cpus[i];
         serial::println(
             "MADT cpu[%] -> apic_id=% acpi_id=% enabled=% bsp=%",
@@ -434,7 +434,7 @@ auto print_madt(const MADT_Info& info) -> void {
         );
     }
 
-    for (usize i = 0; i < info.ioapics.size; ++i) {
+    for (s64 i = 0; i < info.ioapics.size; ++i) {
         const auto& io = info.ioapics[i];
         serial::println(
             "MADT ioapic[%] -> id=% mmio=% gsi_base=%",
@@ -445,7 +445,7 @@ auto print_madt(const MADT_Info& info) -> void {
         );
     }
 
-    for (usize i = 0; i < info.overrides.size; ++i) {
+    for (s64 i = 0; i < info.overrides.size; ++i) {
         const auto& o = info.overrides[i];
         serial::println(
             "MADT override[%] -> isa_irq=% gsi=% polarity=% trigger=%",

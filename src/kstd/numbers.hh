@@ -18,7 +18,10 @@ using f32 = std::float32_t;
 using f64 = std::float64_t;
 
 using usize = std::size_t;
+using isize = std::ptrdiff_t;
 using psize = std::uintptr_t;
+
+static_assert(sizeof(usize) == sizeof(isize));
 
 constexpr auto S8_MAX  = std::numeric_limits<s8>::max();
 constexpr auto S16_MAX = std::numeric_limits<s16>::max();

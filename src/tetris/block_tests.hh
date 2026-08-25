@@ -32,8 +32,8 @@ auto make_block_test_meshes() -> Static_Array<gfx::Mesh, BLOCK_TEST_BODY_COUNT>&
     usize body_index = 0;
     for (const auto& body : available_bodies) {
         auto& body_storage = block_test_mesh_storage[body_index];
-        usize vertex_count = 0;
-        usize index_count = 0;
+        s64 vertex_count = 0;
+        s64 index_count = 0;
 
         const auto center = calculate_center_of_body(create_new_falling_body(body));
         for (const auto& [row, col, layer] : body) {

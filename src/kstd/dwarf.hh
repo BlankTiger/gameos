@@ -240,7 +240,7 @@ inline auto normalize_section_offset(Array_View<const u8> section, u32 raw_offse
     // Linker resolves this DWARF relocation to section address when debug
     // sections are embedded in the loaded kernel image.
     auto section_address = reinterpret_cast<psize>(section.data);
-    kstd_assert(static_cast<psize>(raw_offset) >= section_address, "dwarf: section offset out of range");
+    kstd_assert(raw_offset >= section_address, "dwarf: section offset out of range");
 
     auto offset = static_cast<psize>(raw_offset) - section_address;
     kstd_assert(offset <= section.size, "dwarf: section offset out of range");
@@ -581,8 +581,8 @@ struct Pending_Subprogram {
 //
 auto parse_compilation_unit_debug_information_entries(
     Byte_Reader& debug_info,
-    usize compilation_unit_start,
-    usize compilation_unit_end,
+    u64 compilation_unit_start,
+    u64 compilation_unit_end,
     const Abbreviations& abbreviations,
     u8 address_size,
     Sections& sections
@@ -931,7 +931,7 @@ auto parse_debug_line_header(Byte_Reader& debug_line, const Sections& sections) 
         sections
     );
 
-    for (usize index = 0; index < file_names.size; ++index) {
+    for (s64 index = 0; index < file_names.size; ++index) {
         auto directory_index = file_directory_indices[index];
         if (file_names[index].size == 0 || file_names[index][0] == path::SEPARATOR)
             continue;
@@ -1027,9 +1027,9 @@ auto parse_line_table(const Sections& sections, u32 debug_line_offset, usize pre
 
     auto payload_start = unit_start + sizeof(u32);
     kstd_assert(payload_start <= debug_line.size);
-    kstd_assert(header.unit_length <= static_cast<u64>(debug_line.size - payload_start));
+    kstd_assert(header.unit_length <= debug_line.size - payload_start);
 
-    auto unit_end = payload_start + static_cast<usize>(header.unit_length);
+    auto unit_end = payload_start + header.unit_length;
 
     Debug_Line_State state(header.default_value_of_is_stmt_register);
 

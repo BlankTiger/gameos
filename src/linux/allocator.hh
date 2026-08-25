@@ -11,9 +11,9 @@ struct Hosted_Allocator_State {
 
     struct Allocation_Header {
         void* raw;
-        usize size;
-        usize alignment;
-        usize raw_alignment;
+        s64   size;
+        s64   alignment;
+        s64   raw_alignment;
         u64   magic;
     };
 
@@ -31,16 +31,16 @@ struct Hosted_Allocator_State {
 
                 if (size == 0) return result(nullptr);
 
-                const usize requested_alignment = static_cast<usize>(alignment);
-                const usize raw_alignment       = requested_alignment < alignof(std::max_align_t) ? alignof(std::max_align_t) : requested_alignment;
-                const usize requested_size      = static_cast<usize>(size);
-                if (requested_size > USIZE_MAX - sizeof(Allocation_Header) - requested_alignment + 1)
+                const s64 requested_alignment = alignment;
+                const s64 raw_alignment       = requested_alignment < static_cast<s64>(alignof(std::max_align_t)) ? alignof(std::max_align_t) : requested_alignment;
+                const s64 requested_size      = size;
+                if (requested_size > S64_MAX - static_cast<s64>(sizeof(Allocation_Header)) - requested_alignment + 1)
                     return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
 
-                const usize total_size = requested_size + sizeof(Allocation_Header) + requested_alignment - 1;
+                const s64 total_size = requested_size + sizeof(Allocation_Header) + requested_alignment - 1;
 
-                void* raw = ::operator new(total_size, std::align_val_t{raw_alignment});
-                auto* aligned = reinterpret_cast<u8*>(align_up(ptr_addr(raw) + sizeof(Allocation_Header), requested_alignment));
+                void* raw = ::operator new(static_cast<usize>(total_size), std::align_val_t{static_cast<usize>(raw_alignment)});
+                auto* aligned = reinterpret_cast<u8*>(align_up(ptr_addr(raw) + sizeof(Allocation_Header), static_cast<psize>(requested_alignment)));
                 auto* header  = aligned - sizeof(Allocation_Header);
                 new (header) Allocation_Header {
                     .raw = raw,
@@ -60,7 +60,7 @@ struct Hosted_Allocator_State {
                 if (header->magic != HEADER_MAGIC)
                     return result(nullptr, Allocator_Error::INVALID_POINTER);
 
-                ::operator delete(header->raw, std::align_val_t{header->raw_alignment});
+                ::operator delete(header->raw, std::align_val_t{static_cast<usize>(header->raw_alignment)});
                 return result(nullptr);
             } break;
 
@@ -87,8 +87,8 @@ struct Hosted_Allocator_State {
                 if (header->magic != HEADER_MAGIC)
                     return result(nullptr, Allocator_Error::INVALID_POINTER);
 
-                info->size      = static_cast<s64>(header->size);
-                info->alignment = static_cast<s64>(header->alignment);
+                info->size      = header->size;
+                info->alignment = header->alignment;
 
                 return result(nullptr);
             } break;

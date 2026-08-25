@@ -97,6 +97,8 @@ if(all_test_sources)
     target_compile_options(kstd_tests PRIVATE
         -Wall
         -Wextra
+        -Wno-sign-compare
+        -Wno-narrowing
     )
     target_precompile_headers(kstd_tests PRIVATE
         <gtest/gtest.h>

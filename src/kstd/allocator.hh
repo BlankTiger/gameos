@@ -15,12 +15,12 @@
 #include "kstd/pointer_utils.hh"
 #include "kstd/synchronization.hh"
 
-template <typename T, usize N>
+template <typename T, s64 N>
 struct Static_Array;
 
 namespace mem {
 
-constexpr usize TEMPORARY_STORAGE_SIZE = 16 * 1024;
+constexpr auto TEMPORARY_STORAGE_SIZE = 16 * 1024;
 
 
 force_inline auto resolve_allocator(Allocator allocator) -> Allocator;
@@ -48,31 +48,31 @@ force_inline auto call_allocator(Allocator allocator, Allocator_Mode mode, s64 s
     return allocator.proc(mode, size, alignment, old_size, old_memory, allocator.data);
 }
 
-force_inline auto alloc(usize size, usize alignment = alignof(std::max_align_t), Allocator allocator = {}) -> Allocator_Result {
-    if (size > static_cast<usize>(S64_MAX))
+force_inline auto alloc(s64 size, s64 alignment = alignof(std::max_align_t), Allocator allocator = {}) -> Allocator_Result {
+    if (size < 0)
         return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
 
-    if (alignment == 0 || (!math::is_power_of_two(alignment) || alignment > static_cast<usize>(S64_MAX)))
+    if (alignment <= 0 || !math::is_power_of_two(alignment))
         return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
 
     allocator = resolve_allocator(allocator);
-    return call_allocator(allocator, Allocator_Mode::ALLOCATE, static_cast<s64>(size), static_cast<s64>(alignment), 0, nullptr);
+    return call_allocator(allocator, Allocator_Mode::ALLOCATE, size, alignment, 0, nullptr);
 }
 
-force_inline auto alloc(usize size, Allocator allocator) -> Allocator_Result {
+    force_inline auto alloc(s64 size, Allocator allocator) -> Allocator_Result {
     return alloc(size, alignof(std::max_align_t), allocator);
 }
 
-force_inline auto free(void* pointer, usize size, usize alignment, Allocator allocator = {}) -> Allocator_Error {
-    if (size > static_cast<usize>(S64_MAX) || alignment > static_cast<usize>(S64_MAX))
+force_inline auto free(void* pointer, s64 size, s64 alignment, Allocator allocator = {}) -> Allocator_Error {
+    if (size < 0 || alignment < 0)
         return Allocator_Error::INVALID_ARGUMENT;
 
     allocator = resolve_allocator(allocator);
-    auto result = call_allocator(allocator, Allocator_Mode::FREE, 0, static_cast<s64>(alignment), static_cast<s64>(size), pointer);
+    auto result = call_allocator(allocator, Allocator_Mode::FREE, 0, alignment, size, pointer);
     return result.error;
 }
 
-force_inline auto free(void* pointer, usize size = 0, Allocator allocator = {}) -> Allocator_Error {
+force_inline auto free(void* pointer, s64 size = 0, Allocator allocator = {}) -> Allocator_Error {
     return free(pointer, size, 0, allocator);
 }
 
@@ -80,14 +80,14 @@ force_inline auto free(void* pointer, usize size = 0, Allocator allocator = {}) 
 // The assumption is that you want to (AND HAVE TO) use the same allocator you
 // used for the original allocation.
 //
-force_inline auto realloc(void* pointer, usize old_size, usize new_size, usize alignment, Allocator allocator = {}) -> Allocator_Result {
-    if (old_size > static_cast<usize>(S64_MAX) || new_size > static_cast<usize>(S64_MAX))
+force_inline auto realloc(void* pointer, s64 old_size, s64 new_size, s64 alignment, Allocator allocator = {}) -> Allocator_Result {
+    if (old_size < 0 || new_size < 0 || alignment < 0)
         return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
 
     if (pointer == nullptr && new_size == 0) return result(nullptr);
 
     allocator = resolve_allocator(allocator);
-    auto direct = call_allocator(allocator, Allocator_Mode::RESIZE, static_cast<s64>(new_size), static_cast<s64>(alignment), static_cast<s64>(old_size), pointer);
+    auto direct = call_allocator(allocator, Allocator_Mode::RESIZE, new_size, alignment, old_size, pointer);
     if (direct.error != Allocator_Error::MODE_NOT_IMPLEMENTED)
         return direct;
 
@@ -183,9 +183,9 @@ struct Temporary_Allocator_State {
 
     Temporary_Allocator_State() = default;
 
-    explicit Temporary_Allocator_State(usize size) : Temporary_Allocator_State(context.allocator, size) {}
+    explicit Temporary_Allocator_State(s64 size) : Temporary_Allocator_State(context.allocator, size) {}
 
-    Temporary_Allocator_State(void* memory, usize size)
+    Temporary_Allocator_State(void* memory, s64 size)
         : base(static_cast<u8*>(memory)),
           current(base),
           end(base + size) {
@@ -193,7 +193,7 @@ struct Temporary_Allocator_State {
         kstd_assert(size > 0);
     }
 
-    Temporary_Allocator_State(Allocator backing, usize size) : backing_allocator(backing) {
+    Temporary_Allocator_State(Allocator backing, s64 size) : backing_allocator(backing) {
         kstd_assert(backing_allocator.valid());
         kstd_assert(size > 0);
 
@@ -225,7 +225,7 @@ struct Temporary_Allocator_State {
 
     ~Temporary_Allocator_State() {
         if (backing_allocator.valid() && base != nullptr) {
-            auto error = mem::free(base, static_cast<usize>(end - base), backing_allocator);
+            auto error = mem::free(base, static_cast<s64>(end - base), backing_allocator);
             kstd_debug_assert(error == Allocator_Error::NONE);
         }
     }
@@ -238,12 +238,12 @@ struct Temporary_Allocator_State {
         current = base;
     }
 
-    auto bytes_used() const -> usize {
-        return static_cast<usize>(current - base);
+    auto bytes_used() const -> s64 {
+        return static_cast<s64>(current - base);
     }
 
-    auto bytes_left() const -> usize {
-        return static_cast<usize>(end - current);
+    auto bytes_left() const -> s64 {
+        return static_cast<s64>(end - current);
     }
 
     auto mark() const -> void* {
@@ -268,7 +268,7 @@ struct Temporary_Allocator_State {
 
                 if (size == 0) return result(nullptr);
 
-                auto* aligned = reinterpret_cast<u8*>(align_up(ptr_addr(state->current), static_cast<usize>(alignment)));
+                auto* aligned = reinterpret_cast<u8*>(align_up(ptr_addr(state->current), static_cast<psize>(alignment)));
                 auto* next = aligned + size;
                 if (next < aligned || next > state->end)
                     return result(nullptr, Allocator_Error::OUT_OF_MEMORY);
@@ -289,7 +289,7 @@ struct Temporary_Allocator_State {
                     return allocation;
 
                 if (old_memory != nullptr && old_size > 0)
-                    kstd_memcpy(allocation.memory, old_memory, static_cast<usize>(old_size));
+                    kstd_memcpy(allocation.memory, old_memory, old_size);
 
                 return allocation;
             } break;
@@ -319,7 +319,7 @@ inline Temporary_Allocator_State temporary_allocator_state{};
 // @Important: Don't use the global temporary_allocator_state directly in the
 // functions below. They are meant to work with the one set in the context.
 
-force_inline auto talloc(usize size, usize alignment = alignof(std::max_align_t)) -> void* {
+force_inline auto talloc(s64 size, s64 alignment = alignof(std::max_align_t)) -> void* {
     auto allocation = alloc(size, alignment, context.temporary_allocator);
     kstd_assert(allocation.memory != nullptr, "Temporary allocator exhausted.");
     return allocation.memory;
@@ -337,7 +337,7 @@ force_inline auto temporary_allocator_rewind(const void* mark) -> void {
     context.temporary_state->rewind(mark);
 }
 
-constexpr usize DEFAULT_ARENA_RESERVE_SIZE = 1 * 1024 * 1024;
+constexpr s64 DEFAULT_ARENA_RESERVE_SIZE = 1 * 1024 * 1024;
 
 template <bool DEBUG = false>
 struct Arena_Allocator_State {
@@ -345,13 +345,13 @@ struct Arena_Allocator_State {
     static constexpr auto FEATURES = RESIZE_SHRINK_NO_OP | FAST_BUMP_ALLOCATOR | IS_THIS_YOURS;
 
     Allocator backing_allocator{};
-    usize     allocated{};
+    s64       allocated{};
 
     u8* memory_base   = nullptr;
     u8* current_point = nullptr;
     u8* address_limit = nullptr;
 
-    Arena_Allocator_State(usize reserve = DEFAULT_ARENA_RESERVE_SIZE, Allocator backing_allocator = {})
+    Arena_Allocator_State(s64 reserve = DEFAULT_ARENA_RESERVE_SIZE, Allocator backing_allocator = {})
         : backing_allocator(mem::resolve_allocator(backing_allocator)),
           allocated(align_up(reserve, mem::PAGE_SIZE)),
           memory_base(nullptr),
@@ -367,7 +367,7 @@ struct Arena_Allocator_State {
     }
 
     // Does not own buffer. Destructor will not free it.
-    Arena_Allocator_State(void* memory, usize size)
+    Arena_Allocator_State(void* memory, s64 size)
         : backing_allocator({}),
           allocated(size),
           memory_base(static_cast<u8*>(memory)),
@@ -378,7 +378,7 @@ struct Arena_Allocator_State {
     }
 
     // Does not own buffer. Destructor will not free it.
-    template <usize N>
+    template <s64 N>
     Arena_Allocator_State(Static_Array<u8, N>& buffer) : Arena_Allocator_State(buffer.data, N) {}
 
     ~Arena_Allocator_State() {
@@ -393,7 +393,7 @@ struct Arena_Allocator_State {
         return { .proc = proc, .data = this };
     }
 
-    auto resize_and_dont_copy_old_memory(usize reserve) -> void {
+    auto resize_and_dont_copy_old_memory(s64 reserve) -> void {
         reserve = align_up(reserve, mem::PAGE_SIZE);
         auto allocation = alloc(reserve, backing_allocator);
         kstd_assert(allocation.memory != nullptr);
@@ -415,12 +415,12 @@ struct Arena_Allocator_State {
         current_point = memory_base;
     }
 
-    auto bytes_left() const -> usize {
-        return static_cast<usize>(address_limit - current_point);
+    auto bytes_left() const -> s64 {
+        return static_cast<s64>(address_limit - current_point);
     }
 
-    auto bytes_used() const -> usize {
-        return static_cast<usize>(current_point - memory_base);
+    auto bytes_used() const -> s64 {
+        return static_cast<s64>(current_point - memory_base);
     }
 
     static auto proc(Allocator_Mode mode, s64 size, s64 alignment, s64 old_size, void* old_memory, void* arena_state) -> Allocator_Result {
@@ -437,7 +437,7 @@ struct Arena_Allocator_State {
                 if (size == 0)
                     return result(nullptr);
 
-                auto* aligned = reinterpret_cast<u8*>(align_up(ptr_addr(state->current_point), static_cast<usize>(alignment)));
+                auto* aligned = reinterpret_cast<u8*>(align_up(ptr_addr(state->current_point), static_cast<psize>(alignment)));
                 auto* next = aligned + size;
                 if (next < aligned || next > state->address_limit)
                     return result(nullptr, Allocator_Error::OUT_OF_MEMORY);
@@ -458,7 +458,7 @@ struct Arena_Allocator_State {
                     return allocation;
 
                 if (old_memory != nullptr && old_size > 0)
-                    kstd_memcpy(allocation.memory, old_memory, static_cast<usize>(old_size));
+                    kstd_memcpy(allocation.memory, old_memory, old_size);
 
                 return allocation;
             } break;
@@ -494,8 +494,8 @@ struct Debug_Allocator_State {
 
     struct Allocation_Record {
         void*              pointer;
-        usize              size;
-        usize              alignment;
+    s64                size;
+    s64                alignment;
         Allocation_Record* next;
     };
 
@@ -503,7 +503,7 @@ struct Debug_Allocator_State {
     synchronization::Spinlock guard;
     bool                      synchronized{};
     Allocation_Record*        live_head  = nullptr;
-    usize                     live_count = 0;
+    s64                       live_count = 0;
 
     explicit Debug_Allocator_State(Allocator backing_allocator)
         : backing(backing_allocator),
@@ -531,15 +531,15 @@ struct Debug_Allocator_State {
                 auto record_allocation = alloc(sizeof(Allocation_Record), alignof(Allocation_Record), state->backing);
                 if (record_allocation.memory == nullptr) {
                     // @TODO(blanktiger): Merge errors once they are enum_flags.
-                    auto error = free(allocation.memory, size, static_cast<usize>(alignment), state->backing);
+                    auto error = free(allocation.memory, size, alignment, state->backing);
                     (void)error;
                     return result(nullptr, Allocator_Error::OUT_OF_MEMORY);
                 }
 
                 new(record_allocation.memory) Allocation_Record {
                     .pointer = allocation.memory,
-                    .size = static_cast<usize>(size),
-                    .alignment = static_cast<usize>(alignment),
+                    .size = size,
+                    .alignment = alignment,
                     .next = state->live_head
                 };
 
@@ -567,8 +567,8 @@ struct Debug_Allocator_State {
 
                     new(record_allocation.memory) Allocation_Record {
                         .pointer   = allocation.memory,
-                        .size      = static_cast<usize>(size),
-                        .alignment = static_cast<usize>(alignment),
+                        .size      = size,
+                        .alignment = alignment,
                         .next      = state->live_head
                     };
                     state->live_head = static_cast<Allocation_Record*>(record_allocation.memory);
@@ -589,8 +589,8 @@ struct Debug_Allocator_State {
                 }
 
                 record->pointer   = allocation.memory;
-                record->size      = static_cast<usize>(size);
-                record->alignment = static_cast<usize>(alignment);
+                record->size      = size;
+                record->alignment = alignment;
                 return allocation;
             } break;
 
@@ -602,7 +602,7 @@ struct Debug_Allocator_State {
                     auto* record = *link;
                     if (record->pointer == old_memory) {
                         if (old_size != 0)
-                            kstd_assert(record->size == static_cast<usize>(old_size), "Debug allocator free size mismatch");
+                            kstd_assert(record->size == old_size, "Debug allocator free size mismatch");
 
                         *link = record->next;
                         state->live_count--;

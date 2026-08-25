@@ -16,7 +16,7 @@ static constexpr int MAX_MEMORY_REGIONS    = 128;
 
 struct Memory_Region {
     u64 base;
-    u64 size;
+    s64 size;
 };
 
 using Memory_Regions = Bounded_Array<Memory_Region, MAX_MEMORY_REGIONS>;
@@ -24,19 +24,19 @@ using Memory_Regions = Bounded_Array<Memory_Region, MAX_MEMORY_REGIONS>;
 extern "C" u8 __kernel_start;
 extern "C" u8 __kernel_end;
 
-auto add_usable_region(Memory_Regions& regions, u64 base, u64 length) -> void {
+auto add_usable_region(Memory_Regions& regions, u64 base, s64 length) -> void {
     regions.push_back({base, length});
 }
 
-auto reserve_range(Memory_Regions& regions, u64 start, u64 end) -> void {
+auto reserve_range(Memory_Regions& regions, s64 start, s64 end) -> void {
     if (start >= end) return;
 
-    start = align_down(start, static_cast<u64>(mem::PAGE_SIZE));
-    end   = align_up(end,     static_cast<u64>(mem::PAGE_SIZE));
+    start = align_down(start, mem::PAGE_SIZE);
+    end   = align_up(end,     mem::PAGE_SIZE);
 
-    for (usize i = 0; i < regions.size;) {
-        const u64 region_start = regions[i].base;
-        const u64 region_end   = region_start + regions[i].size;
+    for (s64 i = 0; i < regions.size;) {
+        const s64 region_start = regions[i].base;
+        const s64 region_end   = region_start + regions[i].size;
 
         if (end <= region_start || start >= region_end) {
             i++;
@@ -44,7 +44,7 @@ auto reserve_range(Memory_Regions& regions, u64 start, u64 end) -> void {
         }
 
         if (start <= region_start && end >= region_end) {
-            const usize last = regions.size - 1;
+            auto last = regions.size - 1;
             if (i != last) regions[i] = regions[last];
             regions.size--;
             continue;
@@ -148,7 +148,7 @@ auto initialize(const boot::Multiboot2_Info* mbi) -> Context {
 
     auto allocator = buddy.get_allocator();
 
-    constexpr usize TEMPORARY_ALLOCATOR_SIZE = 1 * 1024 * 1024;
+    constexpr auto TEMPORARY_ALLOCATOR_SIZE = 1 * 1024 * 1024;
     auto temporary_allocation = mem::alloc(TEMPORARY_ALLOCATOR_SIZE, allocator);
     void* temporary_memory = temporary_allocation.memory;
     kstd_assert(temporary_memory != nullptr, "Failed to allocate temporary allocator backing memory.");
@@ -168,22 +168,22 @@ auto initialize(const boot::Multiboot2_Info* mbi) -> Context {
 }  // namespace mem
 
 auto operator new(usize size) -> void* {
-    if (void* ptr = mem::alloc(size, context.allocator).memory) return ptr;
+    if (void* ptr = mem::alloc(static_cast<s64>(size), context.allocator).memory) return ptr;
     halt::forever("new failed");
 }
 
 auto operator new[](usize size) -> void* {
-    if (void* ptr = mem::alloc(size, context.allocator).memory) return ptr;
+    if (void* ptr = mem::alloc(static_cast<s64>(size), context.allocator).memory) return ptr;
     halt::forever("new[] failed");
 }
 
 auto operator new(usize size, std::align_val_t alignment) -> void* {
-    if (void* ptr = mem::alloc(size, static_cast<usize>(alignment)).memory) return ptr;
+    if (void* ptr = mem::alloc(static_cast<s64>(size), static_cast<s64>(alignment)).memory) return ptr;
     halt::forever("aligned new failed");
 }
 
 auto operator new[](usize size, std::align_val_t alignment) -> void* {
-    if (void* ptr = mem::alloc(size, static_cast<usize>(alignment)).memory) return ptr;
+    if (void* ptr = mem::alloc(static_cast<s64>(size), static_cast<s64>(alignment)).memory) return ptr;
     halt::forever("aligned new[] failed");
 }
 
@@ -196,25 +196,25 @@ auto operator delete[](void* ptr) noexcept -> void {
 }
 
 auto operator delete(void* ptr, usize size) noexcept -> void {
-    (void)mem::free(ptr, size);
+    (void)mem::free(ptr, static_cast<s64>(size));
 }
 
 auto operator delete[](void* ptr, usize size) noexcept -> void {
-    (void)mem::free(ptr, size);
+    (void)mem::free(ptr, static_cast<s64>(size));
 }
 
 auto operator delete(void* ptr, std::align_val_t alignment) noexcept -> void {
-    (void)mem::free(ptr, 0, static_cast<usize>(alignment));
+    (void)mem::free(ptr, 0, static_cast<s64>(alignment));
 }
 
 auto operator delete[](void* ptr, std::align_val_t alignment) noexcept -> void {
-    (void)mem::free(ptr, 0, static_cast<usize>(alignment));
+    (void)mem::free(ptr, 0, static_cast<s64>(alignment));
 }
 
 auto operator delete(void* ptr, usize size, std::align_val_t alignment) noexcept -> void {
-    (void)mem::free(ptr, size, static_cast<usize>(alignment));
+    (void)mem::free(ptr, static_cast<s64>(size), static_cast<s64>(alignment));
 }
 
 auto operator delete[](void* ptr, usize size, std::align_val_t alignment) noexcept -> void {
-    (void)mem::free(ptr, size, static_cast<usize>(alignment));
+    (void)mem::free(ptr, static_cast<s64>(size), static_cast<s64>(alignment));
 }

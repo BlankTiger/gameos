@@ -174,7 +174,7 @@ inline gfx::Mesh tetris_checkerboard_mesh;
 
 auto initialize_tetris_meshes() -> void {
     for (usize body_index = 0; body_index < tetris_solid_meshes.size; ++body_index) {
-        for (usize vertex_index = 0; vertex_index < gfx::UNIT_CUBE.vertices.size; ++vertex_index) {
+        for (s64 vertex_index = 0; vertex_index < gfx::UNIT_CUBE.vertices.size; ++vertex_index) {
             tetris_solid_vertices[body_index][vertex_index] = gfx::UNIT_CUBE.vertices[vertex_index];
             tetris_solid_vertices[body_index][vertex_index].color = TETRIS_DIMMED_BODY_COLORS[body_index];
         }
