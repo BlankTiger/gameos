@@ -45,11 +45,6 @@ constexpr auto operator & (Allocator_Features left, Allocator_Features right) ->
     return static_cast<Allocator_Features>(value);
 }
 
-constexpr auto has_feature(Allocator_Features value, Allocator_Features feature) -> bool {
-    auto masked = static_cast<u32>(value) & static_cast<u32>(feature);
-    return masked == static_cast<u32>(feature);
-}
-
 enum struct Allocator_Error : u8 {
     NONE,
     OUT_OF_MEMORY,

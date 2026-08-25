@@ -9,6 +9,7 @@
 #include "kstd/basic.hh"
 #include "kstd/assert.hh"
 #include "kstd/cstring.hh"
+#include "kstd/enum_flags.hh"
 #include "kstd/math.hh"
 #include "kstd/pointer_utils.hh"
 #include "kstd/synchronization.hh"
@@ -90,7 +91,7 @@ force_inline auto realloc(void* pointer, usize old_size, usize new_size, usize a
         return direct;
 
     const auto features = get_features(allocator);
-    const bool can_free = has_feature(features, Allocator_Features::FREE);
+    const bool can_free = has_flag(features, Allocator_Features::FREE);
 
     if (!can_free)
         return direct;
@@ -103,7 +104,7 @@ force_inline auto realloc(void* pointer, usize old_size, usize new_size, usize a
         return result(nullptr, error);
     }
 
-    const bool resize_shrink_is_no_op = has_feature(features, Allocator_Features::RESIZE_SHRINK_NO_OP);
+    const bool resize_shrink_is_no_op = has_flag(features, Allocator_Features::RESIZE_SHRINK_NO_OP);
     if (pointer != nullptr && new_size <= old_size && resize_shrink_is_no_op)
         return result(pointer);
 
@@ -507,7 +508,7 @@ struct Debug_Allocator_State {
 
     explicit Debug_Allocator_State(Allocator backing_allocator)
         : backing(backing_allocator),
-          synchronized(backing_allocator.valid() && has_feature(get_features(backing_allocator), THREADSAFE)),
+          synchronized(backing_allocator.valid() && has_flag(get_features(backing_allocator), THREADSAFE)),
           live_head(nullptr),
           live_count(0) {
         kstd_assert(backing.valid());
@@ -579,7 +580,7 @@ struct Debug_Allocator_State {
                 kstd_assert(record != nullptr, "Debug allocator resize of unknown pointer");
                 if (size == 0) {
                     Allocation_Record** link = &state->live_head;
-                    while (*link != record) 
+                    while (*link != record)
                         link = &(*link)->next;
 
                     *link = record->next;
