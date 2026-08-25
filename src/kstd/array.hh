@@ -6,12 +6,13 @@
 #include <source_location>
 #include <iterator>
 
-#include "basic.hh"
-#include "cstring.hh"
-#include "assert.hh"
-#include "allocator.hh"
-#include "string.hh"
-#include "array_iterator.hh"
+#include "kstd/basic.hh"
+#include "kstd/cstring.hh"
+#include "kstd/assert.hh"
+#include "kstd/allocator.hh"
+#include "kstd/string.hh"
+#include "kstd/array_iterator.hh"
+
 
 template <typename T, usize N>
 struct Array_View {
@@ -125,15 +126,16 @@ template <typename T>
 force_inline auto alloc_array(
     usize count,
     usize alignment = alignof(T),
-    Allocator* allocator = nullptr
+    Allocator allocator = {}
 ) -> Array_View<T> {
     if (alignment < alignof(T)) alignment = alignof(T);
 
     const usize allocation_size = alloc_array_size<T>(count, alignment);
     if (allocation_size == 0) return {0, nullptr};
 
-    void* base = alloc(allocation_size, alignof(std::max_align_t), allocator);
-    if (base == nullptr) return {0, nullptr};
+    auto allocation = alloc(allocation_size, alignof(std::max_align_t), allocator);
+    if (allocation.memory == nullptr) return {0, nullptr};
+    void* base = allocation.memory;
 
     auto* data = reinterpret_cast<T*>(align_up(
         ptr_addr(base) + sizeof(Array_Allocation_Header),
@@ -148,22 +150,22 @@ force_inline auto alloc_array(
 }
 
 template <typename T>
-force_inline auto alloc_array(usize count, Allocator* allocator) -> Array_View<T> {
+force_inline auto alloc_array(usize count, Allocator allocator) -> Array_View<T> {
     return alloc_array<T>(count, alignof(T), allocator);
 }
 
 template <typename T>
-force_inline auto free_array(void* pointer, Allocator* allocator = nullptr) -> void {
+force_inline auto free_array(void* pointer, Allocator allocator = {}) -> void {
     if (pointer == nullptr) return;
 
     auto* header = reinterpret_cast<Array_Allocation_Header*>(
         static_cast<u8*>(pointer) - sizeof(Array_Allocation_Header)
     );
-    free(header->base, header->size, alignof(std::max_align_t), allocator);
+    (void)free(header->base, header->size, allocator);
 }
 
 template <typename T>
-force_inline auto free_array(Array_View<T> array, Allocator* allocator = nullptr) -> void {
+force_inline auto free_array(Array_View<T> array, Allocator allocator = {}) -> void {
     free_array<T>(array.data, allocator);
 }
 
@@ -555,24 +557,24 @@ TEST(Bounded_Array, passes_implicitly_to_function_taking_array_view) {
 template <typename T>
 struct Array {
     // Allocator first. Member init order follows declaration order.
-    mem::Allocator* allocator = nullptr;
+    mem::Allocator allocator{};
     usize           capacity  = 0;
     usize           size      = 0;
     T*              data      = nullptr;
 
-    Array(mem::Allocator* allocator = nullptr)
+    Array(mem::Allocator allocator = {})
         : allocator(mem::resolve_allocator(allocator)),
           capacity(1),
           size(0),
           data(allocate_storage(1)) {}
 
-    Array(usize initial_capacity, mem::Allocator* allocator = nullptr)
+    Array(usize initial_capacity, mem::Allocator allocator = {})
         : allocator(mem::resolve_allocator(allocator)),
           capacity(initial_capacity == 0 ? 1 : initial_capacity),
           size(0),
           data(allocate_storage(capacity)) {}
 
-    Array(usize initial_size, const T& initial_value, mem::Allocator* allocator = nullptr)
+    Array(usize initial_size, const T& initial_value, mem::Allocator allocator = {})
         : allocator(mem::resolve_allocator(allocator)),
           capacity(initial_size == 0 ? 1 : initial_size),
           size(0),
@@ -621,7 +623,7 @@ struct Array {
           capacity(from.capacity),
           size(from.size),
           data(from.data) {
-        from.allocator = nullptr;
+        from.allocator = {};
         from.capacity  = 0;
         from.size      = 0;
         from.data      = nullptr;
@@ -639,7 +641,7 @@ struct Array {
         size      = from.size;
         data      = from.data;
 
-        from.allocator = nullptr;
+        from.allocator = {};
         from.capacity  = 0;
         from.size      = 0;
         from.data      = nullptr;
@@ -759,22 +761,22 @@ struct Array {
 
 private:
     auto ensure_allocator() -> void {
-        if (allocator == nullptr)
-            allocator = mem::resolve_allocator();
+        if (!allocator.valid())
+            allocator = context.allocator;
     }
 
     auto allocate_storage(usize count) -> T* {
         ensure_allocator();
         if (count == 0) return nullptr;
-        void* memory = allocator->alloc(sizeof(T) * count, alignof(T));
-        kstd_assert(memory != nullptr, "Array allocation failed");
-        return static_cast<T*>(memory);
+        auto allocation = mem::alloc(sizeof(T) * count, alignof(T), allocator);
+        kstd_assert(allocation.memory != nullptr, "Array allocation failed");
+        return static_cast<T*>(allocation.memory);
     }
 
     auto free_storage(T* pointer, usize count) -> void {
         if (pointer == nullptr) return;
         ensure_allocator();
-        allocator->free(pointer, sizeof(T) * count, alignof(T));
+        (void)mem::free(pointer, sizeof(T) * count, alignof(T), allocator);
     }
 
     auto destroy_elements() -> void {
@@ -791,14 +793,14 @@ TEST(Array, default_is_empty) {
 
     EXPECT_EQ(arr.size, 0);
     EXPECT_EQ(arr.capacity, 1);
-    EXPECT_NE(arr.allocator, nullptr);
+    EXPECT_TRUE(arr.allocator.valid());
 }
 
 TEST(Array, remembers_explicit_allocator) {
-    mem::Hosted_Allocator allocator;
-    Array<int> arr(&allocator);
+    mem::Hosted_Allocator_State allocator;
+    Array<int> arr(allocator.get_allocator());
 
-    EXPECT_EQ(arr.allocator, &allocator);
+    EXPECT_EQ(arr.allocator, allocator.get_allocator());
 
     arr.push_back(1);
     arr.push_back(2);
@@ -806,31 +808,31 @@ TEST(Array, remembers_explicit_allocator) {
     EXPECT_EQ(arr.size, 2);
     EXPECT_EQ(arr[0], 1);
     EXPECT_EQ(arr[1], 2);
-    EXPECT_EQ(arr.allocator, &allocator);
+    EXPECT_EQ(arr.allocator, allocator.get_allocator());
 }
 
 TEST(Array, copy_keeps_source_allocator) {
-    mem::Hosted_Allocator allocator;
-    Array<int> first(&allocator);
+    mem::Hosted_Allocator_State allocator;
+    Array<int> first(allocator.get_allocator());
     first.push_back(7);
 
     Array<int> second = first;
 
-    EXPECT_EQ(second.allocator, &allocator);
+    EXPECT_EQ(second.allocator, allocator.get_allocator());
     EXPECT_EQ(second.size, 1);
     EXPECT_EQ(second[0], 7);
 }
 
 TEST(Array, move_transfers_allocator) {
-    mem::Hosted_Allocator allocator;
-    Array<int> first(&allocator);
+    mem::Hosted_Allocator_State allocator;
+    Array<int> first(allocator.get_allocator());
     first.push_back(9);
 
     Array<int> second = std::move(first);
 
-    EXPECT_EQ(second.allocator, &allocator);
+    EXPECT_EQ(second.allocator, allocator.get_allocator());
     EXPECT_EQ(second[0], 9);
-    EXPECT_EQ(first.allocator, nullptr);
+    EXPECT_FALSE(first.allocator.valid());
     EXPECT_EQ(first.data, nullptr);
 }
 
@@ -1139,18 +1141,18 @@ TEST(Allocator, alloc_array_returns_dynamic_array_view) {
     defer(mem::free_array(array));
 
     ASSERT_NE(array.data, nullptr);
-    ASSERT_EQ(array.size, 3u);
-    ASSERT_EQ(ptr_addr(array.data) % alignof(u64), 0u);
+    ASSERT_EQ(array.size, 3);
+    ASSERT_EQ(ptr_addr(array.data) % alignof(u64), 0);
 }
 
 TEST(Allocator, alloc_array_accepts_custom_allocator_without_alignment) {
-    mem::Hosted_Allocator hosted{};
+    mem::Hosted_Allocator_State hosted{};
 
-    auto array = mem::alloc_array<u64>(3, &hosted);
-    defer(mem::free_array(array, &hosted));
+    auto array = mem::alloc_array<u64>(3, hosted.get_allocator());
+    defer(mem::free_array(array, hosted.get_allocator()));
 
     ASSERT_NE(array.data, nullptr);
-    ASSERT_EQ(array.size, 3u);
+    ASSERT_EQ(array.size, 3);
 }
 
 TEST(Allocator, free_array_accepts_pointer) {
@@ -1158,13 +1160,13 @@ TEST(Allocator, free_array_accepts_pointer) {
     defer(mem::free_array<u64>(array.data));
 
     ASSERT_NE(array.data, nullptr);
-    ASSERT_EQ(array.size, 3u);
+    ASSERT_EQ(array.size, 3);
 }
 
 TEST(Allocator, alloc_array_size_uses_type_alignment_by_default) {
     ASSERT_EQ(
         mem::alloc_array_size<u64>(3),
-        3u * sizeof(u64) + sizeof(mem::Array_Allocation_Header) + alignof(u64) - 1u
+        3 * sizeof(u64) + sizeof(mem::Array_Allocation_Header) + alignof(u64) - 1
     );
     ASSERT_EQ(mem::alloc_array_size<u64>(3, 1), mem::alloc_array_size<u64>(3));
 }

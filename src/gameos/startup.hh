@@ -46,12 +46,8 @@ inline auto kernel_startup(u32 magic, const boot::Multiboot2_Info* mbi) -> void 
     serial::println("CPUID initial_apic_id=% cache_line_size=%", f.initial_apic_id, f.cache_line_size);
 
     serial::println("Initializing mem");
-    mem::initialize(mbi);
-    tls::initialize_bsp({
-        .allocator           = &mem::buddy,
-        .temporary_allocator = &mem::temporary_allocator,
-        .formatting_config   = {},
-    });
+    const auto bootstrap_context = mem::initialize(mbi);
+    tls::initialize_bsp(bootstrap_context);
 
     // Global constructors are called here, after the allocator is live, so any
     // constructor that calls operator new has a valid global allocator (must

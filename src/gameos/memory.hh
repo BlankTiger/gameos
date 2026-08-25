@@ -11,7 +11,7 @@
 
 namespace mem {
 
-static constexpr int MULTIBOOT_MMAP_USABLE = 1u;
+static constexpr int MULTIBOOT_MMAP_USABLE = 1;
 static constexpr int MAX_MEMORY_REGIONS    = 128;
 
 struct Memory_Region {
@@ -135,7 +135,7 @@ namespace hidden {
     inline Memory_Regions regions{};
 }
 
-auto initialize(const boot::Multiboot2_Info* mbi) -> void {
+auto initialize(const boot::Multiboot2_Info* mbi) -> Context {
     using namespace hidden;
 
     parse_multiboot2_memory_map(regions, mbi);
@@ -146,37 +146,75 @@ auto initialize(const boot::Multiboot2_Info* mbi) -> void {
         buddy.add_region(region.base, region.size);
     }
 
+    auto allocator = buddy.get_allocator();
+
     constexpr usize TEMPORARY_ALLOCATOR_SIZE = 1 * 1024 * 1024;
-    void* temporary_memory = buddy.alloc(TEMPORARY_ALLOCATOR_SIZE);
-    kstd_assert(temporary_memory != nullptr, "failed to allocate temporary allocator backing");
-    temporary_allocator.~Temporary_Allocator();
-    new (&temporary_allocator) Temporary_Allocator{temporary_memory, TEMPORARY_ALLOCATOR_SIZE};
+    auto temporary_allocation = mem::alloc(TEMPORARY_ALLOCATOR_SIZE, allocator);
+    void* temporary_memory = temporary_allocation.memory;
+    kstd_assert(temporary_memory != nullptr, "Failed to allocate temporary allocator backing memory.");
+    new (&temporary_allocator_state) Temporary_Allocator_State{
+        temporary_memory,
+        TEMPORARY_ALLOCATOR_SIZE
+    };
+
+    return Context{
+        .allocator           = allocator,
+        .temporary_state     = &temporary_allocator_state,
+        .temporary_allocator = temporary_allocator_state.get_allocator(),
+        .formatting_config   = {},
+    };
 }
 
 }  // namespace mem
 
 auto operator new(usize size) -> void* {
-    if (void* ptr = mem::resolve_allocator()->alloc(size)) return ptr;
+    if (void* ptr = mem::alloc(size, context.allocator).memory) return ptr;
     halt::forever("new failed");
 }
 
 auto operator new[](usize size) -> void* {
-    if (void* ptr = mem::resolve_allocator()->alloc(size)) return ptr;
+    if (void* ptr = mem::alloc(size, context.allocator).memory) return ptr;
     halt::forever("new[] failed");
 }
 
+auto operator new(usize size, std::align_val_t alignment) -> void* {
+    if (void* ptr = mem::alloc(size, static_cast<usize>(alignment)).memory) return ptr;
+    halt::forever("aligned new failed");
+}
+
+auto operator new[](usize size, std::align_val_t alignment) -> void* {
+    if (void* ptr = mem::alloc(size, static_cast<usize>(alignment)).memory) return ptr;
+    halt::forever("aligned new[] failed");
+}
+
 auto operator delete(void* ptr) noexcept -> void {
-    mem::resolve_allocator()->free(ptr, 0);
+    (void)mem::free(ptr, 0);
 }
 
 auto operator delete[](void* ptr) noexcept -> void {
-    mem::resolve_allocator()->free(ptr, 0);
+    (void)mem::free(ptr, 0);
 }
 
 auto operator delete(void* ptr, usize size) noexcept -> void {
-    mem::resolve_allocator()->free(ptr, size);
+    (void)mem::free(ptr, size);
 }
 
 auto operator delete[](void* ptr, usize size) noexcept -> void {
-    mem::resolve_allocator()->free(ptr, size);
+    (void)mem::free(ptr, size);
+}
+
+auto operator delete(void* ptr, std::align_val_t alignment) noexcept -> void {
+    (void)mem::free(ptr, 0, static_cast<usize>(alignment));
+}
+
+auto operator delete[](void* ptr, std::align_val_t alignment) noexcept -> void {
+    (void)mem::free(ptr, 0, static_cast<usize>(alignment));
+}
+
+auto operator delete(void* ptr, usize size, std::align_val_t alignment) noexcept -> void {
+    (void)mem::free(ptr, size, static_cast<usize>(alignment));
+}
+
+auto operator delete[](void* ptr, usize size, std::align_val_t alignment) noexcept -> void {
+    (void)mem::free(ptr, size, static_cast<usize>(alignment));
 }

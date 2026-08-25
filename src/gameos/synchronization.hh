@@ -9,7 +9,7 @@ namespace synchronization {
 force_inline auto interrupts_enabled() -> bool {
     u64 flags;
     asm volatile("pushfq\n\tpopq %0" : "=r"(flags));
-    return (flags & (1ull << 9)) != 0;  // RFLAGS.IF
+    return (flags & (1 << 9)) != 0;  // RFLAGS.IF
 }
 
 force_inline auto disable_interrupts() -> void {

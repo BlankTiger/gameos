@@ -354,7 +354,7 @@ namespace hidden {
     struct Frame_Data {
         Static_Array<Pixel, GFX_PIXEL_COUNT> back_buffer;
         Static_Array<Depth, GFX_PIXEL_COUNT> depth_buffer;
-        mem::Arena_Allocator<> arena{GFX_ARENA_SIZE};
+        mem::Arena_Allocator_State<> arena{GFX_ARENA_SIZE};
         Array<Draw_Command_2D> draw_commands_2d{256};
         Array<Draw_Command_UI> draw_commands_ui{256};
         Array<Draw_Command_3D> draw_commands_3d{256};
@@ -535,7 +535,7 @@ auto inner_draw_text(u32 x, u32 y, string text, Color fg = WHITE, Color bg = TRA
 
 auto draw_text(u32 x, u32 y, const string text, Color fg = WHITE, Color bg = TRANSPARENT, u8 z = 1, Depth depth = DEPTH_FAR) -> void {
     auto& arena = current_frame().arena;
-    auto copied = copy_string(text, &arena);
+    auto copied = copy_string(text, arena.get_allocator());
     current_frame().draw_commands_2d.push_back(
         Draw_Command_2D{
             .type  = Draw_Command_2D_Type::DRAW_TEXT,
@@ -1125,7 +1125,7 @@ auto draw_nine_patch_text(
     const u32 box_width = box_bounds.width;
     const u32 box_height = box_bounds.height;
     auto& arena = current_frame().arena;
-    const auto copied_text = copy_string(text, &arena);
+    const auto copied_text = copy_string(text, arena.get_allocator());
     current_frame().draw_commands_ui.push_back(
         Draw_Command_UI{
             .type = Draw_Command_UI_Type::DRAW_NINE_PATCH_TEXT,

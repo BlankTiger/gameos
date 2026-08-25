@@ -95,7 +95,7 @@ auto blocks_tests_main() -> void {
         {BLOCK_TEST_CUBE_SCALE, BLOCK_TEST_CUBE_SCALE, BLOCK_TEST_CUBE_SCALE},
     };
 
-    const auto* temporary_allocator_mark = mem::temporary_allocator.mark();
+    const auto* temporary_allocator_mark = mem::temporary_allocator_mark();
     while (true) {
         input::begin_frame();
         if (input::key_pressed(input::Key::ESCAPE)) break;
@@ -130,7 +130,7 @@ auto blocks_tests_main() -> void {
         gfx::draw_mesh(body_instance, camera);
         gfx::draw_frame();
 
-        mem::temporary_allocator.rewind(temporary_allocator_mark);
+        mem::temporary_allocator_rewind(temporary_allocator_mark);
 
         const u64 frame_ticks = get_ticks() - frame_start;
         if (frame_ticks < TARGET_TICKS) sleep_ticks(TARGET_TICKS - frame_ticks);

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <concepts>
+
 #include "kstd/basic.hh"
 #include "kstd/pointer_utils.hh"
 #include "kstd/assert.hh"
@@ -268,11 +270,13 @@ force_inline auto read_register(Register_Offset offset) -> u32 {
     return *ptr_offset(hidden::memory_mapped_registers, byte_offset);
 }
 
-force_inline auto write_register(Register_Offset offset, u32 value) -> void {
+template <typename Integer>
+requires std::integral<Integer> && std::constructible_from<u32, Integer>
+force_inline auto write_register(Register_Offset offset, Integer value) -> void {
     const auto byte_offset = static_cast<u32>(offset);
     kstd_debug_assert(hidden::memory_mapped_registers != nullptr);
     kstd_debug_assert((byte_offset & 3) == 0);  // Make sure byte_offset is divisible by 4, because we are shifting a u32*
-    *ptr_offset(hidden::memory_mapped_registers, byte_offset) = value;
+    *ptr_offset(hidden::memory_mapped_registers, byte_offset) = static_cast<u32>(value);
 }
 
 template <typename Register>
@@ -288,7 +292,7 @@ force_inline auto write_register(Register_Offset offset, Register value) -> void
 }
 
 force_inline auto signal_end_of_interrupt() -> void {
-    write_register(Register_Offset::END_OF_INTERRUPT, 0u);
+    write_register(Register_Offset::END_OF_INTERRUPT, 0);
 }
 
 force_inline auto local_apic_id() -> u32 {
@@ -487,12 +491,12 @@ auto calibrate_and_start_timer(u32 frequency_hz) -> void {
             .reserved_high   = 0,
         }
     );
-    write_register(Register_Offset::TIMER_INITIAL_COUNT, 0xFFFFFFFFu);
+    write_register(Register_Offset::TIMER_INITIAL_COUNT, 0xFFFFFFFF);
 
     ktime::sleep_ms(CALIBRATION_DURATION_MILLISECONDS);
 
     const u64 counts_remaining = read_register(Register_Offset::TIMER_CURRENT_COUNT);
-    const u64 counts_elapsed   = 0xFFFFFFFFu - counts_remaining;
+    const u64 counts_elapsed   = 0xFFFFFFFF - counts_remaining;
     kstd_assert(counts_elapsed > 0, "local APIC timer did not count during calibration");
 
     hidden::timer_counts_per_second = static_cast<u32>(counts_elapsed * 1000 / CALIBRATION_DURATION_MILLISECONDS);
@@ -554,7 +558,7 @@ auto stop_timer() -> void {
             .reserved_high   = 0,
         }
     );
-    write_register(Register_Offset::TIMER_INITIAL_COUNT, 0u);
+    write_register(Register_Offset::TIMER_INITIAL_COUNT, 0);
 }
 
 // Write destination_apic_id into Interrupt Command Register high bits 31:24

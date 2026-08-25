@@ -57,7 +57,7 @@ auto fnv1a_hash(const void* data, usize size, u64 hash = FNV_64_OFFSET_BIAS) -> 
 }
 
 auto knuth_hash(u64 value) -> u64 {
-    constexpr u64 KNUTH_GOLDEN_RATIO_64 = 11400714819323198485ull;
+    constexpr u64 KNUTH_GOLDEN_RATIO_64 = 0x9E3779B97F4A7C15;
     return KNUTH_GOLDEN_RATIO_64 * value;
 }
 

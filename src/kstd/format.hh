@@ -86,8 +86,8 @@ static auto write_signed(Backend& backend, s64 value) -> int {
         backend.put_char('-');
         ++written;
         // Handle minimum value overflow.
-        if (value == -9223372036854775807LL - 1) {
-            written += write_unsigned(backend, (u64)9223372036854775808ULL);
+        if (value == s64{-9223372036854775807} - 1) {
+            written += write_unsigned(backend, u64{0x8000000000000000});
             return written;
         }
         value = -value;
@@ -618,7 +618,7 @@ struct Owned_Format {
     auto format() const -> string {
         constexpr usize n = 5;
         // Can't include string_builder.hh here..
-        auto* data = static_cast<char*>(mem::alloc(n, alignof(char)));
+        auto* data = static_cast<char*>(mem::alloc(n, alignof(char)).memory);
         data[0] = 'o';
         data[1] = 'w';
         data[2] = 'n';
@@ -631,14 +631,14 @@ struct Owned_Format {
 }
 
 TEST(fmt, frees_string_from_user_format) {
-    mem::Hosted_Allocator hosted{};
-    mem::Debug_Allocator  debug{&hosted};
-    PUSH_ALLOCATOR(&debug);
+    mem::Hosted_Allocator_State hosted{};
+    mem::Debug_Allocator_State  debug{hosted.get_allocator()};
+    PUSH_ALLOCATOR(debug.get_allocator());
 
     fmt_test::Capture_Backend backend;
     fmt::print(backend, "%", fmt_test::Owned_Format{});
     EXPECT_STREQ(backend.buffer, "owned");
-    // Debug_Allocator destructor asserts if format() result leaked.
+    // Debug_Allocator_State destructor asserts if format() result leaked.
 }
 
 TEST(fmt, prints_static_array) {

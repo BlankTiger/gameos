@@ -21,8 +21,8 @@ several kstd paths:
   CPU. Use `EXPECT_DEATH` for failing assertions.
 - `kstd_memcpy` / `kstd_memset` / `kstd_memset32` call libc (or a plain loop)
   instead of freestanding `rep movs*` / `rep stos*` asm.
-- Allocators use `Hosted_Allocator` (`operator new` / `delete`). Under
-  `UNIT_TEST`, the global allocator is a `Debug_Allocator` over that heap.
+- Allocators use `Hosted_Allocator_State` (`operator new` / `delete`). Under
+  `UNIT_TEST`, the global allocator is a `Debug_Allocator_State` over that heap.
   A fixed buffer backs the temporary allocator (no kernel buddy).
 
 kstd headers keep their own names (`kstd_assert`, `kstd_memcpy`, and so on).
@@ -31,23 +31,25 @@ They never use bare libc names. That avoids collisions with
 
 # Allocations
 
-All heaps implement `mem::Allocator` (`alloc` / `free`). Null allocator args
-resolve to the current global via `mem::resolve_allocator`.
+Allocators use `mem::Allocator`, a value containing a dispatch procedure and
+state pointer. Null allocator values resolve to the current global via
+`mem::resolve_allocator`. HOWEVER, if you wish to use the global allocator
+just do `context.allocator`.
 
 | Allocator | Role |
 | --- | --- |
-| `Buddy_Allocator` | Kernel default. Page buddy over multiboot regions (`mem::initialize`). |
-| `Hosted_Allocator` | Host/tests only. Wraps `operator new` / `delete`. |
-| `Temporary_Allocator` | Bump arena. `free` is a no-op. Call `reset()` to reclaim. |
-| `Arena_Allocator` | Bump over a backing allocator. |
-| `Debug_Allocator` | Tracks live allocs. Asserts no leaks on destroy (tests wrap hosted). |
-| `Null_Allocator` | `alloc` / `free` call `unreachable`. Use when no heap is valid / no allocations should happen. |
+| `Buddy_Allocator_State` | Kernel default. Page buddy over multiboot regions (`mem::initialize`). |
+| `Hosted_Allocator_State` | Host/tests only. Wraps `operator new` / `delete`. |
+| `Temporary_Allocator_State` | Bump arena. `free` is a no-op. Call `reset()` to reclaim. |
+| `Arena_Allocator_State` | Bump over a backing allocator. |
+| `Debug_Allocator_State` | Tracks live allocations. Asserts no leaks on destroy. |
+| `Null_Allocator_State` | Allocation attempts call `unreachable`. Use when no heap is valid. |
 
 **Global scope.** `PUSH_ALLOCATOR(a)` sets the global for the current scope
 (RAII). `operator new` / `delete` go through the global too.
 
-**Containers.** `Array`, `String_Builder`, and friends store the
-`Allocator*` from construction. Free on the same heap that allocated.
+**Containers.** `Array`, `String_Builder`, and friends store the `Allocator`
+value from construction. Free on the same heap that allocated.
 
 **Strings.** `string` is a non-owning `{data, size}` view. It never frees in
 its destructor.
@@ -57,7 +59,7 @@ its destructor.
 - Null-terminated C string: `csprint` (c string print) /
   `to_c_string`, then `defer(free_c_string(p))`.
 - Scratch: `tprint` / `tcopy` / `talloc` / `temp_c_string` on
-  `mem::temporary_allocator`. Valid until the next `temporary_allocator.reset()`.
+  context temporary allocator. Valid until the next `reset()`.
 - Scratch C string: `ctprint` (c temporary print). Same lifetime rules.
 
 Do not free temp bytes with `free_string` on the global heap. Do not keep
