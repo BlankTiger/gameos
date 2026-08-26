@@ -5,15 +5,14 @@
 #include <execinfo.h>
 
 #include "kstd/basic.hh"
-#include "kstd/array.hh"
 
 namespace stack_trace {
 
 inline auto print_stack_trace(u32 max_frame_count = 10, u32 skip_frame_count = 0) -> void {
     constexpr u32 MAX_FRAME_COUNT = 64;
-    Static_Array<void*, MAX_FRAME_COUNT> frames{};
-    const auto frame_count = backtrace(frames.data, cast(int)MAX_FRAME_COUNT);
-    char**     symbols     = backtrace_symbols(frames.data, frame_count);
+    void*      frames[MAX_FRAME_COUNT]{};
+    const auto frame_count = backtrace(frames, cast(int)MAX_FRAME_COUNT);
+    char**     symbols     = backtrace_symbols(frames, frame_count);
 
     if (symbols == nullptr) return;
 

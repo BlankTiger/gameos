@@ -2,6 +2,10 @@
 
 #include "kstd/assert.hh"
 
+namespace stack_trace {
+    auto print_stack_trace(u32 max_frame_count, u32 skip_frame_count) -> void;
+}
+
 namespace halt {
 using Halt_Print_Fn = auto (*)(char) -> void;
 using Pre_Halt_Hook = auto (*)() -> void;
@@ -116,6 +120,7 @@ forever(const char* message, const std::source_location& location = std::source_
     }
     put_char('\n');
     flush();
+    stack_trace::print_stack_trace(10, 3);
 
     asm volatile("cli" ::: "memory");
     for (;;) asm volatile("hlt");

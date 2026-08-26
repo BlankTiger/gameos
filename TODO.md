@@ -116,7 +116,16 @@ base layer:
 - [x] temporary overflow pages
 - [x] implement ACTUALLY_RESIZE on allocators (buddy?)
 - [x] extract alignof(std::max_align_t) as MAX_ALIGN in basic.hh
+- [ ] make assert a macro that doesn't evaluate the error message if the condition is not false
+- [ ] store traces on debug allocator
 
+
+
+docs:
+- DWARF abbreviations
+- allocators
+- context
+- metaprogramming
 
 
 utils:
