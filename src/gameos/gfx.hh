@@ -117,9 +117,9 @@ struct Pixel {
             return;
         }
 
-        u8 r = cast(u8)((raw >> fmt.red_pos)   & 0xFF);
-        u8 g = cast(u8)((raw >> fmt.green_pos) & 0xFF);
-        u8 b = cast(u8)((raw >> fmt.blue_pos)  & 0xFF);
+        auto r = cast(u8)((raw >> fmt.red_pos)   & 0xFF);
+        auto g = cast(u8)((raw >> fmt.green_pos) & 0xFF);
+        auto b = cast(u8)((raw >> fmt.blue_pos)  & 0xFF);
 
         r = math::lerp(r, fg.r, fg.a, 255);
         g = math::lerp(g, fg.g, fg.a, 255);
@@ -133,7 +133,7 @@ struct Pixel {
 };
 
 using Depth = u32;
-constexpr Depth DEPTH_FAR = cast(Depth)(-1);
+constexpr auto DEPTH_FAR = cast(Depth)(-1);
 
 using namespace math;
 
@@ -344,11 +344,11 @@ struct Framebuffer {
     u32 height;
     u8 bits_per_pixel;
     u8 type;
-    s64 stride;
+    ssize stride;
 };
 
 namespace hidden {
-    constexpr s64 GFX_ARENA_SIZE = 16 * 1024;
+    constexpr ssize GFX_ARENA_SIZE = 16 * 1024;
     constexpr u8 FRAME_OVERLAP = 2;
 
     struct Frame_Data {
@@ -576,7 +576,7 @@ auto inner_draw_circle(u32 x, u32 y, u32 r, Color color, Depth depth = DEPTH_FAR
     if (y2 < y) y2 = height();
 
     u32 color_alpha = color.a;
-    for (s64 i = 0; i < colors_table.size; ++i) {
+    for (ssize i = 0; i < colors_table.size; ++i) {
         colors_table[i] = Color{
             .r = color.r,
             .g = color.g,
@@ -653,7 +653,7 @@ force_inline u8 alpha(s32 x) {
 }
 
 auto inner_draw_line_endpoint(u32 x, u32 y, bool steep, Color color, Depth depth = DEPTH_FAR) -> s32 {
-    s32 sy = cast(s32)y << FIXED_POINT_SHIFT;
+    auto sy = cast(s32)y << FIXED_POINT_SHIFT;
     s32 _y = fixed_point_floor(sy);
     s32 rev_frac_sy_alpha = alpha(reverse_fractional_part(sy));
     s32 frac_sy_alpha = alpha(fractional_part(sy));
@@ -681,8 +681,8 @@ auto inner_draw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color, Depth depth = 
         std::swap(y1, y2);
     }
 
-    s32 dx = cast(s32)(x2 - x1);
-    s32 dy = cast(s32)y2 - cast(s32)y1;
+    auto dx = cast(s32)(x2 - x1);
+    auto dy = cast(s32)y2 - cast(s32)y1;
 
     s32 gradient = 0;
     if (dx != 0) gradient = (dy << FIXED_POINT_SHIFT) / dx;
@@ -745,12 +745,12 @@ auto inner_draw_raw_line(u32 x1, u32 y1, u32 x2, u32 y2, Color color, Depth dept
         std::swap(y1, y2);
     }
 
-    s32 dx = cast(s32)(x2 - x1);
+    auto dx = cast(s32)(x2 - x1);
     s32 dy = abs(cast(s32)y2 - cast(s32)y1);
 
     s32 y_step = y1 < y2 ? 1 : -1;
     s32 error = dx / 2;
-    s32 y = cast(s32)y1;
+    auto y = cast(s32)y1;
 
     for (u32 x = x1; x <= x2; ++x) {
         if (steep) {
@@ -994,7 +994,7 @@ auto map_nine_patch_coordinate(
 ) -> u32 {
     const u32 source_left_margin    = source_split1;
     const u32 source_right_margin   = source_length - source_split2;
-    const u64 source_margins_length = cast(u64)source_left_margin + source_right_margin;
+    const auto source_margins_length = cast(u64)source_left_margin + source_right_margin;
 
     u32 destination_left_margin = source_left_margin;
     u32 destination_right_margin = source_right_margin;
@@ -1303,8 +1303,8 @@ namespace hidden {
 force_inline auto sample_texture(const Resource_View& res, f32 u, f32 v) -> Color {
     u = std::clamp(u, f32(0), f32(1));
     v = std::clamp(v, f32(0), f32(1));
-    const u32 tx = cast(u32)(u * cast(f32)(res.width  - 1));
-    const u32 ty = cast(u32)(v * cast(f32)(res.height - 1));
+    const auto tx = cast(u32)(u * cast(f32)(res.width  - 1));
+    const auto ty = cast(u32)(v * cast(f32)(res.height - 1));
     const Color* colors = cast(const Color*)res.data.data;
     return colors[ty * res.width + tx];
 }
@@ -1499,9 +1499,9 @@ auto clip_to_screen(Vector4<f32> clip) -> Vector4<f32> {
 
 force_inline static auto project(Mesh_Instance instance, Camera3D camera) -> Array<Vector4<f32>> {
     Matrix4<f32> M = hidden::projection.M_projection * camera.M_camera * instance.transform;
-    const s64 vertex_count = instance.model.vertices.size;
+    const ssize vertex_count = instance.model.vertices.size;
     Array<Vector4<f32>> projected_positions(vertex_count, Vector4<f32>::zero());
-    for (s64 i = 0; i < vertex_count; ++i) {
+    for (ssize i = 0; i < vertex_count; ++i) {
         Vector4<f32> clip = multiply(M, Vector4<f32>::as_point(instance.model.vertices[i].position));
         if (clip.w == 0.f) {
             projected_positions[i] = Vector4<f32>::zero();
@@ -1574,12 +1574,12 @@ auto inner_draw_raw_line_3d(
         (p1.x >= cast(f32)width() && p2.x >= cast(f32)width()) ||
         (p1.y >= cast(f32)height() && p2.y >= cast(f32)height())) return;
 
-    const s32 max_x = cast(s32)width() - 1;
-    const s32 max_y = cast(s32)height() - 1;
-    u32 x1 = cast(u32)(std::clamp(cast(s32)p1.x, s32(0), max_x));
-    u32 y1 = cast(u32)(std::clamp(cast(s32)p1.y, s32(0), max_y));
-    u32 x2 = cast(u32)(std::clamp(cast(s32)p2.x, s32(0), max_x));
-    u32 y2 = cast(u32)(std::clamp(cast(s32)p2.y, s32(0), max_y));
+    const auto max_x = cast(s32)width() - 1;
+    const auto max_y = cast(s32)height() - 1;
+    auto x1 = cast(u32)(std::clamp(cast(s32)p1.x, s32(0), max_x));
+    auto y1 = cast(u32)(std::clamp(cast(s32)p1.y, s32(0), max_y));
+    auto x2 = cast(u32)(std::clamp(cast(s32)p2.x, s32(0), max_x));
+    auto y2 = cast(u32)(std::clamp(cast(s32)p2.y, s32(0), max_y));
 
     bool steep = abs_diff(y1, y2) > abs_diff(x1, x2);
     if (steep) {
@@ -1592,12 +1592,12 @@ auto inner_draw_raw_line_3d(
         std::swap(p1, p2);
     }
 
-    s32 dx = cast(s32)(x2 - x1);
+    auto dx = cast(s32)(x2 - x1);
     s32 dy = abs(cast(s32)y2 - cast(s32)y1);
 
     s32 y_step = y1 < y2 ? 1 : -1;
     s32 error = dx / 2;
-    s32 y = cast(s32)y1;
+    auto y = cast(s32)y1;
 
     f32 dz = dx != 0
         ? (p2.z - p1.z) / cast(f32)dx

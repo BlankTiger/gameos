@@ -10,11 +10,11 @@ struct At_Exit_Entry {
     void* dso_handle;
 };
 
-static constexpr s64 MAX_AT_EXIT_ENTRIES = 32;
+static constexpr ssize MAX_AT_EXIT_ENTRIES = 32;
 
 namespace constructors::hidden {
     static inline At_Exit_Entry at_exit_entries[MAX_AT_EXIT_ENTRIES];
-    static inline s64           at_exit_entry_count;
+    static inline ssize         at_exit_entry_count;
 }
 
 extern "C" {
@@ -46,7 +46,7 @@ extern "C" void __cxa_finalize(void* dso_handle) {
         return;
     }
 
-    for (s64 i = at_exit_entry_count; i != 0; --i) {
+    for (ssize i = at_exit_entry_count; i != 0; --i) {
         At_Exit_Entry& entry = at_exit_entries[i - 1];
         if (entry.destructor == nullptr || entry.dso_handle != dso_handle) continue;
 

@@ -33,9 +33,9 @@
 
 #define cast(type) (type)
 
-#define size_of(value) cast(isize)sizeof(value)
-#define align_of(value) cast(isize)alignof(value)
-#define offset_of(type, member) cast(isize)offsetof(type, member)
+#define size_of(value) cast(ssize)sizeof(value)
+#define align_of(value) cast(ssize)alignof(value)
+#define offset_of(type, member) cast(ssize)offsetof(type, member)
 
 template <typename F>
 struct Defer {
@@ -51,8 +51,9 @@ struct Defer {
 // (as opposed to a compile-time N). Declared here rather than in
 // array.hh since string.hh needs it for a forward declaration
 // before array.hh itself is reachable (see string.hh comment).
-inline constexpr s64 DYNAMIC_EXTENT = -1;
+inline constexpr ssize DYNAMIC_EXTENT = -1;
 
 namespace mem {
-    inline constexpr s64 PAGE_SIZE = 4096;
+    inline constexpr ssize PAGE_SSIZE = 4096;
+    inline constexpr auto  PAGE_USIZE = cast(usize)PAGE_SSIZE;
 }

@@ -11,8 +11,8 @@
 namespace tls {
 
 constexpr u32   IA32_FS_BASE    = 0xC0000100;
-constexpr s64 MAX_DESTRUCTORS = 32;
-constexpr s64 TLS_ALIGNMENT   = 16;
+constexpr ssize MAX_DESTRUCTORS = 32;
+constexpr ssize TLS_ALIGNMENT   = 16;
 
 extern "C" u8 __tls_start[];
 extern "C" u8 __tdata_end[];
@@ -38,12 +38,12 @@ struct Block {
 
 inline Static_Array<Block*, acpi::MAX_CPUS> idle_blocks;
 
-force_inline auto block_size() -> s64 {
-    auto image_size = cast(s64)(ptr_addr(__tls_end) - ptr_addr(__tls_start));
+force_inline auto block_size() -> ssize {
+    auto image_size = cast(ssize)(ptr_addr(__tls_end) - ptr_addr(__tls_start));
     return mem::align_up(image_size, TLS_ALIGNMENT);
 }
 
-force_inline auto allocation_size() -> s64 {
+force_inline auto allocation_size() -> ssize {
     return block_size() + 2 * size_of(psize);
 }
 

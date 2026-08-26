@@ -154,7 +154,7 @@ struct Global_Descriptor_Table {
 static_assert(size_of(Global_Descriptor_Table) == 40);
 
 namespace hidden {
-    constexpr s64 IST1_STACK_SIZE = 4 * 1024;
+    constexpr ssize IST1_STACK_SIZE = 4 * 1024;
 
     alignas(16) inline Global_Descriptor_Table global_descriptor_table{};
     inline Global_Descriptor_Table_Register    global_descriptor_table_register{};

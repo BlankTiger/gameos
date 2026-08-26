@@ -25,7 +25,7 @@
 namespace threads {
 
 using Thread_Procedure = auto (*)(void*) -> void;
-constexpr u32 ANY_CPU = cast(u32)(-1);
+constexpr auto ANY_CPU = cast(u32)(-1);
 
 namespace hidden {
 
@@ -310,7 +310,7 @@ auto yield() -> void {
         kstd_assert(current->state.load(std::memory_order_relaxed) == State::RUNNING);
         kstd_assert(!ready_queue.full());
 
-        u32 handle = cast(u32)(current - threads.elements());
+        auto handle = cast(u32)(current - threads.elements());
 
         current->state.store(State::READY, std::memory_order_relaxed);
         ready_queue.push_back(handle);
@@ -334,7 +334,7 @@ auto idle_poll() -> bool {
 
         bool found = false;
         const auto queued = ready_queue.size;
-        for (s64 index = 0; index < queued; ++index) {
+        for (ssize index = 0; index < queued; ++index) {
             auto candidate = ready_queue.pop_front();
             auto& candidate_thread = threads[candidate];
             if (!found && (candidate_thread.cpu_affinity == ANY_CPU || candidate_thread.cpu_affinity == cpu)) {
@@ -447,9 +447,9 @@ auto spawn(Procedure procedure, Arguments&&... args) -> Thread_Handle<hidden::Pr
 
     // To reduce allocations we allocate only once for Control and for the thread's stack.
     using Control = Typed_Control<Procedure, Result_Type, Arguments...>;
-    constexpr s64 control_alignment = align_of(Control) > AP_STACK_ALIGNMENT ? align_of(Control) : AP_STACK_ALIGNMENT;
-    constexpr s64 stack_offset      = (size_of(Control) + AP_STACK_ALIGNMENT - 1) & ~(AP_STACK_ALIGNMENT - 1);
-    constexpr s64 storage_size      = stack_offset + THREAD_STACK_SIZE;
+    constexpr ssize control_alignment = align_of(Control) > AP_STACK_ALIGNMENT ? align_of(Control) : AP_STACK_ALIGNMENT;
+    constexpr ssize stack_offset      = (size_of(Control) + AP_STACK_ALIGNMENT - 1) & ~(AP_STACK_ALIGNMENT - 1);
+    constexpr ssize storage_size      = stack_offset + THREAD_STACK_SIZE;
 
     auto storage_allocation = mem::alloc(storage_size, control_alignment, context.allocator);
     auto* storage = storage_allocation.memory;

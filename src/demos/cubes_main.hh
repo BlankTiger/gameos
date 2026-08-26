@@ -64,8 +64,8 @@ auto cubes_main() -> void {
             f32 dragged_depth = 2.f;
             for (auto* candidate: {&cube, &cool_cube, &wireframe_cube}) {
                 auto projected = gfx::project(*candidate, camera);
-                f32 min_x = cast(f32)gfx::width();
-                f32 min_y = cast(f32)gfx::height();
+                auto min_x = cast(f32)gfx::width();
+                auto min_y = cast(f32)gfx::height();
                 f32 max_x = 0.f;
                 f32 max_y = 0.f;
                 f32 depth = 2.f;
@@ -93,7 +93,7 @@ auto cubes_main() -> void {
             dragged_cube = nullptr;
         } else if (dragged_cube != nullptr) {
             const f32 depth = -dragged_cube->translation.z;
-            const f32 aspect_ratio = cast(f32)gfx::width() / cast(f32)gfx::height();
+            const auto aspect_ratio = cast(f32)gfx::width() / cast(f32)gfx::height();
             dragged_cube->translation.x += 2.f * depth * aspect_ratio * cast(f32)mouse_delta.x / cast(f32)gfx::width();
             dragged_cube->translation.y -= 2.f * depth * cast(f32)mouse_delta.y / cast(f32)gfx::height();
             dragged_cube->recompute_matrix();
@@ -102,7 +102,7 @@ auto cubes_main() -> void {
         const u64 frame_start = get_ticks();
         const u64 elapsed     = frame_start - last_tick;
         last_tick = frame_start;
-        const f64 dt  = cast(f64)elapsed / TICK_RATE;
+        const auto dt = cast(f64)elapsed / TICK_RATE;
         const f64 fps = dt > 0.0 ? 1.0 / dt : 0.0;
 
         const f32 angle = RAD_PER_SEC * cast(f32)elapsed / cast(f32)TICK_RATE;

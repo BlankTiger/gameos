@@ -220,7 +220,7 @@ auto set_interrupt_request_line_masked(u8 irq_line, bool masked) -> void {
 
     const bool is_slave  = irq_line >= 8;
     const u16  data_port = is_slave ? PIC_DATA_PORT_SLAVE : PIC_DATA_PORT_MASTER;
-    const u8   bit       = cast(u8)(1 << (irq_line & 7));
+    const auto bit       = cast(u8)(1 << (irq_line & 7));
 
     u8 mask_register = inb(data_port);
     if (masked) {

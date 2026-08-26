@@ -131,7 +131,7 @@ using Abbreviations = Hash_Table<u64, Abbreviation>;
 // `debug_abbrev` must be initialized with memory of the .debug_abbrev section.
 // It's stopped at the (0, 0, 0) terminator that ends the abbreviations table.
 //
-auto parse_abbreviations(Byte_Reader& debug_abbrev, s64 preallocate_abbreviation_count = 0) -> Abbreviations {
+auto parse_abbreviations(Byte_Reader& debug_abbrev, ssize preallocate_abbreviation_count = 0) -> Abbreviations {
     Abbreviations abbreviations(preallocate_abbreviation_count);
 
     for (;;) {
@@ -234,7 +234,7 @@ struct Attribute_Value {
     };
 };
 
-inline auto normalize_section_offset(Array_View<const u8> section, u32 raw_offset) -> s64 {
+inline auto normalize_section_offset(Array_View<const u8> section, u32 raw_offset) -> ssize {
     if (raw_offset <= section.size) return raw_offset;
 
     // Linker resolves this DWARF relocation to section address when debug
@@ -244,7 +244,7 @@ inline auto normalize_section_offset(Array_View<const u8> section, u32 raw_offse
 
     auto offset = cast(psize)raw_offset - section_address;
     kstd_assert(offset <= section.size, "dwarf: section offset out of range");
-    return cast(s64)offset;
+    return cast(ssize)offset;
 }
 
 auto read_section_string(Array_View<const u8> section, u32 offset) -> string {
@@ -833,7 +833,7 @@ auto parse_directories_or_file_names(
     for (u64 index = 0; index < count; ++index) {
         string path{};
         bool   has_path = false;
-        s64    directory_index = -1;
+        ssize  directory_index = -1;
 
         defer({
             kstd_assert(has_path);
@@ -856,7 +856,7 @@ auto parse_directories_or_file_names(
             if (line_content_type == Line_Content_Type::DIRECTORY_INDEX) {
                 kstd_assert(value.kind == Attribute_Value_Kind::UNSIGNED);
                 kstd_assert(value.v_unsigned <= 0xffffffff);
-                directory_index = cast(s64)value.v_unsigned;
+                directory_index = cast(ssize)value.v_unsigned;
             }
         }
     }
@@ -931,7 +931,7 @@ auto parse_debug_line_header(Byte_Reader& debug_line, const Sections& sections) 
         sections
     );
 
-    for (s64 index = 0; index < file_names.size; ++index) {
+    for (ssize index = 0; index < file_names.size; ++index) {
         auto directory_index = file_directory_indices[index];
         if (file_names[index].size == 0 || file_names[index][0] == path::SEPARATOR)
             continue;
@@ -1016,7 +1016,7 @@ struct Debug_Line_State {
     explicit Debug_Line_State(bool default_is_stmt) : is_stmt(default_is_stmt) {}
 };
 
-auto parse_line_table(const Sections& sections, u32 debug_line_offset, s64 preallocate_row_count = 0) -> Array<Source_Row> {
+auto parse_line_table(const Sections& sections, u32 debug_line_offset, ssize preallocate_row_count = 0) -> Array<Source_Row> {
     Byte_Reader debug_line(sections.debug_line_bytes);
     auto normalized_offset = normalize_section_offset(sections.debug_line_bytes, debug_line_offset);
     auto skip_ok = debug_line.skip(normalized_offset);

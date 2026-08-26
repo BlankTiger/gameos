@@ -55,8 +55,8 @@ force_inline auto read_model_specific_register(u32 register_index) -> u64 {
 }
 
 force_inline auto write_model_specific_register(u32 register_index, u64 value) -> void {
-    u32 low  = cast(u32)value;
-    u32 high = cast(u32)(value >> 32);
+    auto low  = cast(u32)value;
+    auto high = cast(u32)(value >> 32);
     asm volatile("wrmsr" : : "c"(register_index), "a"(low), "d"(high));
 }
 

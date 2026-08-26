@@ -35,7 +35,7 @@ constexpr auto frexp_f32(f32 f) -> std::pair<f32, int> {
     if (exp_bits == 0xFF) return { f, 0 };  // inf/nan: pass through unchanged.
 
     // f = 1.mantissa * 2^(exp_bits-127) = (1.mantissa/2) * 2^(exp_bits-126).
-    int exponent      = cast(int)exp_bits - 126;
+    auto exponent     = cast(int)exp_bits - 126;
     u32 mantissa_bits = (bits & u32{0x807FFFFF}) | (u32{126} << 23);  // force exponent field to 126, i.e. 2^-1.
 
     return { std::bit_cast<f32>(mantissa_bits), exponent };
@@ -47,8 +47,8 @@ constexpr auto frexp_f32(f32 f) -> std::pair<f32, int> {
 constexpr auto ldexp_f32(f32 mantissa, int e) -> f32 {
     if (mantissa == 0.0f) return mantissa;
 
-    u32 bits     = std::bit_cast<u32>(mantissa);
-    int exp_bits = cast(int)((bits >> 23) & u32{0xFF}) + e;
+    u32  bits     = std::bit_cast<u32>(mantissa);
+    auto exp_bits = cast(int)((bits >> 23) & u32{0xFF}) + e;
 
     if (exp_bits <= 0)    return std::bit_cast<f32>(bits & u32{0x80000000});                   // underflow -> signed zero.
     if (exp_bits >= 0xFF) return std::bit_cast<f32>((bits & u32{0x80000000}) | (u32{0xFF} << 23)); // overflow  -> signed infinity.
@@ -77,12 +77,12 @@ force_inline auto lerp(u8 a, u8 b, int pos, int max) -> u8 {
 }
 
 force_inline auto floor(f32 x) -> s32 {
-    s32 i = cast(s32)x;
+    auto i = cast(s32)x;
     return x < cast(f32)i ? i - 1 : i;
 }
 
 force_inline auto ceil(f32 x) -> s32 {
-    s32 i = cast(s32)x;
+    auto i = cast(s32)x;
     return x > cast(f32)i ? i + 1 : i;
 }
 
@@ -233,8 +233,8 @@ force_inline auto tan(f32 xx) -> f32 {
 
     if (x > LOSSTH) return 0.0f;  // Total loss of precision; no error-reporting mechanism here.
 
-    s32 j = cast(s32)(FOPI * x);  // Integer part of x / (pi/4).
-    f32 y = cast(f32)j;
+    auto j = cast(s32)(FOPI * x);  // Integer part of x / (pi/4).
+    auto y = cast(f32)j;
 
     if (j & 1) {  // Map zeros and singularities to the origin.
         j += 1;
@@ -282,8 +282,8 @@ force_inline auto sin(f32 xx) -> f32 {
 
     if (x > T24M1) return 0.0f;  // Total loss of precision; no error-reporting mechanism here.
 
-    s32 j = cast(s32)(FOPI * x);  // Integer part of x / (pi/4).
-    f32 y = cast(f32)j;
+    auto j = cast(s32)(FOPI * x);  // Integer part of x / (pi/4).
+    auto y = cast(f32)j;
 
     if (j & 1) {  // Map zeros to the origin.
         j += 1;
@@ -333,8 +333,8 @@ force_inline auto cos(f32 xx) -> f32 {
 
     if (x > T24M1) return 0.0f;  // Total loss of precision; no error-reporting mechanism here.
 
-    s32 j = cast(s32)(FOPI * x);  // Integer part of x / (pi/4).
-    f32 y = cast(f32)j;
+    auto j = cast(s32)(FOPI * x);  // Integer part of x / (pi/4).
+    auto y = cast(f32)j;
 
     if (j & 1) {  // Map zeros to the origin.
         j += 1;
@@ -390,8 +390,8 @@ struct Vector2 {
           y(cast(T)other.y)
     {}
 
-    constexpr auto operator [] (s64 i) -> T& { return data[i]; }
-    constexpr auto operator [] (s64 i) const -> const T& { return data[i]; }
+    constexpr auto operator [] (ssize i) -> T& { return data[i]; }
+    constexpr auto operator [] (ssize i) const -> const T& { return data[i]; }
     [[nodiscard]] static constexpr auto zero() -> Vector2 { return Vector2{ T(0), T(0) }; }
     [[nodiscard]] static constexpr auto one()  -> Vector2 { return Vector2{ T(1), T(1) }; }
 };
@@ -415,8 +415,8 @@ struct Vector3 {
           z(cast(T)other.z)
     {}
 
-    constexpr auto operator [] (s64 i) -> T& { return data[i]; }
-    constexpr auto operator [] (s64 i) const -> const T& { return data[i]; }
+    constexpr auto operator [] (ssize i) -> T& { return data[i]; }
+    constexpr auto operator [] (ssize i) const -> const T& { return data[i]; }
     [[nodiscard]] static constexpr auto zero() -> Vector3 { return Vector3{ T(0), T(0), T(0) }; }
     [[nodiscard]] static constexpr auto one()  -> Vector3 { return Vector3{ T(1), T(1), T(1) }; }
 };
@@ -442,8 +442,8 @@ struct Vector4 {
           z(cast(T)other.w)
     {}
 
-    constexpr auto operator [] (s64 i) -> T& { return data[i]; }
-    constexpr auto operator [] (s64 i) const -> const T& { return data[i]; }
+    constexpr auto operator [] (ssize i) -> T& { return data[i]; }
+    constexpr auto operator [] (ssize i) const -> const T& { return data[i]; }
     explicit constexpr operator Vector3<T>() const { return Vector3<T>{ x, y, z }; }
     [[nodiscard]] static constexpr auto zero() -> Vector4 { return Vector4{ T(0), T(0), T(0), T(0) }; }
     [[nodiscard]] static constexpr auto one()  -> Vector4 { return Vector4{ T(1), T(1), T(1), T(1) }; }
@@ -487,7 +487,7 @@ namespace std {
     template<typename T>
     struct tuple_size<math::Vector2<T>> : integral_constant<size_t, 2> {};
 
-    template<int I, typename T>
+    template<size_t I, typename T>
     struct tuple_element<I, math::Vector2<T>> {
         using type = T;
     };
@@ -495,7 +495,7 @@ namespace std {
     template<typename T>
     struct tuple_size<math::Vector3<T>> : integral_constant<size_t, 3> {};
 
-    template<int I, typename T>
+    template<size_t I, typename T>
     struct tuple_element<I, math::Vector3<T>> {
         using type = T;
     };
@@ -503,7 +503,7 @@ namespace std {
     template<typename T>
     struct tuple_size<math::Vector4<T>> : integral_constant<size_t, 4> {};
 
-    template<int I, typename T>
+    template<size_t I, typename T>
     struct tuple_element<I, math::Vector4<T>> {
         using type = T;
     };
@@ -648,8 +648,8 @@ struct Quaternion {
         normalize(axis, Vector3<T>::zero());
         if (axis == Vector3<T>::zero()) return identity();
         T half = angle * T(0.5);
-        T s    = cast(T)(sin(cast(f32)half));
-        T c    = cast(T)(cos(cast(f32)half));
+        auto s = cast(T)(sin(cast(f32)half));
+        auto c = cast(T)(cos(cast(f32)half));
         return Quaternion{ axis.x * s, axis.y * s, axis.z * s, c };
     }
 };
@@ -1058,7 +1058,7 @@ TEST(Vector4, construct_from_vector3_float) {
 TEST(Vector4, convert_to_vector3) {
     Vector4<s32> v{1, 2, 3, 4};
 
-    Vector3<s32> result = cast(Vector3<s32>)v;
+    auto result = cast(Vector3<s32>)v;
 
     EXPECT_EQ(result.x, 1);
     EXPECT_EQ(result.y, 2);
@@ -1068,7 +1068,7 @@ TEST(Vector4, convert_to_vector3) {
 TEST(Vector4, convert_to_vector3_float) {
     Vector4<f32> v{1.0f, 2.0f, 3.0f, 4.0f};
 
-    Vector3<f32> result = cast(Vector3<f32>)v;
+    auto result = cast(Vector3<f32>)v;
 
     EXPECT_EQ(result.x, 1.0f);
     EXPECT_EQ(result.y, 2.0f);

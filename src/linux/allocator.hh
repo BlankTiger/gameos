@@ -11,9 +11,9 @@ struct Hosted_Allocator_State {
 
     struct Allocation_Header {
         void* raw;
-        s64   size;
-        s64   alignment;
-        s64   raw_alignment;
+        ssize size;
+        ssize alignment;
+        ssize raw_alignment;
         u64   magic;
     };
 
@@ -23,7 +23,7 @@ struct Hosted_Allocator_State {
         return { .proc = proc, .data = this };
     }
 
-    static auto proc(Allocator_Mode mode, s64 size, s64 alignment, s64, void* old_memory, void*) -> Allocator_Result {
+    static auto proc(Allocator_Mode mode, ssize size, ssize alignment, ssize, void* old_memory, void*) -> Allocator_Result {
         switch (mode) {
             case Allocator_Mode::ALLOCATE: {
                 if (size < 0 || alignment <= 0 || !math::is_power_of_two(alignment))
@@ -31,13 +31,13 @@ struct Hosted_Allocator_State {
 
                 if (size == 0) return result(nullptr);
 
-                const s64 requested_alignment = alignment;
-                const s64 raw_alignment       = requested_alignment < cast(s64)align_of(std::max_align_t) ? align_of(std::max_align_t) : requested_alignment;
-                const s64 requested_size      = size;
-                if (requested_size > S64_MAX - cast(s64)size_of(Allocation_Header) - requested_alignment + 1)
+                const ssize requested_alignment = alignment;
+                const ssize raw_alignment       = requested_alignment < align_of(std::max_align_t) ? align_of(std::max_align_t) : requested_alignment;
+                const ssize requested_size      = size;
+                if (requested_size > SSIZE_MAX_VALUE - size_of(Allocation_Header) - requested_alignment + 1)
                     return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
 
-                const s64 total_size = requested_size + size_of(Allocation_Header) + requested_alignment - 1;
+                const ssize total_size = requested_size + size_of(Allocation_Header) + requested_alignment - 1;
 
                 void* raw = ::operator new(cast(usize)total_size, cast(std::align_val_t)raw_alignment);
                 auto* aligned = cast(u8*)(align_up(ptr_addr(raw) + size_of(Allocation_Header), cast(psize)requested_alignment));
@@ -60,7 +60,7 @@ struct Hosted_Allocator_State {
                 if (header->magic != HEADER_MAGIC)
                     return result(nullptr, Allocator_Error::INVALID_POINTER);
 
-                ::operator delete(header->raw, cast(std::align_val_t)header->raw_alignment});
+                ::operator delete(header->raw, cast(std::align_val_t)header->raw_alignment);
                 return result(nullptr);
             } break;
 
@@ -103,7 +103,7 @@ struct Hosted_Allocator_State {
 #if UNIT_TEST
 namespace hidden {
     inline Hosted_Allocator_State hosted_allocator_state{};
-    constexpr s64 LINUX_TEMPORARY_ALLOCATOR_SIZE = 256 * 1024;
+    constexpr int LINUX_TEMPORARY_ALLOCATOR_SIZE = 256 * 1024;
     alignas(16) inline u8 linux_temporary_allocator_buffer[LINUX_TEMPORARY_ALLOCATOR_SIZE];
 
     struct Hosted_Allocator_Init {

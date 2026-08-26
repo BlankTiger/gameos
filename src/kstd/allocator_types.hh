@@ -72,11 +72,11 @@ struct Allocator_Query_Result {
 
 struct Allocator_Info {
     void* pointer{};
-    s64   size{};
-    s64   alignment{};
+    ssize size{};
+    ssize alignment{};
 };
 
-using Allocator_Proc = Allocator_Result (*)(Allocator_Mode mode, s64 size, s64 alignment, s64 old_size, void* old_memory, void* allocator_data);
+using Allocator_Proc = Allocator_Result (*)(Allocator_Mode mode, ssize size, ssize alignment, ssize old_size, void* old_memory, void* allocator_data);
 
 // @TODO(blanktiger): Note in documentation that every allocators get_allocator that includes pointer to state must obviously outlive everything that uses the returned Allocator
 struct Allocator {

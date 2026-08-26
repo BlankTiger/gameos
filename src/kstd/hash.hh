@@ -16,20 +16,20 @@ constexpr u64 FNV_64_OFFSET_BIAS = 0xcbf29ce484222325;
 template <typename Key_Type>
 using Hash_Function = auto (*)(Key_Type&) -> u32;
 
-auto sdbm_hash(const void* data, s64 size, u32 hash = HASH_INIT) -> u32 {
+auto sdbm_hash(const void* data, ssize size, u32 hash = HASH_INIT) -> u32 {
     auto* bytes = cast(const u8*)data;
-    for (s64 i = 0; i < size; ++i)
+    for (ssize i = 0; i < size; ++i)
         hash = (hash << 16) + (hash << 6) - hash + bytes[i];
 
     return hash;
 }
 
 template <typename Float_Type>
-auto sdbm_float_hash(const Float_Type* data, s64 count, u32 hash = HASH_INIT) -> u32 {
+auto sdbm_float_hash(const Float_Type* data, ssize count, u32 hash = HASH_INIT) -> u32 {
     static_assert(std::is_floating_point_v<Float_Type>);
     static_assert(size_of(Float_Type) == size_of(u32) || size_of(Float_Type) == size_of(u64));
 
-    for (s64 i = 0; i < count; ++i) {
+    for (ssize i = 0; i < count; ++i) {
         if constexpr (size_of(Float_Type) == size_of(u32)) {
             auto bits = std::bit_cast<u32>(data[i]);
             if (bits == 0x80000000) bits = 0;
@@ -48,9 +48,9 @@ auto fnv1a_hash(u64 value, u64 hash = FNV_64_OFFSET_BIAS) -> u64 {
     return (hash ^ value) * FNV_64_PRIME;
 }
 
-auto fnv1a_hash(const void* data, s64 size, u64 hash = FNV_64_OFFSET_BIAS) -> u64 {
+auto fnv1a_hash(const void* data, ssize size, u64 hash = FNV_64_OFFSET_BIAS) -> u64 {
     auto* bytes = cast(const u8*)data;
-    for (s64 i = 0; i < size; ++i)
+    for (ssize i = 0; i < size; ++i)
         hash = fnv1a_hash(bytes[i], hash);
 
     return hash;

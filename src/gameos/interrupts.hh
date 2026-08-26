@@ -380,7 +380,7 @@ extern "C" auto isr_dispatch(Interrupt_Frame* frame) -> void {
         default: isr_unimplemented_handler(type, error); break;
     }
 
-    const u8 vector = cast(u8)type;
+    const auto vector = cast(u8)type;
     const bool is_io_vector = vector >= 32 && vector < 48;
     if (is_io_vector) {
         // Early boot: 8259 still drives ISA IRQs (PIT calibrate).

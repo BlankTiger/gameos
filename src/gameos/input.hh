@@ -114,7 +114,7 @@ struct Poll_Result {
 
 namespace hidden {
 
-constexpr s64 EVENT_QUEUE_CAPACITY = 256;
+constexpr ssize EVENT_QUEUE_CAPACITY = 256;
 
 inline Ring_Buffer<Event, EVENT_QUEUE_CAPACITY> events;
 inline synchronization::Spinlock                lock;

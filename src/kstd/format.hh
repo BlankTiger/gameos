@@ -251,28 +251,28 @@ static force_inline auto print_value(Backend& backend, T&& value) -> int {
         // u8 buffer, so walking `data` would print bytes, not typed elements.
         if constexpr (std::is_convertible_v<decltype(value.elements()), const char*>) {
             const char* data_ptr = value.elements();
-            s64 sz = value.size;
-            for (s64 i = 0; i < sz; ++i) { backend.put_char(data_ptr[i]); }
+            ssize sz = value.size;
+            for (ssize i = 0; i < sz; ++i) { backend.put_char(data_ptr[i]); }
             return cast(int)sz;
         } else {
             backend.put_char('[');
             int written = 1;
             const bool newline_after_each = context.formatting_config.newline_after_each_array_element;
-            const s64 indent_spaces       = context.formatting_config.array_element_indent_spaces;
+            const int indent_spaces       = context.formatting_config.array_element_indent_spaces;
             auto* data_ptr = value.elements();
-            s64 sz = value.size;
+            ssize sz = value.size;
             if (newline_after_each && sz > 0) {
                 backend.new_line();
                 ++written;
             }
-            for (s64 i = 0; i < sz; ++i) {
+            for (ssize i = 0; i < sz; ++i) {
                 if (i > 0 && !newline_after_each) {
                     backend.put_char(',');
                     backend.put_char(' ');
                     written += 2;
                 }
                 if (newline_after_each) {
-                    for (s64 j = 0; j < indent_spaces; ++j) {
+                    for (int j = 0; j < indent_spaces; ++j) {
                         backend.put_char(' ');
                     }
                     written += cast(int)indent_spaces;
@@ -293,28 +293,28 @@ static force_inline auto print_value(Backend& backend, T&& value) -> int {
     } else if constexpr (requires { value.data; value.size; } && !requires { value.data(); }) {
         if constexpr (std::is_convertible_v<decltype(value.data), const char*>) {
             const char* data_ptr = value.data;
-            s64 sz = value.size;
-            for (s64 i = 0; i < sz; ++i) { backend.put_char(data_ptr[i]); }
+            ssize sz = value.size;
+            for (ssize i = 0; i < sz; ++i) { backend.put_char(data_ptr[i]); }
             return cast(int)sz;
         } else {
             backend.put_char('[');
             int written = 1;
             const bool newline_after_each = context.formatting_config.newline_after_each_array_element;
-            const s64 indent_spaces       = context.formatting_config.array_element_indent_spaces;
+            const int indent_spaces       = context.formatting_config.array_element_indent_spaces;
             auto* data_ptr = value.data;
-            s64 sz = value.size;
+            ssize sz = value.size;
             if (newline_after_each && sz > 0) {
                 backend.new_line();
                 ++written;
             }
-            for (s64 i = 0; i < sz; ++i) {
+            for (ssize i = 0; i < sz; ++i) {
                 if (i > 0 && !newline_after_each) {
                     backend.put_char(',');
                     backend.put_char(' ');
                     written += 2;
                 }
                 if (newline_after_each) {
-                    for (s64 j = 0; j < indent_spaces; ++j) {
+                    for (int j = 0; j < indent_spaces; ++j) {
                         backend.put_char(' ');
                     }
                     written += cast(int)indent_spaces;
@@ -335,8 +335,8 @@ static force_inline auto print_value(Backend& backend, T&& value) -> int {
     } else if constexpr (requires { value.data(); value.size; }) {
         if constexpr (std::is_convertible_v<decltype(value.data()), const char*>) {
             const char* data = value.data();
-            s64 size = value.size;
-            for (s64 i = 0; i < size; ++i) {
+            ssize size = value.size;
+            for (ssize i = 0; i < size; ++i) {
                 backend.put_char(data[i]);
             }
             return cast(int)size;
@@ -346,8 +346,8 @@ static force_inline auto print_value(Backend& backend, T&& value) -> int {
     } else if constexpr (requires { value.data(); value.size(); }) {
         if constexpr (std::is_convertible_v<decltype(value.data()), const char*>) {
             const char* data = value.data();
-            s64 size = value.size();
-            for (s64 i = 0; i < size; ++i) {
+            ssize size = value.size();
+            for (ssize i = 0; i < size; ++i) {
                 backend.put_char(data[i]);
             }
             return cast(int)size;
@@ -362,12 +362,12 @@ static force_inline auto print_value(Backend& backend, T&& value) -> int {
 // -- format string parsing --
 
 template <typename Backend>
-force_inline auto write_literal(Backend& backend, const char* data, s64 length) -> int {
+force_inline auto write_literal(Backend& backend, const char* data, ssize length) -> int {
     if (length == 0) return 0;
     if constexpr (requires { backend.append(data, length); }) {
         backend.append(data, length);
     } else {
-        for (s64 i = 0; i < length; ++i)
+        for (ssize i = 0; i < length; ++i)
             backend.put_char(data[i]);
     }
     return cast(int)length;
@@ -378,7 +378,7 @@ force_inline auto is_digit(char c) -> bool {
 }
 
 template <int I = 0, typename Backend, typename Tuple>
-force_inline auto print_arg_at(Backend& backend, Tuple& args, s64 index) -> int {
+force_inline auto print_arg_at(Backend& backend, Tuple& args, ssize index) -> int {
     if constexpr (I < std::tuple_size_v<Tuple>) {
         if (I == index)
             return print_value(backend, std::get<I>(args));
@@ -389,11 +389,11 @@ force_inline auto print_arg_at(Backend& backend, Tuple& args, s64 index) -> int 
 
 template <typename Backend, typename Tuple>
 auto print_impl(Backend& backend, string format, Tuple& args) -> int {
-    constexpr s64 arg_count = std::tuple_size_v<Tuple>;
+    constexpr int arg_count = std::tuple_size_v<Tuple>;
 
-    s64 implicit_index_cursor = 0;
-    s64 cursor                = 0;
-    s64 printed               = 0;
+    ssize implicit_index_cursor = 0;
+    ssize cursor                = 0;
+    ssize printed               = 0;
     int   written               = 0;
 
     while (cursor < format.size) {
@@ -416,7 +416,7 @@ auto print_impl(Backend& backend, string format, Tuple& args) -> int {
         written += write_literal(backend, format.data + printed, cursor - printed);
         cursor += 1;  // skip '%'
 
-        s64 value = implicit_index_cursor;
+        ssize value = implicit_index_cursor;
 
         if (cursor < format.size) {
             char next = format.data[cursor];
@@ -429,13 +429,13 @@ auto print_impl(Backend& backend, string format, Tuple& args) -> int {
                 continue;
             }
             if (is_digit(next)) {
-                s64 start = cursor;
-                s64 sum   = 0;
+                ssize start = cursor;
+                ssize sum   = 0;
                 while (cursor < format.size && is_digit(format.data[cursor])) {
-                    sum = sum * 10 + cast(s64)(format.data[cursor] - '0');
+                    sum = sum * 10 + cast(ssize)(format.data[cursor] - '0');
                     cursor += 1;
                 }
-                s64 digit_count = cursor - start;
+                ssize digit_count = cursor - start;
                 if (sum == 0) {
                     if (digit_count >= 2) {
                         // %00, %000, ... -> empty insert
@@ -532,7 +532,7 @@ namespace fmt_test {
 
 struct Capture_Backend {
     char  buffer[256] = {};
-    s64   length      = 0;
+    ssize length      = 0;
 
     auto put_char(char c) -> void {
         if (length + 1 < size_of(buffer)) buffer[length++] = c;

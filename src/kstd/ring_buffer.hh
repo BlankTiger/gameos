@@ -4,17 +4,17 @@
 #include "basic.hh"
 #include "string_builder.hh"
 
-template <typename T, s64 N>
+template <typename T, ssize N>
 struct Ring_Buffer {
     static_assert(N > 0);
 
     Static_Array<T, N> data;
-    s64                head = 0;
-    s64                tail = 0;
-    s64                size = 0;
+    ssize              head = 0;
+    ssize              tail = 0;
+    ssize              size = 0;
 
     auto push_back(const T& element) -> void {
-        kstd_assert(size < cast(s64)N, "push_back on full Ring_Buffer");
+        kstd_assert(size < N, "push_back on full Ring_Buffer");
 
         data[tail] = element;
         tail = (tail + 1) % N;
@@ -47,7 +47,7 @@ struct Ring_Buffer {
     auto format() const -> string {
         String_Builder builder;
         builder.append("[");
-        for (s64 index = 0; index < size; ++index) {
+        for (ssize index = 0; index < size; ++index) {
             if (index > 0) builder.append(", ");
             builder.print(data[(head + index) % N]);
         }

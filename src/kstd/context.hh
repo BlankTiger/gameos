@@ -9,8 +9,8 @@ struct Temporary_Allocator_State;
 namespace ctx {
 
 struct Formatting_Config {
-    bool  newline_after_each_array_element = false;
-    s64 array_element_indent_spaces        = 4;
+    bool newline_after_each_array_element = false;
+    int  array_element_indent_spaces      = 4;
 };
 
 } // namespace context

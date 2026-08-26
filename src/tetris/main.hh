@@ -89,8 +89,8 @@ struct Game {
     Grid3<Block_Type> grid;
     Grid3<u8> body_indices;
     Falling_Body falling_body;
-    s64 falling_body_index = 0;
-    s64 next_falling_body_index = krand::generate(0, available_bodies.size());
+    ssize falling_body_index = 0;
+    ssize next_falling_body_index = krand::generate(0, available_bodies.size());
     bool game_over = false;
 
     Array<u32> layers_to_destroy;
@@ -120,8 +120,8 @@ constexpr f32 TETRIS_PREVIEW_DISTANCE = 8.f;
 constexpr f32 TETRIS_PREVIEW_BLOCK_SCALE = TETRIS_BLOCK_SCALE / 3;
 constexpr f32 TETRIS_PREVIEW_BLOCK_SPACING = TETRIS_BLOCK_SPACING / 3;
 
-constexpr s64 TETRIS_SHADOW_MAX_VERTICES = ARBITRARY_FALLING_BODY_BLOCK_SIZE_LIMIT * 6 * 4;
-constexpr s64 TETRIS_SHADOW_MAX_INDICES = ARBITRARY_FALLING_BODY_BLOCK_SIZE_LIMIT * 6 * 2;
+constexpr int TETRIS_SHADOW_MAX_VERTICES = ARBITRARY_FALLING_BODY_BLOCK_SIZE_LIMIT * 6 * 4;
+constexpr int TETRIS_SHADOW_MAX_INDICES = ARBITRARY_FALLING_BODY_BLOCK_SIZE_LIMIT * 6 * 2;
 
 constexpr f32 TETRIS_ORIGIN_Z = 0.0f;
 constexpr f32 TETRIS_CAMERA_OFFSET_Z = -8.0f;
@@ -154,7 +154,7 @@ constexpr Static_Array<gfx::Color, available_bodies.size()> TETRIS_BODY_COLORS{{
 constexpr auto make_tetris_dimmed_body_colors() {
     constexpr f32 TETRIS_SOLID_COLOR_DIM = 0.5f;
     Static_Array<gfx::Color, available_bodies.size()> colors{{}};
-    for (s64 i = 0; i < colors.size; ++i) {
+    for (ssize i = 0; i < colors.size; ++i) {
         colors[i] = TETRIS_BODY_COLORS[i].dim(TETRIS_SOLID_COLOR_DIM);
     }
     return colors;
@@ -173,8 +173,8 @@ inline Static_Array<gfx::Index, TETRIS_BOARD_INDEX_COUNT> tetris_checkerboard_in
 inline gfx::Mesh tetris_checkerboard_mesh;
 
 auto initialize_tetris_meshes() -> void {
-    for (s64 body_index = 0; body_index < tetris_solid_meshes.size; ++body_index) {
-        for (s64 vertex_index = 0; vertex_index < gfx::UNIT_CUBE.vertices.size; ++vertex_index) {
+    for (ssize body_index = 0; body_index < tetris_solid_meshes.size; ++body_index) {
+        for (ssize vertex_index = 0; vertex_index < gfx::UNIT_CUBE.vertices.size; ++vertex_index) {
             tetris_solid_vertices[body_index][vertex_index] = gfx::UNIT_CUBE.vertices[vertex_index];
             tetris_solid_vertices[body_index][vertex_index].color = TETRIS_DIMMED_BODY_COLORS[body_index];
         }
@@ -191,9 +191,9 @@ auto initialize_tetris_board_mesh() -> void {
             const u32 cell_index = row * TETRIS_BOARD_CELL_COLS + col;
             const u32 vertex_index = cell_index * 4;
             const u32 index_index = cell_index * 2;
-            const f32 x1 = cast(f32)row - TETRIS_BOARD_CELL_ROWS / 2.f;
+            const auto x1 = cast(f32)row - TETRIS_BOARD_CELL_ROWS / 2.f;
             const f32 x2 = x1 + 1.f;
-            const f32 y1 = cast(f32)col - TETRIS_BOARD_CELL_COLS / 2.f;
+            const auto y1 = cast(f32)col - TETRIS_BOARD_CELL_COLS / 2.f;
             const f32 y2 = y1 + 1.f;
             const gfx::Color color = ((row + col) & 1) == 0 ? TETRIS_CHECKER_COLOR_A : TETRIS_CHECKER_COLOR_B;
 
@@ -238,7 +238,7 @@ auto update_tetris_camera_controls(gfx::Camera3D& camera, f32& orbit_angle, f32&
 
 auto camera_relative_move_delta(f32 orbit_angle, s32 screen_x, s32 screen_y) -> Vector2<s32> {
     f32 quarter_turns = orbit_angle / (TETRIS_PI * 0.5f);
-    s32 sector = cast(s32)(quarter_turns >= 0.f ? quarter_turns + 0.5f : quarter_turns - 0.5f);
+    auto sector = cast(s32)(quarter_turns >= 0.f ? quarter_turns + 0.5f : quarter_turns - 0.5f);
     sector = ((sector % 4) + 4) % 4;
 
     constexpr Static_Array<Vector2<s32>, 4> screen_right_deltas{{
@@ -357,8 +357,8 @@ auto tetris_block_occludes_falling_or_shadow(
 // Remove inside faces from the shadow mesh
 auto update_tetris_shadow_mesh(const Falling_Body& body) -> void {
     const auto anchor = body.blocks[0];
-    s64 vertex_count = 0;
-    s64 index_count = 0;
+    ssize vertex_count = 0;
+    ssize index_count = 0;
 
     for (const auto& [row, col, layer] : body.blocks) {
         const Vector3<f32> offset{
@@ -379,7 +379,7 @@ auto update_tetris_shadow_mesh(const Falling_Body& body) -> void {
             }
             if (neighbor_inside) continue;
 
-            const s64 vertex_offset = vertex_count;
+            const ssize vertex_offset = vertex_count;
             for (int vertex = face * 4; vertex < face * 4 + 4; ++vertex) {
                 auto shadow_vertex = gfx::UNIT_CUBE.vertices[vertex];
                 shadow_vertex.position += offset * (TETRIS_BLOCK_SPACING / TETRIS_BLOCK_SCALE);
@@ -406,8 +406,8 @@ auto update_tetris_shadow_mesh(const Falling_Body& body) -> void {
 auto draw_tetris_back_walls(const Game& game, gfx::Camera3D& camera) -> void {
     const bool negative_x_wall = camera.position.x >= 0.f;
     const bool positive_y_wall = camera.position.y <= 0.f;
-    const f32 x_edge = cast(f32)game.grid.rows / 2.f + TETRIS_BOARD_WALL_GAP;
-    const f32 y_edge = cast(f32)game.grid.cols / 2.f + TETRIS_BOARD_WALL_GAP;
+    const auto x_edge = cast(f32)game.grid.rows / 2.f + TETRIS_BOARD_WALL_GAP;
+    const auto y_edge = cast(f32)game.grid.cols / 2.f + TETRIS_BOARD_WALL_GAP;
     const f32 board_z = tetris_board_z(game);
     const f32 wall_z = board_z + TETRIS_BOARD_WALL_HEIGHT / 2.f;
 
@@ -475,7 +475,7 @@ auto draw_tetris_block(
 
 auto draw_tetris_block(
     gfx::Camera3D& camera,
-    s64 body_index,
+    ssize body_index,
     Vector3<f32> position,
     Vector3<f32> scale = {TETRIS_BLOCK_SCALE, TETRIS_BLOCK_SCALE, TETRIS_BLOCK_SCALE}
 ) -> void {
@@ -495,7 +495,7 @@ auto draw_tetris_block(
 auto tetris_preview_world_position(const gfx::Camera3D& camera) -> Vector3<f32> {
     const f32 panel_width = TETRIS_PREVIEW_WIDTH + TETRIS_PREVIEW_MARGIN * 2.f;
     const f32 center_x = TETRIS_PREVIEW_MARGIN + panel_width / 2.f;
-    const f32 center_y = cast(f32)gfx::height() / 2.f;
+    const auto center_y = cast(f32)gfx::height() / 2.f;
     const f32 ndc_x = center_x / cast(f32)gfx::width() * 2.f - 1.f;
     const f32 ndc_y = 1.f - center_y / cast(f32)gfx::height() * 2.f;
     const Vector4<f32> camera_position{
@@ -844,8 +844,8 @@ auto move_falling_body_lower(Game& game) -> void {
 auto try_moving_falling_body(Game& game, s32 row_delta, s32 col_delta) -> bool {
     Blocks moved;
     for (const auto& [row, col, layer] : game.falling_body.blocks) {
-        const s32 new_row = cast(s32)row + row_delta;
-        const s32 new_col = cast(s32)col + col_delta;
+        const auto new_row = cast(s32)row + row_delta;
+        const auto new_col = cast(s32)col + col_delta;
         if (new_row < 0 || new_col < 0 || new_row >= cast(s32)game.grid.rows || new_col >= cast(s32)game.grid.cols)
             return false;
 
@@ -885,9 +885,9 @@ auto update(Game& game, f32 camera_orbit_angle) -> void {
                 return game.grid.at(row, col, layer) == Block_Type::FALLING;
             };
 
-            s64 write_layer = cast(s64)game.grid.layers - 1;
+            auto write_layer = game.grid.layers - 1;
 
-            for (s64 read_layer = cast(s64)game.grid.layers - 1; read_layer >= 0; --read_layer) {
+            for (auto read_layer = game.grid.layers - 1; read_layer >= 0; --read_layer) {
                 if (!layer_destroyed[read_layer]) {
                     if (read_layer != write_layer) {
                         game.grid.copy_layer(cast(u32)read_layer, cast(u32)write_layer, skip_if_is_falling);
@@ -897,7 +897,7 @@ auto update(Game& game, f32 camera_orbit_angle) -> void {
                 }
             }
 
-            for (s64 layer = write_layer; layer >= 0; --layer) {
+            for (ssize layer = write_layer; layer >= 0; --layer) {
                 game.grid.clear_layer(cast(u32)layer, skip_if_is_falling);
                 game.body_indices.clear_layer(cast(u32)layer, skip_if_is_falling);
             }
@@ -966,7 +966,7 @@ auto update(Game& game, f32 camera_orbit_angle) -> void {
                 }
 
                 // If there is a new full layer, then schedule it for destruction.
-                for (s64 layer_index = game.grid.layers - 1; layer_index >= 0; --layer_index) {
+                for (auto layer_index = game.grid.layers - 1; layer_index >= 0; --layer_index) {
                     if (game.grid.layer_filled_with(layer_index, Block_Type::SOLID)) {
                         game.layers_to_destroy.push_back(layer_index);
                     }

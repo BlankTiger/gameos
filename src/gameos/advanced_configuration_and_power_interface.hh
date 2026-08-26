@@ -12,10 +12,10 @@
 
 namespace acpi {
 
-constexpr s64 RSDP_V1_SIZE            = 20;
-constexpr s64 MAX_CPUS                = 64;
-constexpr s64 MAX_IOAPICS             = 4;
-constexpr s64 MAX_INTERRUPT_OVERRIDES = 32;
+constexpr int RSDP_V1_SIZE            = 20;
+constexpr int MAX_CPUS                = 64;
+constexpr int MAX_IOAPICS             = 4;
+constexpr int MAX_INTERRUPT_OVERRIDES = 32;
 
 inline constexpr char RSDP_SIGNATURE[8] = {
     'R', 'S', 'D', ' ', 'P', 'T', 'R', ' '
@@ -25,10 +25,10 @@ inline constexpr char RSDT_SIGNATURE[4] = { 'R', 'S', 'D', 'T' };
 inline constexpr char XSDT_SIGNATURE[4] = { 'X', 'S', 'D', 'T' };
 
 // Every ACPI table: sum of all bytes in the structure is 0 mod 256.
-force_inline auto checksum_ok(const void* table, s64 size) -> bool {
+force_inline auto checksum_ok(const void* table, ssize size) -> bool {
     u8 sum = 0;
     const auto* bytes = cast(const u8*)table;
-    for (s64 i = 0; i < size; ++i) {
+    for (ssize i = 0; i < size; ++i) {
         sum = cast(u8)(sum + bytes[i]);
     }
     return sum == 0;
@@ -234,7 +234,7 @@ auto find_rsdp_bios_scan() -> const RSDP* {
     kstd_memcpy(&extended_bios_data_area_segment, addr_as<const u8*>(0x40E), size_of(extended_bios_data_area_segment));
     // Word at 0x40E is a real-mode segment, not a byte address.
     // One segment unit is 16 bytes, so base = segment * 16.
-    const u64 extended_bios_data_area_base = cast(u64)extended_bios_data_area_segment << 4;
+    const auto extended_bios_data_area_base = cast(u64)extended_bios_data_area_segment << 4;
     if (extended_bios_data_area_base != 0) {
         const auto* rsdp = find_rsdp_in_range(extended_bios_data_area_base, extended_bios_data_area_base + 1024);
         if (rsdp != nullptr) return rsdp;
@@ -292,11 +292,11 @@ auto find_madt_in_rsdt(const SDT_Header* rsdt) -> const MADT* {
     if (!sdt_valid(rsdt)) return nullptr;
     if (!kstd_memeq(rsdt->signature, RSDT_SIGNATURE)) return nullptr;
 
-    const s64 entry_bytes = rsdt->length - size_of(SDT_Header);
-    const s64 entry_count = entry_bytes / size_of(u32);
+    const ssize entry_bytes = rsdt->length - size_of(SDT_Header);
+    const ssize entry_count = entry_bytes / size_of(u32);
     const auto* entries = addr_as<const u32*>(ptr_addr(rsdt) + size_of(SDT_Header));
 
-    for (s64 i = 0; i < entry_count; ++i) {
+    for (ssize i = 0; i < entry_count; ++i) {
         const auto* header = addr_as<const SDT_Header*>(entries[i]);
         if (!sdt_valid(header)) continue;
         if (kstd_memeq(header->signature, MADT_SIGNATURE)) {
@@ -310,11 +310,11 @@ auto find_madt_in_xsdt(const SDT_Header* xsdt) -> const MADT* {
     if (!sdt_valid(xsdt)) return nullptr;
     if (!kstd_memeq(xsdt->signature, XSDT_SIGNATURE)) return nullptr;
 
-    const s64 entry_bytes = xsdt->length - size_of(SDT_Header);
-    const s64 entry_count = entry_bytes / size_of(u64);
+    const ssize entry_bytes = xsdt->length - size_of(SDT_Header);
+    const ssize entry_count = entry_bytes / size_of(u64);
     const auto* entries = addr_as<const u64*>(ptr_addr(xsdt) + size_of(SDT_Header));
 
-    for (s64 i = 0; i < entry_count; ++i) {
+    for (ssize i = 0; i < entry_count; ++i) {
         const auto* header = addr_as<const SDT_Header*>(entries[i]);
         if (!sdt_valid(header)) continue;
         if (kstd_memeq(header->signature, MADT_SIGNATURE)) {
@@ -340,7 +340,7 @@ auto find_madt(const RSDP* rsdp) -> const MADT* {
 }
 
 auto push_cpu(MADT_Info& info, u32 apic_id, u32 acpi_id, bool enabled) -> void {
-    if (info.cpus.size >= cast(s64)MAX_CPUS) {
+    if (info.cpus.size >= MAX_CPUS) {
         serial::println("MADT: cpu list full, dropping apic_id=%", apic_id);
         return;
     }
@@ -422,7 +422,7 @@ auto print_madt(const MADT_Info& info) -> void {
         info.overrides.size
     );
 
-    for (s64 i = 0; i < info.cpus.size; ++i) {
+    for (ssize i = 0; i < info.cpus.size; ++i) {
         const auto& cpu = info.cpus[i];
         serial::println(
             "MADT cpu[%] -> apic_id=% acpi_id=% enabled=% bsp=%",
@@ -434,7 +434,7 @@ auto print_madt(const MADT_Info& info) -> void {
         );
     }
 
-    for (s64 i = 0; i < info.ioapics.size; ++i) {
+    for (ssize i = 0; i < info.ioapics.size; ++i) {
         const auto& io = info.ioapics[i];
         serial::println(
             "MADT ioapic[%] -> id=% mmio=% gsi_base=%",
@@ -445,7 +445,7 @@ auto print_madt(const MADT_Info& info) -> void {
         );
     }
 
-    for (s64 i = 0; i < info.overrides.size; ++i) {
+    for (ssize i = 0; i < info.overrides.size; ++i) {
         const auto& o = info.overrides[i];
         serial::println(
             "MADT override[%] -> isa_irq=% gsi=% polarity=% trigger=%",

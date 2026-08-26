@@ -18,10 +18,10 @@ using f32 = std::float32_t;
 using f64 = std::float64_t;
 
 using usize = std::size_t;
-using isize = std::ptrdiff_t;
+using ssize = std::ptrdiff_t;
 using psize = std::uintptr_t;
 
-static_assert(sizeof(usize) == sizeof(isize));
+static_assert(sizeof(usize) == sizeof(ssize));
 
 constexpr auto S8_MAX  = std::numeric_limits<s8>::max();
 constexpr auto S16_MAX = std::numeric_limits<s16>::max();
@@ -57,6 +57,9 @@ constexpr auto F64_MIN = std::numeric_limits<f64>::lowest();
 
 constexpr auto USIZE_MAX = std::numeric_limits<usize>::max();
 constexpr auto PSIZE_MAX = std::numeric_limits<psize>::max();
+// For some reason there is somehow SSIZE_MAX somewhere..??
+constexpr auto SSIZE_MAX_VALUE = std::numeric_limits<ssize>::max();
 
 constexpr auto USIZE_MIN = std::numeric_limits<usize>::min();
 constexpr auto PSIZE_MIN = std::numeric_limits<psize>::min();
+constexpr auto SSIZE_MIN_VALUE = std::numeric_limits<ssize>::min();

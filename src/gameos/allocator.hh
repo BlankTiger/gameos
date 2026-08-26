@@ -49,8 +49,8 @@ struct Buddy_Allocator_State {
     }
 
     static auto order_for_block_size(u64 block_size) -> int {
-        int order     = MIN_ORDER;
-        u64   current = mem::PAGE_SIZE;
+        int order   = MIN_ORDER;
+        int current = mem::PAGE_SSIZE;
         while (current < block_size && order < MAX_ORDER) {
             current <<= 1;
             order++;
@@ -59,7 +59,7 @@ struct Buddy_Allocator_State {
     }
 
     static auto next_block_size(u64 required_size) -> u64 {
-        u64 block_size = mem::PAGE_SIZE;
+        u64 block_size = mem::PAGE_USIZE;
         while (block_size < required_size && block_size < (u64{1} << MAX_ORDER))
             block_size <<= 1;
         return block_size;
@@ -89,18 +89,18 @@ struct Buddy_Allocator_State {
     }
 
     auto add_region(u64 base, u64 size) -> void {
-        const u64 start = align_up(base, cast(u64)mem::PAGE_SIZE);
-        const u64 end   = align_down(base + size, cast(u64)mem::PAGE_SIZE);
+        const u64 start = align_up(base, mem::PAGE_USIZE);
+        const u64 end   = align_down(base + size, mem::PAGE_USIZE);
         if (start >= end) return;
 
         u64 current = start;
         while (current < end) {
             u64 block_size = math::floor_pow2(end - current);
-            while (block_size > mem::PAGE_SIZE && (current & (block_size - 1)) != 0)
+            while (block_size > mem::PAGE_USIZE && (current & (block_size - 1)) != 0)
                 block_size >>= 1;
 
-            if (block_size < mem::PAGE_SIZE)
-                block_size = mem::PAGE_SIZE;
+            if (block_size < mem::PAGE_USIZE)
+                block_size = mem::PAGE_USIZE;
 
             const int order = order_for_block_size(block_size);
             push_free_block(current, order);
@@ -108,7 +108,7 @@ struct Buddy_Allocator_State {
         }
     }
 
-    static auto proc(Allocator_Mode mode, s64 size, s64 alignment, s64, void* old_memory, void* buddy_state) -> Allocator_Result {
+    static auto proc(Allocator_Mode mode, ssize size, ssize alignment, ssize, void* old_memory, void* buddy_state) -> Allocator_Result {
         auto* state = cast(Buddy_Allocator_State*)buddy_state;
 
         switch (mode) {
@@ -118,15 +118,15 @@ struct Buddy_Allocator_State {
 
                 if (size == 0) return result(nullptr);
 
-                const u64 requested_size      = cast(u64)size;
-                const u64 requested_alignment = cast(u64)alignment;
-                const u64 required_size       = requested_size + requested_alignment + size_of(Allocation_Header);
+                const auto requested_size      = cast(u64)size;
+                const auto requested_alignment = cast(u64)alignment;
+                const u64  required_size       = requested_size + requested_alignment + size_of(Allocation_Header);
                 if (required_size < requested_size)
                     return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
 
                 auto scoped_lock = state->lock.scoped_irq_lock();
                 const u64 target_block_size = next_block_size(required_size);
-                if (target_block_size < mem::PAGE_SIZE) return result(nullptr, Allocator_Error::OUT_OF_MEMORY);
+                if (target_block_size < mem::PAGE_USIZE) return result(nullptr, Allocator_Error::OUT_OF_MEMORY);
 
                 const int target_order = order_for_block_size(target_block_size);
                 int order = target_order;
@@ -205,8 +205,8 @@ struct Buddy_Allocator_State {
                 auto scoped_lock = state->lock.scoped_irq_lock();
                 Allocation_Header header{};
                 kstd_memcpy(&header, cast(void*)(ptr_addr(info->pointer) - size_of(Allocation_Header)), size_of(header));
-                info->size      = cast(s64)block_size_for_order(header.order);
-                info->alignment = cast(s64)mem::PAGE_SIZE;
+                info->size      = block_size_for_order(header.order);
+                info->alignment = mem::PAGE_SSIZE;
 
                 return result(nullptr);
             } break;

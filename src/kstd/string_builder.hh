@@ -10,7 +10,7 @@
 #include "format.hh"
 #include "string.hh"
 
-inline constexpr s64 STRING_BUILDER_BUFFER_SIZE = 512;
+inline constexpr int STRING_BUILDER_BUFFER_SIZE = 512;
 
 //
 // Linked buffers, pointers into prior buffers stay valid. Initial inline
@@ -18,21 +18,21 @@ inline constexpr s64 STRING_BUILDER_BUFFER_SIZE = 512;
 //
 struct String_Builder {
     struct Buffer {
-        s64     count     = 0;
-        s64     allocated = 0;
+        ssize   count     = 0;
+        ssize   allocated = 0;
         Buffer* next      = nullptr;
     };
 
     static_assert(STRING_BUILDER_BUFFER_SIZE > size_of(Buffer));
-    static constexpr s64 INITIAL_DATA_SIZE = STRING_BUILDER_BUFFER_SIZE - size_of(Buffer);
+    static constexpr ssize INITIAL_DATA_SIZE = STRING_BUILDER_BUFFER_SIZE - size_of(Buffer);
 
     mem::Allocator  allocator{};
     Buffer*         current_buffer         = nullptr;
-    s64             subsequent_buffer_size = INITIAL_DATA_SIZE;
+    ssize           subsequent_buffer_size = INITIAL_DATA_SIZE;
     bool            failed                 = false;
     alignas(Buffer) u8 initial_bytes[STRING_BUILDER_BUFFER_SIZE]{};
 
-    String_Builder(mem::Allocator allocator = {}, s64 buffer_size = 0)
+    String_Builder(mem::Allocator allocator = {}, ssize buffer_size = 0)
         : allocator(mem::resolve_allocator(allocator)),
           current_buffer(nullptr),
           subsequent_buffer_size(buffer_size > 0 ? buffer_size : INITIAL_DATA_SIZE),
@@ -60,12 +60,12 @@ struct String_Builder {
         failed = false;
     }
 
-    auto append(const char* bytes, s64 length) -> void {
+    auto append(const char* bytes, ssize length) -> void {
         if (bytes == nullptr || length == 0) return;
 
         while (length > 0) {
             Buffer* buffer = get_current_buffer();
-            s64 length_max = buffer->allocated - buffer->count;
+            ssize length_max = buffer->allocated - buffer->count;
             if (length_max == 0) {
                 if (!expand()) {
                     failed = true;
@@ -76,7 +76,7 @@ struct String_Builder {
                 kstd_assert(length_max > 0, "String_Builder expand produced empty buffer");
             }
 
-            s64 to_copy = length < length_max ? length : length_max;
+            ssize to_copy = length < length_max ? length : length_max;
             kstd_memcpy(buffer_data(buffer) + buffer->count, bytes, to_copy);
             buffer->count += to_copy;
             length        -= to_copy;
@@ -110,8 +110,8 @@ struct String_Builder {
         return fmt::println(*this, std::forward<Args>(args)...);
     }
 
-    auto length() const -> s64 {
-        s64 bytes = 0;
+    auto length() const -> ssize {
+        ssize bytes = 0;
         for (const Buffer* buffer = base_buffer(); buffer != nullptr; buffer = buffer->next)
             bytes += buffer->count;
         return bytes;
@@ -121,7 +121,7 @@ struct String_Builder {
     // Chain buffers stay on builder's allocator. Non-owning; pair with
     // free_string when not on temp. Resets builder by default.
     auto to_string(mem::Allocator destination_allocator = {}, bool do_reset = true) -> string {
-        s64 count = length();
+        ssize count = length();
         if (count == 0) {
             if (do_reset) reset();
             return string{};
@@ -146,7 +146,7 @@ struct String_Builder {
     // global). Chain buffers stay on builder's allocator. free_c_string when not
     // on temp. Resets builder by default.
     auto to_c_string(mem::Allocator destination_allocator = {}, bool do_reset = true) -> const char* {
-        s64 count = length();
+        ssize count = length();
 
         auto* out = cast(char*)(mem::alloc(count + 1, align_of(char), destination_allocator).memory);
         kstd_assert(out != nullptr, "String_Builder::to_c_string allocation failed");
@@ -188,7 +188,7 @@ private:
         Buffer* buffer = base->next;
         while (buffer != nullptr) {
             Buffer* next = buffer->next;
-            s64 block_size = size_of(Buffer) + buffer->allocated;
+            ssize block_size = size_of(Buffer) + buffer->allocated;
             cast(void)mem::free(buffer, block_size, align_of(Buffer), allocator);
             buffer = next;
         }
@@ -198,8 +198,8 @@ private:
     auto expand() -> bool {
         kstd_assert(allocator.valid(), "String_Builder expand without a valid allocator.");
 
-            s64 subsequent = subsequent_buffer_size > 0 ? subsequent_buffer_size : INITIAL_DATA_SIZE;
-            s64 block_size = size_of(Buffer) + subsequent;
+            ssize subsequent = subsequent_buffer_size > 0 ? subsequent_buffer_size : INITIAL_DATA_SIZE;
+            ssize block_size = size_of(Buffer) + subsequent;
         auto allocation = mem::alloc(block_size, align_of(Buffer), allocator);
         auto* bytes = cast(u8*)allocation.memory;
         if (bytes == nullptr) return false;
@@ -276,12 +276,12 @@ TEST(String_Builder, append_and_to_string) {
 
 TEST(String_Builder, grows_past_initial_buffer) {
     String_Builder builder;
-    for (s64 i = 0; i < STRING_BUILDER_BUFFER_SIZE * 2; ++i)
+    for (ssize i = 0; i < STRING_BUILDER_BUFFER_SIZE * 2; ++i)
         builder.append('x');
     string s = builder.to_string();
     defer(free_string(s));
     EXPECT_EQ(s.size, STRING_BUILDER_BUFFER_SIZE * 2);
-    for (s64 i = 0; i < s.size; ++i)
+    for (ssize i = 0; i < s.size; ++i)
         EXPECT_EQ(s.data[i], 'x');
 }
 
@@ -351,7 +351,7 @@ TEST(sprint, explicit_allocator_grows_past_inline_buffer) {
     kstd_memset(payload, 'x', size_of(payload));
     auto formatted = sprint(debug.get_allocator(), "%", string(payload, size_of(payload)));
     EXPECT_EQ(formatted.size, size_of(payload));
-    for (s64 i = 0; i < formatted.size; ++i)
+    for (ssize i = 0; i < formatted.size; ++i)
         EXPECT_EQ(formatted.data[i], 'x');
     free_string(formatted, debug.get_allocator());
 }
