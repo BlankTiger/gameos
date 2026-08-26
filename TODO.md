@@ -114,6 +114,8 @@ base layer:
 - [x] math::is_power_of_two for argument 0
 - [x] get number type situation under control
 - [x] temporary overflow pages
+- [x] implement ACTUALLY_RESIZE on allocators (buddy?)
+- [x] extract alignof(std::max_align_t) as MAX_ALIGN in basic.hh
 
 
 

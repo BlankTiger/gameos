@@ -26,7 +26,7 @@ struct Hosted_Allocator_State {
     static auto proc(Allocator_Mode mode, ssize size, ssize alignment, ssize, void* old_memory, void*) -> Allocator_Result {
         switch (mode) {
             case Allocator_Mode::ALLOCATE: {
-                if (size < 0 || alignment <= 0 || !math::is_power_of_two(alignment))
+                if (size < 0 || !math::is_power_of_two(alignment))
                     return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
 
                 if (size == 0) return result(nullptr);

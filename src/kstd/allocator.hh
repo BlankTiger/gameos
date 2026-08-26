@@ -52,7 +52,7 @@ force_inline auto alloc(ssize size, ssize alignment = MAX_ALIGN, Allocator alloc
     if (size < 0)
         return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
 
-    if (alignment <= 0 || !math::is_power_of_two(alignment))
+    if (!math::is_power_of_two(alignment))
         return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
 
     allocator = resolve_allocator(allocator);
@@ -339,7 +339,7 @@ struct Temporary_Allocator_State {
                 if (state->data == nullptr)
                     return result(nullptr, Allocator_Error::USE_OF_UNINITIALIZED_ALLOCATOR);
 
-                if (size < 0 || alignment <= 0 || !math::is_power_of_two(alignment))
+                if (size < 0 || !math::is_power_of_two(alignment))
                     return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
 
                 if (size == 0) return result(nullptr);
@@ -359,8 +359,11 @@ struct Temporary_Allocator_State {
             } break;
 
             case Allocator_Mode::RESIZE: {
-                if (size < 0 || alignment <= 0 || !math::is_power_of_two(alignment))
+                if (size < 0 || !math::is_power_of_two(alignment))
                     return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
+
+                if (old_memory != nullptr && ptr_addr(old_memory) % cast(psize)alignment != 0)
+                    return result(nullptr, Allocator_Error::MODE_NOT_IMPLEMENTED);
 
                 if (size == 0 || size <= old_size)
                     return result(size == 0 ? nullptr : old_memory);
@@ -547,7 +550,7 @@ struct Arena_Allocator_State {
                 if (state->memory_base == nullptr)
                     return result(nullptr, Allocator_Error::USE_OF_UNINITIALIZED_ALLOCATOR);
 
-                if (size < 0 || alignment <= 0 || !math::is_power_of_two(alignment))
+                if (size < 0 || !math::is_power_of_two(alignment))
                     return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
 
                 if (size == 0)
@@ -563,8 +566,11 @@ struct Arena_Allocator_State {
             } break;
 
             case Allocator_Mode::RESIZE: {
-                if (size < 0 || alignment <= 0 || !math::is_power_of_two(alignment))
+                if (size < 0 || !math::is_power_of_two(alignment))
                     return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
+
+                if (old_memory != nullptr && ptr_addr(old_memory) % cast(psize)alignment != 0)
+                    return result(nullptr, Allocator_Error::MODE_NOT_IMPLEMENTED);
 
                 if (size == 0 || size <= old_size)
                     return result(size == 0 ? nullptr : old_memory);
