@@ -48,7 +48,7 @@ force_inline auto call_allocator(Allocator allocator, Allocator_Mode mode, ssize
     return allocator.proc(mode, size, alignment, old_size, old_memory, allocator.data);
 }
 
-force_inline auto alloc(ssize size, ssize alignment = align_of(std::max_align_t), Allocator allocator = {}) -> Allocator_Result {
+force_inline auto alloc(ssize size, ssize alignment = MAX_ALIGN, Allocator allocator = {}) -> Allocator_Result {
     if (size < 0)
         return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
 
@@ -60,7 +60,7 @@ force_inline auto alloc(ssize size, ssize alignment = align_of(std::max_align_t)
 }
 
 force_inline auto alloc(ssize size, Allocator allocator) -> Allocator_Result {
-    return alloc(size, align_of(std::max_align_t), allocator);
+    return alloc(size, MAX_ALIGN, allocator);
 }
 
 force_inline auto free(void* pointer, ssize size, ssize alignment, Allocator allocator = {}) -> Allocator_Error {
@@ -162,34 +162,51 @@ force_inline auto get_info(void* pointer, Allocator allocator) -> Allocator_Quer
 }
 
 template <typename T>
-force_inline auto align_up(T value, T alignment) -> T {
+force_inline constexpr auto align_up(T value, T alignment) -> T {
     return (value + alignment - 1) & ~(alignment - 1);
 }
 
 template <typename T>
-force_inline auto align_down(T value, T alignment) -> T {
+force_inline constexpr auto align_down(T value, T alignment) -> T {
     return value & ~(alignment - 1);
 }
 
-// @TODO(blanktiger): Implement overflow pages. Implement DEBUG like on Arena_Allocator_State. Implement high water mark.
+struct Temporary_Allocator_Overflow_Page {
+    Temporary_Allocator_Overflow_Page* next{};
+    ssize                              size{};
+};
+
+struct Temporary_Allocator_Mark {
+    Temporary_Allocator_Overflow_Page* top_overflow_page{};
+    ssize                              current_page_bytes_occupied{};
+    ssize                              total_bytes_occupied{};
+};
+
 struct Temporary_Allocator_State {
     using enum Allocator_Features;
     static constexpr auto FEATURES = RESIZE_SHRINK_NO_OP | FAST_BUMP_ALLOCATOR | PER_FRAME_TEMPORARY_STORAGE;
+    static constexpr ssize OVERFLOW_PAGE_HEADER_SIZE = align_up(size_of(Temporary_Allocator_Overflow_Page), MAX_ALIGN);
 
-    u8*       base{};
-    u8*       current{};
-    u8*       end{};
-    Allocator backing_allocator{};
+    u8*                                original_data{};
+    ssize                              original_size{};
+    u8*                                data{};
+    ssize                              size{};
+    ssize                              current_page_bytes_occupied{};
+    ssize                              total_bytes_occupied{};
+    ssize                              high_water_mark{};
+    Temporary_Allocator_Overflow_Page* overflow_pages{};
+    Allocator                          backing_allocator{};
 
     Temporary_Allocator_State() = default;
 
     explicit Temporary_Allocator_State(ssize size) : Temporary_Allocator_State(context.allocator, size) {}
 
     Temporary_Allocator_State(void* memory, ssize size)
-        : base(cast(u8*)memory),
-          current(base),
-          end(base + size) {
-        kstd_assert(base != nullptr);
+        : original_data(cast(u8*)memory),
+          original_size(size),
+          data(original_data),
+          size(size) {
+        kstd_assert(original_data != nullptr);
         kstd_assert(size > 0);
     }
 
@@ -201,9 +218,10 @@ struct Temporary_Allocator_State {
         kstd_assert(allocation.memory != nullptr);
         kstd_assert(allocation.error == Allocator_Error::NONE);
 
-        base    = cast(u8*)allocation.memory;
-        current = base;
-        end     = base + size;
+        original_data = cast(u8*)allocation.memory;
+        original_size = size;
+        data          = original_data;
+        this->size    = size;
     }
 
     // @NOTE(blanktiger): Couldn't figure out a way to avoid ownership issues with those two implemented.
@@ -211,21 +229,32 @@ struct Temporary_Allocator_State {
     auto operator = (const Temporary_Allocator_State&) -> Temporary_Allocator_State& = delete;
 
     Temporary_Allocator_State(Temporary_Allocator_State&& from) noexcept
-        : base(from.base),
-          current(from.current),
-          end(from.end),
+        : original_data(from.original_data),
+          original_size(from.original_size),
+          data(from.data),
+          size(from.size),
+          current_page_bytes_occupied(from.current_page_bytes_occupied),
+          total_bytes_occupied(from.total_bytes_occupied),
+          high_water_mark(from.high_water_mark),
+          overflow_pages(from.overflow_pages),
           backing_allocator(from.backing_allocator) {
-        from.base              = nullptr;
-        from.current           = nullptr;
-        from.end               = nullptr;
-        from.backing_allocator = {};
+        from.original_data               = nullptr;
+        from.original_size               = 0;
+        from.data                        = nullptr;
+        from.size                        = 0;
+        from.current_page_bytes_occupied = 0;
+        from.total_bytes_occupied        = 0;
+        from.high_water_mark             = 0;
+        from.overflow_pages              = nullptr;
+        from.backing_allocator           = {};
     }
 
     auto operator = (Temporary_Allocator_State&&) -> Temporary_Allocator_State& = delete;
 
     ~Temporary_Allocator_State() {
-        if (backing_allocator.valid() && base != nullptr) {
-            auto error = mem::free(base, cast(ssize)(end - base), backing_allocator);
+        free_overflow_pages();
+        if (backing_allocator.valid() && original_data != nullptr) {
+            auto error = mem::free(original_data, original_size, backing_allocator);
             kstd_debug_assert(error == Allocator_Error::NONE);
         }
     }
@@ -235,24 +264,65 @@ struct Temporary_Allocator_State {
     }
 
     auto reset() -> void {
-        current = base;
+        free_overflow_pages();
+        data                         = original_data;
+        size                         = original_size;
+        current_page_bytes_occupied  = 0;
+        total_bytes_occupied         = 0;
+        high_water_mark              = 0;
     }
 
     auto bytes_used() const -> ssize {
-        return cast(ssize)(current - base);
+        return total_bytes_occupied;
     }
 
     auto bytes_left() const -> ssize {
-        return cast(ssize)(end - current);
+        return size - current_page_bytes_occupied;
     }
 
-    auto mark() const -> void* {
-        return current;
+    auto mark() const -> Temporary_Allocator_Mark {
+        return { overflow_pages, current_page_bytes_occupied, total_bytes_occupied };
     }
 
-    auto rewind(const void* mark_point) -> void {
-        kstd_assert(mark_point >= base && mark_point <= end);
-        current = cast(u8*)mark_point;
+    auto rewind(Temporary_Allocator_Mark mark_point) -> void {
+        free_overflow_pages(mark_point.top_overflow_page);
+        current_page_bytes_occupied = mark_point.current_page_bytes_occupied;
+        total_bytes_occupied        = mark_point.total_bytes_occupied;
+    }
+
+    force_inline auto add_new_overflow_page(ssize minimum_size, ssize alignment) -> Allocator_Result {
+        auto default_page_size = original_size > OVERFLOW_PAGE_HEADER_SIZE
+            ? original_size - OVERFLOW_PAGE_HEADER_SIZE
+            : 0;
+        auto page_size = default_page_size > minimum_size + alignment ? default_page_size : minimum_size + alignment;
+        auto page_bytes = align_up(OVERFLOW_PAGE_HEADER_SIZE + page_size, MAX_ALIGN);
+        auto page_allocation = alloc(page_bytes, MAX_ALIGN, backing_allocator);
+        if (page_allocation.memory == nullptr)
+            return page_allocation;
+
+        auto* page = cast(Temporary_Allocator_Overflow_Page*)page_allocation.memory;
+        page->next = overflow_pages;
+        page->size = page_size;
+        overflow_pages = page;
+        data = cast(u8*)page + OVERFLOW_PAGE_HEADER_SIZE;
+        size = page_size;
+        current_page_bytes_occupied = 0;
+        return result(page);
+    }
+
+    force_inline auto allocate_from_current_page(ssize requested_size, ssize alignment) -> Allocator_Result {
+        auto* aligned = cast(u8*)(align_up(ptr_addr(data + current_page_bytes_occupied), cast(psize)alignment));
+        auto* next    = aligned + requested_size;
+        auto allocation_did_not_overflow = next >= aligned;
+        auto allocation_fits_in_page     = next <= data + size;
+        if (!allocation_did_not_overflow || !allocation_fits_in_page)
+            return result(nullptr, Allocator_Error::OUT_OF_MEMORY);
+
+        total_bytes_occupied += cast(ssize)(next - (data + current_page_bytes_occupied));
+        current_page_bytes_occupied = cast(ssize)(next - data);
+        if (total_bytes_occupied > high_water_mark)
+            high_water_mark = total_bytes_occupied;
+        return result(aligned);
     }
 
     static auto proc(Allocator_Mode mode, ssize size, ssize alignment, ssize old_size, void* old_memory, void* temporary_allocator_state) -> Allocator_Result {
@@ -260,7 +330,7 @@ struct Temporary_Allocator_State {
 
         switch (mode) {
             case Allocator_Mode::ALLOCATE: {
-                if (state->base == nullptr)
+                if (state->data == nullptr)
                     return result(nullptr, Allocator_Error::USE_OF_UNINITIALIZED_ALLOCATOR);
 
                 if (size < 0 || alignment <= 0 || !math::is_power_of_two(alignment))
@@ -268,13 +338,18 @@ struct Temporary_Allocator_State {
 
                 if (size == 0) return result(nullptr);
 
-                auto* aligned = cast(u8*)(align_up(ptr_addr(state->current), cast(psize)alignment));
-                auto* next = aligned + size;
-                if (next < aligned || next > state->end)
-                    return result(nullptr, Allocator_Error::OUT_OF_MEMORY);
+                auto allocation = state->allocate_from_current_page(size, alignment);
+                if (allocation.memory != nullptr)
+                    return allocation;
 
-                state->current = next;
-                return result(aligned);
+                if (!state->backing_allocator.valid())
+                    return allocation;
+
+                auto page_allocation = state->add_new_overflow_page(size, alignment);
+                if (page_allocation.memory == nullptr)
+                    return page_allocation;
+
+                return state->allocate_from_current_page(size, alignment);
             } break;
 
             case Allocator_Mode::RESIZE: {
@@ -304,13 +379,39 @@ struct Temporary_Allocator_State {
 
             case Allocator_Mode::IS_THIS_YOURS: {
                 auto address = ptr_addr(old_memory);
-                return result(address >= ptr_addr(state->base) && address < ptr_addr(state->end) ? old_memory : nullptr);
+                if (address >= ptr_addr(state->original_data) && address < ptr_addr(state->original_data + state->original_size))
+                    return result(old_memory);
+                for (auto* page = state->overflow_pages; page != nullptr; page = page->next) {
+                    auto* page_data = cast(u8*)page + OVERFLOW_PAGE_HEADER_SIZE;
+                    if (address >= ptr_addr(page_data) && address < ptr_addr(page_data + page->size))
+                        return result(old_memory);
+                }
+                return result(nullptr);
             } break;
 
             default: return result(nullptr, Allocator_Error::MODE_NOT_IMPLEMENTED);
         }
 
         unreachable();
+    }
+
+    // nullptr means free every overflow page.
+    auto free_overflow_pages(Temporary_Allocator_Overflow_Page* target = nullptr) -> void {
+        while (overflow_pages != target) {
+            kstd_assert(overflow_pages != nullptr, "Temporary allocator mark belongs to another allocator.");
+            auto* page = overflow_pages;
+            overflow_pages = page->next;
+            auto error = mem::free(page, OVERFLOW_PAGE_HEADER_SIZE + page->size, backing_allocator);
+            kstd_debug_assert(error == Allocator_Error::NONE);
+        }
+
+        if (overflow_pages == nullptr) {
+            data = original_data;
+            size = original_size;
+        } else {
+            data = cast(u8*)overflow_pages + OVERFLOW_PAGE_HEADER_SIZE;
+            size = overflow_pages->size;
+        }
     }
 };
 
@@ -319,7 +420,7 @@ inline Temporary_Allocator_State temporary_allocator_state{};
 // @Important: Don't use the global temporary_allocator_state directly in the
 // functions below. They are meant to work with the one set in the context.
 
-    force_inline auto talloc(ssize size, ssize alignment = align_of(std::max_align_t)) -> void* {
+    force_inline auto talloc(ssize size, ssize alignment = MAX_ALIGN) -> void* {
     auto allocation = alloc(size, alignment, context.temporary_allocator);
     kstd_assert(allocation.memory != nullptr, "Temporary allocator exhausted.");
     return allocation.memory;
@@ -329,11 +430,11 @@ force_inline auto reset_temporary_allocator() -> void {
     context.temporary_state->reset();
 }
 
-force_inline auto temporary_allocator_mark() -> void* {
+force_inline auto temporary_allocator_mark() -> Temporary_Allocator_Mark {
     return context.temporary_state->mark();
 }
 
-force_inline auto temporary_allocator_rewind(const void* mark) -> void {
+force_inline auto temporary_allocator_rewind(Temporary_Allocator_Mark mark) -> void {
     context.temporary_state->rewind(mark);
 }
 
@@ -766,7 +867,7 @@ struct Push_Temporary_Allocator {
 };
 
 struct Auto_Rewind_Temporary {
-    void* mark;
+    Temporary_Allocator_Mark mark;
 
     Auto_Rewind_Temporary() : mark(temporary_allocator_mark()) {}
     ~Auto_Rewind_Temporary() { temporary_allocator_rewind(mark); }
@@ -936,6 +1037,52 @@ TEST(Allocator, temporary_allocator_get_allocator_interface) {
     auto allocator = state.get_allocator();
     ASSERT_EQ(allocator.data, &state);
     ASSERT_NE(allocator.proc, nullptr);
+}
+
+TEST(Temporary_Allocator_State, grows_with_embedded_overflow_pages) {
+    mem::Hosted_Allocator_State hosted{};
+    mem::Temporary_Allocator_State state{hosted.get_allocator(), 32};
+
+    auto first = mem::alloc(24, 8, state.get_allocator());
+    auto second = mem::alloc(24, 8, state.get_allocator());
+
+    ASSERT_NE(first.memory, nullptr);
+    ASSERT_NE(second.memory, nullptr);
+    ASSERT_NE(first.memory, second.memory);
+    ASSERT_NE(state.overflow_pages, nullptr);
+    ASSERT_EQ(state.bytes_used(), 48);
+    ASSERT_EQ(state.high_water_mark, 48);
+}
+
+TEST(Temporary_Allocator_State, rewind_releases_newer_overflow_pages) {
+    mem::Hosted_Allocator_State hosted{};
+    mem::Temporary_Allocator_State state{hosted.get_allocator(), 32};
+
+    auto mark = state.mark();
+    auto first = mem::alloc(40, 8, state.get_allocator());
+    auto second_mark = state.mark();
+    auto second = mem::alloc(40, 8, state.get_allocator());
+
+    state.rewind(second_mark);
+    ASSERT_NE(first.memory, nullptr);
+    ASSERT_NE(second.memory, nullptr);
+    ASSERT_NE(state.overflow_pages, nullptr);
+    ASSERT_EQ(state.bytes_used(), second_mark.total_bytes_occupied);
+
+    state.rewind(mark);
+    ASSERT_EQ(state.overflow_pages, nullptr);
+    ASSERT_EQ(state.bytes_used(), 0);
+}
+
+TEST(Temporary_Allocator_State, fixed_buffer_does_not_grow) {
+    Static_Array<u8, 32> buffer{};
+    mem::Temporary_Allocator_State state{buffer.data, 32};
+
+    auto allocation = mem::alloc(33, 8, state.get_allocator());
+
+    ASSERT_EQ(allocation.memory, nullptr);
+    ASSERT_EQ(allocation.error, mem::Allocator_Error::OUT_OF_MEMORY);
+    ASSERT_EQ(state.overflow_pages, nullptr);
 }
 
 TEST(Debug_Allocator_State, allows_destruction_when_all_freed) {

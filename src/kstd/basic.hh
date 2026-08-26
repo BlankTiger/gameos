@@ -37,6 +37,8 @@
 #define align_of(value) cast(ssize)alignof(value)
 #define offset_of(type, member) cast(ssize)offsetof(type, member)
 
+inline constexpr ssize MAX_ALIGN = align_of(std::max_align_t);
+
 template <typename F>
 struct Defer {
     F f;

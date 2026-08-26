@@ -32,7 +32,7 @@ struct Hosted_Allocator_State {
                 if (size == 0) return result(nullptr);
 
                 const ssize requested_alignment = alignment;
-                const ssize raw_alignment       = requested_alignment < align_of(std::max_align_t) ? align_of(std::max_align_t) : requested_alignment;
+                const ssize raw_alignment       = requested_alignment < MAX_ALIGN ? MAX_ALIGN : requested_alignment;
                 const ssize requested_size      = size;
                 if (requested_size > SSIZE_MAX_VALUE - size_of(Allocation_Header) - requested_alignment + 1)
                     return result(nullptr, Allocator_Error::INVALID_ARGUMENT);

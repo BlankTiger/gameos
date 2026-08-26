@@ -95,7 +95,7 @@ auto blocks_tests_main() -> void {
         {BLOCK_TEST_CUBE_SCALE, BLOCK_TEST_CUBE_SCALE, BLOCK_TEST_CUBE_SCALE},
     };
 
-    const auto* temporary_allocator_mark = mem::temporary_allocator_mark();
+    const auto temporary_allocator_mark = mem::temporary_allocator_mark();
     while (true) {
         input::begin_frame();
         if (input::key_pressed(input::Key::ESCAPE)) break;

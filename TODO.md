@@ -113,6 +113,7 @@ base layer:
 - [x] debug allocator threadsafe flag should be only set when the backing has it set and then it should use the lock, otherwise it shouldn't.
 - [x] math::is_power_of_two for argument 0
 - [x] get number type situation under control
+- [x] temporary overflow pages
 
 
 
