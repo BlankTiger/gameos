@@ -686,7 +686,7 @@ struct Array {
     }
 
     auto ensure_space_for(ssize new_elements_count) -> void {
-            kstd_assert(new_elements_count >= 0 && new_elements_count <= SSIZE_MAX_VALUE - size, "Array size overflow");
+        kstd_assert(new_elements_count >= 0 && new_elements_count <= SSIZE_MAX_VALUE - size, "Array size overflow");
         reserve(size + new_elements_count);
     }
 

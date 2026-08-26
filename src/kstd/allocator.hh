@@ -91,16 +91,15 @@ force_inline auto realloc(void* pointer, ssize old_size, ssize new_size, ssize a
     if (direct.error != Allocator_Error::MODE_NOT_IMPLEMENTED)
         return direct;
 
-    const auto features = get_features(allocator);
-    const bool can_free = has_flag(features, Allocator_Features::FREE);
-
-    if (!can_free)
-        return direct;
-
     if (pointer != nullptr && old_size == 0)
         return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
 
+    const auto features = get_features(allocator);
+    const bool can_free = has_flag(features, Allocator_Features::FREE);
+
     if (new_size == 0) {
+        if (!can_free)
+            return direct;
         auto error = free(pointer, old_size, alignment, allocator);
         return result(nullptr, error);
     }
@@ -115,6 +114,9 @@ force_inline auto realloc(void* pointer, ssize old_size, ssize new_size, ssize a
     const auto copy_size = old_size < new_size ? old_size : new_size;
     if (pointer != nullptr && copy_size > 0)
         kstd_memcpy(allocation.memory, pointer, copy_size);
+
+    if (!can_free)
+        return allocation;
 
     auto error = free(pointer, old_size, alignment, allocator);
     if (error != Allocator_Error::NONE) {
@@ -184,7 +186,7 @@ struct Temporary_Allocator_Mark {
 
 struct Temporary_Allocator_State {
     using enum Allocator_Features;
-    static constexpr auto FEATURES = RESIZE_SHRINK_NO_OP | FAST_BUMP_ALLOCATOR | PER_FRAME_TEMPORARY_STORAGE;
+    static constexpr auto FEATURES = RESIZE_SHRINK_NO_OP | ACTUALLY_RESIZE | FAST_BUMP_ALLOCATOR | PER_FRAME_TEMPORARY_STORAGE;
     static constexpr ssize OVERFLOW_PAGE_HEADER_SIZE = align_up(size_of(Temporary_Allocator_Overflow_Page), MAX_ALIGN);
 
     u8*                                original_data{};
@@ -310,6 +312,11 @@ struct Temporary_Allocator_State {
         return result(page);
     }
 
+    force_inline auto update_high_water_mark() -> void {
+        if (total_bytes_occupied > high_water_mark)
+            high_water_mark = total_bytes_occupied;
+    }
+
     force_inline auto allocate_from_current_page(ssize requested_size, ssize alignment) -> Allocator_Result {
         auto* aligned = cast(u8*)(align_up(ptr_addr(data + current_page_bytes_occupied), cast(psize)alignment));
         auto* next    = aligned + requested_size;
@@ -320,8 +327,7 @@ struct Temporary_Allocator_State {
 
         total_bytes_occupied += cast(ssize)(next - (data + current_page_bytes_occupied));
         current_page_bytes_occupied = cast(ssize)(next - data);
-        if (total_bytes_occupied > high_water_mark)
-            high_water_mark = total_bytes_occupied;
+        update_high_water_mark();
         return result(aligned);
     }
 
@@ -359,14 +365,23 @@ struct Temporary_Allocator_State {
                 if (size == 0 || size <= old_size)
                     return result(size == 0 ? nullptr : old_memory);
 
-                auto allocation = proc(Allocator_Mode::ALLOCATE, size, alignment, 0, nullptr, temporary_allocator_state);
-                if (allocation.memory == nullptr)
-                    return allocation;
+                const auto old_address     = ptr_addr(old_memory);
+                const auto current_address = ptr_addr(state->data) + state->current_page_bytes_occupied;
+                if (old_memory != nullptr && old_address <= current_address && old_address + old_size == current_address) {
+                    const auto next_address  = old_address + size;
+                    const auto limit_address = ptr_addr(state->data) + state->size;
+                    if (next_address >= old_address && next_address <= limit_address) {
+                        state->total_bytes_occupied += size - old_size;
+                        state->current_page_bytes_occupied = cast(ssize)(next_address - ptr_addr(state->data));
+                        state->update_high_water_mark();
+                        return result(old_memory);
+                    }
+                }
 
-                if (old_memory != nullptr && old_size > 0)
-                    kstd_memcpy(allocation.memory, old_memory, old_size);
+                if (old_memory == nullptr)
+                    return proc(Allocator_Mode::ALLOCATE, size, alignment, 0, nullptr, temporary_allocator_state);
 
-                return allocation;
+                return result(nullptr, Allocator_Error::MODE_NOT_IMPLEMENTED);
             } break;
 
             case Allocator_Mode::FEATURES: {
@@ -443,7 +458,7 @@ constexpr ssize DEFAULT_ARENA_RESERVE_SIZE = 1 * 1024 * 1024;
 template <bool DEBUG = false>
 struct Arena_Allocator_State {
     using enum Allocator_Features;
-    static constexpr auto FEATURES = RESIZE_SHRINK_NO_OP | FAST_BUMP_ALLOCATOR | IS_THIS_YOURS;
+    static constexpr auto FEATURES = RESIZE_SHRINK_NO_OP | ACTUALLY_RESIZE | FAST_BUMP_ALLOCATOR | IS_THIS_YOURS;
 
     Allocator backing_allocator{};
     ssize     allocated{};
@@ -554,14 +569,21 @@ struct Arena_Allocator_State {
                 if (size == 0 || size <= old_size)
                     return result(size == 0 ? nullptr : old_memory);
 
-                auto allocation = proc(Allocator_Mode::ALLOCATE, size, alignment, 0, nullptr, arena_state);
-                if (allocation.memory == nullptr)
-                    return allocation;
+                const auto old_address     = ptr_addr(old_memory);
+                const auto current_address = ptr_addr(state->current_point);
+                if (old_memory != nullptr && old_address <= current_address && old_address + old_size == current_address) {
+                    const auto next_address  = old_address + size;
+                    const auto limit_address = ptr_addr(state->address_limit);
+                    if (next_address >= old_address && next_address <= limit_address) {
+                        state->current_point = cast(u8*)next_address;
+                        return result(old_memory);
+                    }
+                }
 
-                if (old_memory != nullptr && old_size > 0)
-                    kstd_memcpy(allocation.memory, old_memory, old_size);
+                if (old_memory == nullptr)
+                    return proc(Allocator_Mode::ALLOCATE, size, alignment, 0, nullptr, arena_state);
 
-                return allocation;
+                return result(nullptr, Allocator_Error::MODE_NOT_IMPLEMENTED);
             } break;
 
             case Allocator_Mode::FEATURES: {
@@ -650,7 +672,7 @@ struct Debug_Allocator_State {
             } break;
 
             case Allocator_Mode::RESIZE: {
-                auto allocation = call_allocator(state->backing, mode, size, alignment, old_size, old_memory);
+                auto allocation = mem::realloc(old_memory, old_size, size, alignment, state->backing);
                 if (allocation.error != Allocator_Error::NONE)
                     return allocation;
 
@@ -734,8 +756,8 @@ struct Debug_Allocator_State {
 
                 for (auto* record = state->live_head; record != nullptr; record = record->next) {
                     if (record->pointer == info->pointer) {
-                        info->size      = cast(ssize)record->size;
-                        info->alignment = cast(ssize)record->alignment;
+                        info->requested_size      = cast(ssize)record->size;
+                        info->requested_alignment = cast(ssize)record->alignment;
                         return result(nullptr);
                     }
                 }
@@ -965,6 +987,42 @@ TEST(Allocator, realloc_moves_and_preserves_memory) {
     ASSERT_EQ(mem::free(resized.memory, 32, 16), mem::Allocator_Error::NONE);
 }
 
+TEST(Allocator, bump_allocators_realloc_tail_growth_in_place) {
+    // Can't have freestanding methods defined in gtests.. MEH.
+    struct A {
+        static auto verify(mem::Allocator allocator) -> void {
+            auto allocation = mem::alloc(8, 16, allocator);
+            auto resized    = mem::realloc(allocation.memory, 8, 32, 16, allocator);
+
+            ASSERT_EQ(resized.memory, allocation.memory);
+            ASSERT_EQ(resized.error, mem::Allocator_Error::NONE);
+        }
+    };
+
+    mem::Temporary_Allocator_State temporary{256};
+    A::verify(temporary.get_allocator());
+    ASSERT_EQ(temporary.bytes_used(), 32);
+
+    mem::Arena_Allocator_State arena{256};
+    A::verify(arena.get_allocator());
+    ASSERT_EQ(arena.bytes_used(), 32);
+}
+
+TEST(Allocator, bump_allocators_move_non_tail_allocations) {
+    mem::Arena_Allocator_State arena{256};
+    auto first  = mem::alloc(8, 16, arena.get_allocator());
+    auto second = mem::alloc(8, 16, arena.get_allocator());
+    kstd_memset(first.memory, 0xAB, 8);
+
+    auto resized = mem::realloc(first.memory, 8, 32, 16, arena.get_allocator());
+    ASSERT_EQ(resized.error, mem::Allocator_Error::NONE);
+    ASSERT_NE(resized.memory, first.memory);
+    auto* bytes = cast(u8*)resized.memory;
+    for (int i = 0; i < 8; ++i)
+        ASSERT_EQ(bytes[i], cast(u8)(0xAB));
+    cast(void)second;
+}
+
 TEST(Allocator, bump_allocators_realloc_shrink_in_place) {
     {
         mem::Temporary_Allocator_State temporary{256};
@@ -1004,8 +1062,8 @@ TEST(Allocator, hosted_info_reports_allocation_metadata) {
 
     auto info = mem::get_info(allocation.memory, state.get_allocator());
     ASSERT_EQ(info.value.pointer, allocation.memory);
-    ASSERT_EQ(info.value.size,      24);
-    ASSERT_EQ(info.value.alignment, 64);
+    ASSERT_EQ(info.value.requested_size,      24);
+    ASSERT_EQ(info.value.requested_alignment, 64);
     ASSERT_EQ(mem::free(allocation.memory, 24, 64), mem::Allocator_Error::NONE);
 }
 
@@ -1142,8 +1200,8 @@ TEST(Debug_Allocator_State, tracks_resize_in_place) {
 
     auto info = mem::get_info(resized.memory, debug.get_allocator());
     ASSERT_EQ(info.error, mem::Allocator_Query_Error::NONE);
-    ASSERT_EQ(info.value.size,      8);
-    ASSERT_EQ(info.value.alignment, 16);
+    ASSERT_EQ(info.value.requested_size,      8);
+    ASSERT_EQ(info.value.requested_alignment, 16);
     // Temporary_Allocator_State doesn't implement FREE, but Debug_Allocator tracks the call.
     ASSERT_EQ(mem::free(resized.memory, 8, 16), mem::Allocator_Error::MODE_NOT_IMPLEMENTED);
 }
@@ -1167,8 +1225,8 @@ TEST(Debug_Allocator_State, tracks_resize_to_new_pointer) {
 
     auto info = mem::get_info(resized.memory, debug.get_allocator());
     ASSERT_EQ(info.error, mem::Allocator_Query_Error::NONE);
-    ASSERT_EQ(info.value.size,      32);
-    ASSERT_EQ(info.value.alignment, 16);
+    ASSERT_EQ(info.value.requested_size,      32);
+    ASSERT_EQ(info.value.requested_alignment, 16);
     // Temporary_Allocator_State doesn't implement FREE, but Debug_Allocator tracks the call.
     ASSERT_EQ(mem::free(resized.memory, 32, 16), mem::Allocator_Error::MODE_NOT_IMPLEMENTED);
 }

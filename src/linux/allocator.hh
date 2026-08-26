@@ -87,8 +87,8 @@ struct Hosted_Allocator_State {
                 if (header->magic != HEADER_MAGIC)
                     return result(nullptr, Allocator_Error::INVALID_POINTER);
 
-                info->size      = header->size;
-                info->alignment = header->alignment;
+                info->requested_size      = header->size;
+                info->requested_alignment = header->alignment;
 
                 return result(nullptr);
             } break;
