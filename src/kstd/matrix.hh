@@ -14,9 +14,9 @@ struct Matrix2 {
     using Value_Type  = T;
     using Row_Type    = Vector2<T>;
     using Column_Type = Vector2<T>;
-    static constexpr usize rows = 2;
-    static constexpr usize cols = 2;
-    static constexpr usize size = rows * cols;
+    static constexpr int rows = 2;
+    static constexpr int cols = 2;
+    static constexpr int size = rows * cols;
 
     union {
         struct { T _11, _12, _21, _22; };
@@ -38,9 +38,9 @@ struct Matrix3 {
     using Value_Type  = T;
     using Row_Type    = Vector3<T>;
     using Column_Type = Vector3<T>;
-    static constexpr usize rows = 3;
-    static constexpr usize cols = 3;
-    static constexpr usize size = rows * cols;
+    static constexpr int rows = 3;
+    static constexpr int cols = 3;
+    static constexpr int size = rows * cols;
 
     union {
         struct { T _11, _12, _13, _21, _22, _23, _31, _32, _33; };
@@ -63,9 +63,9 @@ struct Matrix4 {
     using Value_Type  = T;
     using Row_Type    = Vector4<T>;
     using Column_Type = Vector4<T>;
-    static constexpr usize rows = 4;
-    static constexpr usize cols = 4;
-    static constexpr usize size = rows * cols;
+    static constexpr int rows = 4;
+    static constexpr int cols = 4;
+    static constexpr int size = rows * cols;
 
     union {
         struct { T _11, _12, _13, _14, _21, _22, _23, _24, _31, _32, _33, _34, _41, _42, _43, _44; };
@@ -92,9 +92,9 @@ struct Matrix4x3 {
     using Value_Type  = T;
     using Row_Type    = Vector4<T>;
     using Column_Type = Vector3<T>;
-    static constexpr usize rows = 3;
-    static constexpr usize cols = 4;
-    static constexpr usize size = rows * cols;
+    static constexpr int rows = 3;
+    static constexpr int cols = 4;
+    static constexpr int size = rows * cols;
 
     union {
         struct { T _11, _12, _13, _14, _21, _22, _23, _24, _31, _32, _33, _34; };
@@ -137,12 +137,12 @@ template <typename T>
 concept AnyMatrix4x3Ish = IsMatrix<T> && (T::rows >= 3) && (T::cols >= 4);
 
 template <std::floating_point T>
-constexpr auto row(const Matrix4<T>& m, usize i) -> Vector4<T> {
+constexpr auto row(const Matrix4<T>& m, int i) -> Vector4<T> {
     return m.v[i];
 }
 
 template <std::floating_point T>
-constexpr auto column(const Matrix4<T>& m, usize i) -> Vector4<T> {
+constexpr auto column(const Matrix4<T>& m, int i) -> Vector4<T> {
     return Vector4<T>{ m.coef[0][i], m.coef[1][i], m.coef[2][i], m.coef[3][i] };
 }
 
@@ -412,7 +412,7 @@ constexpr auto operator * (const Matrix4<T>& a, const Matrix3<T>& b) -> Matrix4<
 template <IsMatrix M>
 constexpr auto operator * (const M& a, @T(M::Value_Type) t) -> M {
     M r{};
-    for (usize i = 0; i < M::size; ++i) r.floats[i] = a.floats[i] * t;
+    for (int i = 0; i < M::size; ++i) r.floats[i] = a.floats[i] * t;
     return r;
 }
 
@@ -424,20 +424,20 @@ constexpr auto operator * (@T(M::Value_Type) t, const M& a) -> M {
 template <IsMatrix M>
 constexpr auto operator + (const M& a, const M& b) -> M {
     M r{};
-    for (usize i = 0; i < M::size; ++i) r.floats[i] = a.floats[i] + b.floats[i];
+    for (int i = 0; i < M::size; ++i) r.floats[i] = a.floats[i] + b.floats[i];
     return r;
 }
 
 template <IsMatrix M>
 constexpr auto operator - (const M& a, const M& b) -> M {
     M r{};
-    for (usize i = 0; i < M::size; ++i) r.floats[i] = a.floats[i] - b.floats[i];
+    for (int i = 0; i < M::size; ++i) r.floats[i] = a.floats[i] - b.floats[i];
     return r;
 }
 
 template <IsMatrix M>
 constexpr auto operator == (const M& a, const M& b) -> bool {
-    for (usize i = 0; i < M::size; ++i) {
+    for (int i = 0; i < M::size; ++i) {
         if (a.floats[i] != b.floats[i]) return false;
     }
     return true;
@@ -446,8 +446,8 @@ constexpr auto operator == (const M& a, const M& b) -> bool {
 template <AnyMatrix3x3 M>
 constexpr auto make_matrix3(const M& m) -> Matrix3<@T(M::Value_Type)> {
     Matrix3<@T(M::Value_Type)> r{};
-    for (usize i = 0; i < 3; ++i)
-        for (usize j = 0; j < 3; ++j)
+    for (int i = 0; i < 3; ++i)
+        for (int j = 0; j < 3; ++j)
             r.coef[i][j] = m.coef[i][j];
     return r;
 }
@@ -456,11 +456,11 @@ template <AnyMatrix3x3 M>
 constexpr auto make_matrix4(const M& m) -> Matrix4<@T(M::Value_Type)> {
     auto r = Matrix4<@T(M::Value_Type)>::identity();
 
-    constexpr usize row_max = std::min<usize>(3, M::rows - 1);  // Index of the highest row (0-based).
-    constexpr usize col_max = std::min<usize>(3, M::cols - 1);  // Index of the highest column (0-based).
+    constexpr int row_max = std::min<int>(3, M::rows - 1);  // Index of the highest row (0-based).
+    constexpr int col_max = std::min<int>(3, M::cols - 1);  // Index of the highest column (0-based).
 
-    for (usize i = 0; i <= row_max; ++i)
-        for (usize j = 0; j <= col_max; ++j)
+    for (int i = 0; i <= row_max; ++i)
+        for (int j = 0; j <= col_max; ++j)
             r.coef[i][j] = m.coef[i][j];
 
     return r;
@@ -469,8 +469,8 @@ constexpr auto make_matrix4(const M& m) -> Matrix4<@T(M::Value_Type)> {
 template <std::floating_point T>
 constexpr auto transpose(const Matrix4<T>& m) -> Matrix4<T> {
     Matrix4<T> r{};
-    for (usize i = 0; i < 4; ++i)
-        for (usize j = 0; j < 4; ++j)
+    for (int i = 0; i < 4; ++i)
+        for (int j = 0; j < 4; ++j)
             r.coef[i][j] = m.coef[j][i];
     return r;
 }
@@ -478,8 +478,8 @@ constexpr auto transpose(const Matrix4<T>& m) -> Matrix4<T> {
 template <std::floating_point T>
 constexpr auto transpose(const Matrix3<T>& m) -> Matrix3<T> {
     Matrix3<T> r{};
-    for (usize i = 0; i < 3; ++i)
-        for (usize j = 0; j < 3; ++j)
+    for (int i = 0; i < 3; ++i)
+        for (int j = 0; j < 3; ++j)
             r.coef[i][j] = m.coef[j][i];
     return r;
 }
@@ -720,7 +720,7 @@ template <std::floating_point T>
 constexpr auto make_projection_matrix(T fov_vertical, T aspect_ratio_horizontal_over_vertical, T z_near, T z_far, T x_offset = T(0), T y_offset = T(0), bool depth_range_01 = false) -> Matrix4<T> {
     auto result = Matrix4<T>::identity();
 
-    T tan_theta = static_cast<T>(tan(static_cast<f32>(fov_vertical * T(0.5))));
+    auto tan_theta = cast(T)(tan(cast(f32)(fov_vertical * T(0.5))));
     T cot_theta = T(1) / tan_theta;
 
     T f     = z_far;
@@ -872,10 +872,10 @@ constexpr auto inverse(const Matrix4<T>& m, @T(Matrix4<T>::Value_Type) epsilon =
 
 template <std::floating_point T>
 constexpr auto determinant(const Matrix4<T>& m) -> T {
-    Vector3<T> a = static_cast<Vector3<T>>(m.v[0]);
-    Vector3<T> b = static_cast<Vector3<T>>(m.v[1]);
-    Vector3<T> c = static_cast<Vector3<T>>(m.v[2]);
-    Vector3<T> d = static_cast<Vector3<T>>(m.v[3]);
+    auto a = cast(Vector3<T>)m.v[0];
+    auto b = cast(Vector3<T>)m.v[1];
+    auto c = cast(Vector3<T>)m.v[2];
+    auto d = cast(Vector3<T>)m.v[3];
 
     T x = m.v[0].w;
     T y = m.v[1].w;
@@ -895,8 +895,8 @@ constexpr auto isometry_inverse(const Matrix4<T>& m) -> Matrix4<T> {
     auto result = Matrix4<T>::identity();
 
     // Transposed 3x3 upper-left.
-    for (usize i = 0; i < 3; ++i)
-        for (usize j = 0; j < 3; ++j)
+    for (int i = 0; i < 3; ++i)
+        for (int j = 0; j < 3; ++j)
             result.coef[i][j] = m.coef[j][i];
 
     // -t via known last row (0,0,0,1); cheaper than general translate.
@@ -1067,7 +1067,7 @@ TEST(Matrix, make_matrix4_from_matrix4x3_copies_translation) {
     EXPECT_EQ(m4._24, 2.0f);
     EXPECT_EQ(m4._34, 3.0f);
     EXPECT_EQ(m4._44, 1.0f);
-    (void)m4x3;
+    cast(void)m4x3;
 }
 
 TEST(Matrix, transpose_matrix4) {

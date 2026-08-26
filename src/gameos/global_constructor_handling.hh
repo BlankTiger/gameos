@@ -1,6 +1,6 @@
 #pragma once
 
-#include "kstd/numbers.hh"
+#include "kstd/basic.hh"
 
 using Init_Function = void (*)();
 
@@ -10,11 +10,11 @@ struct At_Exit_Entry {
     void* dso_handle;
 };
 
-static constexpr usize MAX_AT_EXIT_ENTRIES = 32;
+static constexpr ssize MAX_AT_EXIT_ENTRIES = 32;
 
 namespace constructors::hidden {
     static inline At_Exit_Entry at_exit_entries[MAX_AT_EXIT_ENTRIES];
-    static inline usize         at_exit_entry_count;
+    static inline ssize         at_exit_entry_count;
 }
 
 extern "C" {
@@ -46,7 +46,7 @@ extern "C" void __cxa_finalize(void* dso_handle) {
         return;
     }
 
-    for (usize i = at_exit_entry_count; i != 0; --i) {
+    for (ssize i = at_exit_entry_count; i != 0; --i) {
         At_Exit_Entry& entry = at_exit_entries[i - 1];
         if (entry.destructor == nullptr || entry.dso_handle != dso_handle) continue;
 
@@ -63,7 +63,7 @@ extern "C" auto run_global_constructors() -> void {
 
     for (Init_Function* fn = __ctors_end; fn != __ctors_start;) {
         --fn;
-        if (*fn == nullptr || *fn == reinterpret_cast<Init_Function>(-1)) continue;
+        if (*fn == nullptr || *fn == cast(Init_Function)(-1)) continue;
         (*fn)();
     }
 }
@@ -71,4 +71,3 @@ extern "C" auto run_global_constructors() -> void {
 extern "C" auto run_global_destructors() -> void {
     __cxa_finalize(nullptr);
 }
-

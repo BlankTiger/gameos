@@ -35,7 +35,7 @@ constexpr auto frexp_f32(f32 f) -> std::pair<f32, int> {
     if (exp_bits == 0xFF) return { f, 0 };  // inf/nan: pass through unchanged.
 
     // f = 1.mantissa * 2^(exp_bits-127) = (1.mantissa/2) * 2^(exp_bits-126).
-    int exponent      = static_cast<int>(exp_bits) - 126;
+    auto exponent     = cast(int)exp_bits - 126;
     u32 mantissa_bits = (bits & u32{0x807FFFFF}) | (u32{126} << 23);  // force exponent field to 126, i.e. 2^-1.
 
     return { std::bit_cast<f32>(mantissa_bits), exponent };
@@ -47,13 +47,13 @@ constexpr auto frexp_f32(f32 f) -> std::pair<f32, int> {
 constexpr auto ldexp_f32(f32 mantissa, int e) -> f32 {
     if (mantissa == 0.0f) return mantissa;
 
-    u32 bits     = std::bit_cast<u32>(mantissa);
-    int exp_bits = static_cast<int>((bits >> 23) & u32{0xFF}) + e;
+    u32  bits     = std::bit_cast<u32>(mantissa);
+    auto exp_bits = cast(int)((bits >> 23) & u32{0xFF}) + e;
 
     if (exp_bits <= 0)    return std::bit_cast<f32>(bits & u32{0x80000000});                   // underflow -> signed zero.
     if (exp_bits >= 0xFF) return std::bit_cast<f32>((bits & u32{0x80000000}) | (u32{0xFF} << 23)); // overflow  -> signed infinity.
 
-    return std::bit_cast<f32>((bits & u32{0x807FFFFF}) | (static_cast<u32>(exp_bits) << 23));
+    return std::bit_cast<f32>((bits & u32{0x807FFFFF}) | (cast(u32)exp_bits << 23));
 }
 
 }  // namespace
@@ -77,13 +77,13 @@ force_inline auto lerp(u8 a, u8 b, int pos, int max) -> u8 {
 }
 
 force_inline auto floor(f32 x) -> s32 {
-    s32 i = static_cast<s32>(x);
-    return x < static_cast<f32>(i) ? i - 1 : i;
+    auto i = cast(s32)x;
+    return x < cast(f32)i ? i - 1 : i;
 }
 
 force_inline auto ceil(f32 x) -> s32 {
-    s32 i = static_cast<s32>(x);
-    return x > static_cast<f32>(i) ? i + 1 : i;
+    auto i = cast(s32)x;
+    return x > cast(f32)i ? i + 1 : i;
 }
 
 // Square root, ported from the Cephes single-precision math library (sqrtf.c,
@@ -177,7 +177,7 @@ force_inline auto log2(f32 xx) -> f32 {
     z += x * LOG2EA;
     z += y;
     z += x;
-    z += static_cast<f32>(e);
+    z += cast(f32)e;
     return z;
 }
 
@@ -187,7 +187,7 @@ force_inline constexpr auto log2(T value) -> s32 {
     if (value <= 0) return -1;
 
     using Unsigned_T = std::make_unsigned_t<T>;
-    return static_cast<s32>(std::bit_width(static_cast<Unsigned_T>(value))) - 1;
+    return cast(s32)(std::bit_width(cast(Unsigned_T)value)) - 1;
 }
 
 template <std::integral T>
@@ -233,8 +233,8 @@ force_inline auto tan(f32 xx) -> f32 {
 
     if (x > LOSSTH) return 0.0f;  // Total loss of precision; no error-reporting mechanism here.
 
-    s32 j = static_cast<s32>(FOPI * x);  // Integer part of x / (pi/4).
-    f32 y = static_cast<f32>(j);
+    auto j = cast(s32)(FOPI * x);  // Integer part of x / (pi/4).
+    auto y = cast(f32)j;
 
     if (j & 1) {  // Map zeros and singularities to the origin.
         j += 1;
@@ -282,8 +282,8 @@ force_inline auto sin(f32 xx) -> f32 {
 
     if (x > T24M1) return 0.0f;  // Total loss of precision; no error-reporting mechanism here.
 
-    s32 j = static_cast<s32>(FOPI * x);  // Integer part of x / (pi/4).
-    f32 y = static_cast<f32>(j);
+    auto j = cast(s32)(FOPI * x);  // Integer part of x / (pi/4).
+    auto y = cast(f32)j;
 
     if (j & 1) {  // Map zeros to the origin.
         j += 1;
@@ -333,8 +333,8 @@ force_inline auto cos(f32 xx) -> f32 {
 
     if (x > T24M1) return 0.0f;  // Total loss of precision; no error-reporting mechanism here.
 
-    s32 j = static_cast<s32>(FOPI * x);  // Integer part of x / (pi/4).
-    f32 y = static_cast<f32>(j);
+    auto j = cast(s32)(FOPI * x);  // Integer part of x / (pi/4).
+    auto y = cast(f32)j;
 
     if (j & 1) {  // Map zeros to the origin.
         j += 1;
@@ -386,12 +386,12 @@ struct Vector2 {
 
     template <Numeric U>
     explicit constexpr Vector2(const Vector2<U>& other)
-        : x(static_cast<T>(other.x)),
-          y(static_cast<T>(other.y))
+        : x(cast(T)other.x),
+          y(cast(T)other.y)
     {}
 
-    constexpr auto operator [] (usize i) -> T& { return data[i]; }
-    constexpr auto operator [] (usize i) const -> const T& { return data[i]; }
+    constexpr auto operator [] (ssize i) -> T& { return data[i]; }
+    constexpr auto operator [] (ssize i) const -> const T& { return data[i]; }
     [[nodiscard]] static constexpr auto zero() -> Vector2 { return Vector2{ T(0), T(0) }; }
     [[nodiscard]] static constexpr auto one()  -> Vector2 { return Vector2{ T(1), T(1) }; }
 };
@@ -410,13 +410,13 @@ struct Vector3 {
 
     template <Numeric U>
     explicit constexpr Vector3(const Vector3<U>& other)
-        : x(static_cast<T>(other.x)),
-          y(static_cast<T>(other.y)),
-          z(static_cast<T>(other.z))
+        : x(cast(T)other.x),
+          y(cast(T)other.y),
+          z(cast(T)other.z)
     {}
 
-    constexpr auto operator [] (usize i) -> T& { return data[i]; }
-    constexpr auto operator [] (usize i) const -> const T& { return data[i]; }
+    constexpr auto operator [] (ssize i) -> T& { return data[i]; }
+    constexpr auto operator [] (ssize i) const -> const T& { return data[i]; }
     [[nodiscard]] static constexpr auto zero() -> Vector3 { return Vector3{ T(0), T(0), T(0) }; }
     [[nodiscard]] static constexpr auto one()  -> Vector3 { return Vector3{ T(1), T(1), T(1) }; }
 };
@@ -436,14 +436,14 @@ struct Vector4 {
 
     template <Numeric U>
     explicit constexpr Vector4(const Vector3<U>& other)
-        : x(static_cast<T>(other.x)),
-          y(static_cast<T>(other.y)),
-          z(static_cast<T>(other.z)),
-          z(static_cast<T>(other.w))
+        : x(cast(T)other.x),
+          y(cast(T)other.y),
+          z(cast(T)other.z),
+          z(cast(T)other.w)
     {}
 
-    constexpr auto operator [] (usize i) -> T& { return data[i]; }
-    constexpr auto operator [] (usize i) const -> const T& { return data[i]; }
+    constexpr auto operator [] (ssize i) -> T& { return data[i]; }
+    constexpr auto operator [] (ssize i) const -> const T& { return data[i]; }
     explicit constexpr operator Vector3<T>() const { return Vector3<T>{ x, y, z }; }
     [[nodiscard]] static constexpr auto zero() -> Vector4 { return Vector4{ T(0), T(0), T(0), T(0) }; }
     [[nodiscard]] static constexpr auto one()  -> Vector4 { return Vector4{ T(1), T(1), T(1), T(1) }; }
@@ -467,13 +467,13 @@ struct is_vec<Vector4<T>> : std::true_type {};
 template <typename T>
 concept IsVector = is_vec<std::remove_cvref_t<T>>::value;
 
-template<usize I, IsVector V>
+template<int I, IsVector V>
 constexpr auto get(V& v) -> @T(V::Value_Type)& {
     static_assert(I < V::size);
     return v.data[I];
 }
 
-template<usize I, IsVector V>
+template<int I, IsVector V>
 constexpr auto get(const V& v) -> const @T(V::Value_Type)& {
     static_assert(I < V::size);
     return v.data[I];
@@ -487,7 +487,7 @@ namespace std {
     template<typename T>
     struct tuple_size<math::Vector2<T>> : integral_constant<size_t, 2> {};
 
-    template<usize I, typename T>
+    template<size_t I, typename T>
     struct tuple_element<I, math::Vector2<T>> {
         using type = T;
     };
@@ -495,7 +495,7 @@ namespace std {
     template<typename T>
     struct tuple_size<math::Vector3<T>> : integral_constant<size_t, 3> {};
 
-    template<usize I, typename T>
+    template<size_t I, typename T>
     struct tuple_element<I, math::Vector3<T>> {
         using type = T;
     };
@@ -503,7 +503,7 @@ namespace std {
     template<typename T>
     struct tuple_size<math::Vector4<T>> : integral_constant<size_t, 4> {};
 
-    template<usize I, typename T>
+    template<size_t I, typename T>
     struct tuple_element<I, math::Vector4<T>> {
         using type = T;
     };
@@ -514,39 +514,39 @@ namespace math {
 template <IsVector V>
 [[nodiscard]] constexpr auto operator + (const V& a, const V& b) -> V {
     V result {};
-    for (usize i = 0; i < V::size; ++i) result[i] = a[i] + b[i];
+    for (int i = 0; i < V::size; ++i) result[i] = a[i] + b[i];
     return result;
 }
 
 template <IsVector V>
 constexpr auto operator += (V& a, const V& b) -> V& {
-    for (usize i = 0; i < V::size; ++i) a[i] += b[i];
+    for (int i = 0; i < V::size; ++i) a[i] += b[i];
     return a;
 }
 
 template <IsVector V>
 [[nodiscard]] constexpr auto operator - (const V& a, const V& b) -> V {
     V result {};
-    for (usize i = 0; i < V::size; ++i) result[i] = a[i] - b[i];
+    for (int i = 0; i < V::size; ++i) result[i] = a[i] - b[i];
     return result;
 }
 
 template <IsVector V>
 constexpr auto operator -= (V& a, const V& b) -> V& {
-    for (usize i = 0; i < V::size; ++i) a[i] -= b[i];
+    for (int i = 0; i < V::size; ++i) a[i] -= b[i];
     return a;
 }
 
 template <IsVector V>
 [[nodiscard]] constexpr auto operator * (const V& v, @T(V::Value_Type) scalar) -> V {
     V result{};
-    for (usize i = 0; i < V::size; ++i) result[i] = v[i] * scalar;
+    for (int i = 0; i < V::size; ++i) result[i] = v[i] * scalar;
     return result;
 }
 
 template <IsVector V>
 constexpr auto operator *= (V& a, @T(V::Value_Type) scalar) -> V& {
-    for (usize i = 0; i < V::size; ++i) a[i] *= scalar;
+    for (int i = 0; i < V::size; ++i) a[i] *= scalar;
     return a;
 }
 
@@ -558,20 +558,20 @@ template <IsVector V>
 template <IsVector V>
 [[nodiscard]] constexpr auto operator / (const V& v, @T(V::Value_Type) scalar) -> V {
     V result{};
-    for (usize i = 0; i < V::size; i++) result[i] = v[i] / scalar;
+    for (int i = 0; i < V::size; i++) result[i] = v[i] / scalar;
     return result;
 }
 
 template <IsVector V>
 [[nodiscard]] constexpr auto operator - (const V& v) -> V {
     V result{};
-    for (usize i = 0; i < V::size; i++) result[i] = -v[i];
+    for (int i = 0; i < V::size; i++) result[i] = -v[i];
     return result;
 }
 
 template <IsVector V>
 constexpr auto operator == (const V& a, const V& b) -> bool {
-    for (usize i = 0; i < V::size; i++) {
+    for (int i = 0; i < V::size; i++) {
         if (a[i] != b[i])
             return false;
     }
@@ -588,7 +588,7 @@ template <IsVector V>
 [[nodiscard]] force_inline constexpr auto dot(const V& a, const V& b) -> @T(V::Value_Type) {
     using T = @T(V::Value_Type);
     T result{};
-    for (usize i = 0; i < V::size; i++) result += a[i] * b[i];
+    for (int i = 0; i < V::size; i++) result += a[i] * b[i];
     return result;
 }
 
@@ -600,7 +600,7 @@ template <IsVector V>
 template <IsVector V>
 [[nodiscard]] force_inline constexpr auto det_xy(const V& v1, const V& v2) -> @T(V::Value_Type) {
     using T = @T(V::Value_Type);
-    return static_cast<T>(v1.x * v2.y - v1.y * v2.x);
+    return cast(T)(v1.x * v2.y - v1.y * v2.x);
 }
 
 // 2D "cross" = signed parallelogram area (same as det_xy).
@@ -629,8 +629,8 @@ force_inline auto normalize(V& v, const V& fallback = V::zero()) -> void {
         v = fallback;
         return;
     }
-    f32 len = sqrt(static_cast<f32>(len_sq));
-    v = v / static_cast<T>(len);
+    f32 len = sqrt(cast(f32)len_sq);
+    v = v / cast(T)len;
 }
 
 // Distinct type on purpose: quaternions must not pick up IsVector operations
@@ -648,8 +648,8 @@ struct Quaternion {
         normalize(axis, Vector3<T>::zero());
         if (axis == Vector3<T>::zero()) return identity();
         T half = angle * T(0.5);
-        T s    = static_cast<T>(sin(static_cast<f32>(half)));
-        T c    = static_cast<T>(cos(static_cast<f32>(half)));
+        auto s = cast(T)(sin(cast(f32)half));
+        auto c = cast(T)(cos(cast(f32)half));
         return Quaternion{ axis.x * s, axis.y * s, axis.z * s, c };
     }
 };
@@ -701,7 +701,7 @@ TEST(Vector, create) {
 template <IsVector V>
 void test_zero() {
     auto v = V::zero();
-    for (usize i = 0; i < V::size; ++i) EXPECT_EQ(v[i], 0);
+    for (int i = 0; i < V::size; ++i) EXPECT_EQ(v[i], 0);
 }
 
 TEST(Vector, zero) {
@@ -716,7 +716,7 @@ TEST(Vector, zero) {
 template <IsVector V>
 void test_one() {
     auto v = V::one();
-    for (usize i = 0; i < V::size; ++i) EXPECT_EQ(v[i], 1);
+    for (int i = 0; i < V::size; ++i) EXPECT_EQ(v[i], 1);
 }
 
 
@@ -733,13 +733,13 @@ template <IsVector V>
 void test_add() {
     V a{}, b{};
 
-    for (usize i = 0; i < V::size; ++i) {
+    for (int i = 0; i < V::size; ++i) {
         a[i] = i + 1;
         b[i] = i + 2;
     }
 
     auto result = a + b;
-    for (usize i = 0; i < V::size; ++i) EXPECT_EQ(result[i], (i + 1) + (i + 2));
+    for (int i = 0; i < V::size; ++i) EXPECT_EQ(result[i], (i + 1) + (i + 2));
 }
 
 TEST(Vector, add) {
@@ -755,13 +755,13 @@ template <IsVector V>
 void test_add_assign() {
     V a{}, b{};
 
-    for (usize i = 0; i < V::size; ++i) {
+    for (int i = 0; i < V::size; ++i) {
         a[i] = i + 1;
         b[i] = i + 2;
     }
 
     a += b;
-    for (usize i = 0; i < V::size; ++i) EXPECT_EQ(a[i], (i + 1) + (i + 2));
+    for (int i = 0; i < V::size; ++i) EXPECT_EQ(a[i], (i + 1) + (i + 2));
 }
 
 TEST(Vector, add_assign) {
@@ -777,13 +777,13 @@ template <IsVector V>
 void test_subtract() {
     V a{}, b{};
 
-    for (usize i = 0; i < V::size; ++i) {
+    for (int i = 0; i < V::size; ++i) {
         a[i] = i + 5;
         b[i] = i + 2;
     }
 
     auto result = a - b;
-    for (usize i = 0; i < V::size; ++i) EXPECT_EQ(result[i], 3);
+    for (int i = 0; i < V::size; ++i) EXPECT_EQ(result[i], 3);
 }
 
 TEST(Vector, subtract) {
@@ -799,13 +799,13 @@ template <IsVector V>
 void test_subtract_assign() {
     V a{}, b{};
 
-    for (usize i = 0; i < V::size; ++i) {
+    for (int i = 0; i < V::size; ++i) {
         a[i] = i + 5;
         b[i] = i + 2;
     }
 
     a -= b;
-    for (usize i = 0; i < V::size; ++i) EXPECT_EQ(a[i], 3);
+    for (int i = 0; i < V::size; ++i) EXPECT_EQ(a[i], 3);
 }
 
 TEST(Vector, subtract_assign) {
@@ -821,11 +821,11 @@ template <IsVector V>
 void test_scalar_multiply() {
     V v{};
 
-    for (usize i = 0; i < V::size; ++i)
+    for (int i = 0; i < V::size; ++i)
         v[i] = i + 1;
 
     auto result = v * 2;
-    for (usize i = 0; i < V::size; ++i) EXPECT_EQ(result[i], (i + 1) * 2);
+    for (int i = 0; i < V::size; ++i) EXPECT_EQ(result[i], (i + 1) * 2);
 }
 
 TEST(Vector, multiply_scalar) {
@@ -841,11 +841,11 @@ template <IsVector V>
 void test_scalar_left_multiply() {
     V v{};
 
-    for (usize i = 0; i < V::size; ++i)
+    for (int i = 0; i < V::size; ++i)
         v[i] = i + 1;
 
     auto result = 2 * v;
-    for (usize i = 0; i < V::size; ++i) EXPECT_EQ(result[i], (i + 1) * 2);
+    for (int i = 0; i < V::size; ++i) EXPECT_EQ(result[i], (i + 1) * 2);
 }
 
 TEST(Vector, scalar_left_multiply) {
@@ -861,11 +861,11 @@ template <IsVector V>
 void test_scalar_multiply_assign() {
     V v{};
 
-    for (usize i = 0; i < V::size; ++i)
+    for (int i = 0; i < V::size; ++i)
         v[i] = i + 1;
 
     v *= 2;
-    for (usize i = 0; i < V::size; ++i) EXPECT_EQ(v[i], (i + 1) * 2);
+    for (int i = 0; i < V::size; ++i) EXPECT_EQ(v[i], (i + 1) * 2);
 }
 
 TEST(Vector, multiply_scalar_assign) {
@@ -881,11 +881,11 @@ template <IsVector V>
 void test_scalar_divide() {
     V v{};
 
-    for (usize i = 0; i < V::size; ++i)
+    for (int i = 0; i < V::size; ++i)
         v[i] = (i + 1) * 2;
 
     auto result = v / 2;
-    for (usize i = 0; i < V::size; ++i) EXPECT_EQ(result[i], i + 1);
+    for (int i = 0; i < V::size; ++i) EXPECT_EQ(result[i], i + 1);
 }
 
 TEST(Vector, divide_scalar) {
@@ -901,7 +901,7 @@ template <IsVector V>
 void test_unary_minus() {
     V v{};
 
-    for (usize i = 0; i < V::size; ++i)
+    for (int i = 0; i < V::size; ++i)
         v[i] = i + 1;
 
     auto result = -v;
@@ -921,7 +921,7 @@ template <IsVector V>
 void test_equality() {
     V a{}, b{}, c{};
 
-    for (usize i = 0; i < V::size; ++i) {
+    for (int i = 0; i < V::size; ++i) {
         a[i] = i;
         b[i] = i;
         c[i] = i + 1;
@@ -947,7 +947,7 @@ void test_dot() {
 
     @T(V::Value_Type) expected = 0;
 
-    for (usize i = 0; i < V::size; ++i) {
+    for (int i = 0; i < V::size; ++i) {
         a[i] = i + 1;
         b[i] = i + 2;
         expected += a[i] * b[i];
@@ -971,7 +971,7 @@ void test_length_squared() {
 
     @T(V::Value_Type) expected = 0;
 
-    for (usize i = 0; i < V::size; ++i) {
+    for (int i = 0; i < V::size; ++i) {
         v[i] = i + 1;
         expected += v[i] * v[i];
     }
@@ -1058,7 +1058,7 @@ TEST(Vector4, construct_from_vector3_float) {
 TEST(Vector4, convert_to_vector3) {
     Vector4<s32> v{1, 2, 3, 4};
 
-    Vector3<s32> result = static_cast<Vector3<s32>>(v);
+    auto result = cast(Vector3<s32>)v;
 
     EXPECT_EQ(result.x, 1);
     EXPECT_EQ(result.y, 2);
@@ -1068,7 +1068,7 @@ TEST(Vector4, convert_to_vector3) {
 TEST(Vector4, convert_to_vector3_float) {
     Vector4<f32> v{1.0f, 2.0f, 3.0f, 4.0f};
 
-    Vector3<f32> result = static_cast<Vector3<f32>>(v);
+    auto result = cast(Vector3<f32>)v;
 
     EXPECT_EQ(result.x, 1.0f);
     EXPECT_EQ(result.y, 2.0f);
@@ -1081,7 +1081,7 @@ void test_det_xy_zero() {
 
     @T(V::Value_Type) expected = 0;
 
-    for (usize i = 0; i < V::size; ++i) {
+    for (int i = 0; i < V::size; ++i) {
         v1[i] = i + 1;
         v2[i] = i + 1;
     }
@@ -1104,7 +1104,7 @@ void test_det_xy_non_zero() {
 
     @T(V::Value_Type) expected = -1;
 
-    for (usize i = 0; i < V::size; ++i) {
+    for (int i = 0; i < V::size; ++i) {
         v1[i] = i + 1;
         v2[i] = i + 2;
     }
@@ -1280,18 +1280,18 @@ struct Rect {
     template<IsVector V>
     constexpr Rect(const V& v1, const V& v2, const V& v3)
     requires(std::is_integral_v<decltype(v1.x)>)
-        : x1(static_cast<u32>(std::min({v1.x, v2.x, v3.x}))),
-          y1(static_cast<u32>(std::min({v1.y, v2.y, v3.y}))),
-          x2(static_cast<u32>(std::max({v1.x, v2.x, v3.x}))),
-          y2(static_cast<u32>(std::max({v1.y, v2.y, v3.y}))) {}
+        : x1(cast(u32)std::min({v1.x, v2.x, v3.x})),
+          y1(cast(u32)std::min({v1.y, v2.y, v3.y})),
+          x2(cast(u32)std::max({v1.x, v2.x, v3.x})),
+          y2(cast(u32)std::max({v1.y, v2.y, v3.y})) {}
 
     template<IsVector V>
     constexpr Rect(const V& v1, const V& v2, const V& v3)
     requires(std::is_floating_point_v<decltype(v1.x)>)
-        : x1(static_cast<u32>(floor(std::min({v1.x, v2.x, v3.x})))),
-          y1(static_cast<u32>(floor(std::min({v1.y, v2.y, v3.y})))),
-          x2(static_cast<u32>(ceil(std::max({v1.x, v2.x, v3.x})))),
-          y2(static_cast<u32>(ceil(std::max({v1.y, v2.y, v3.y})))) {}
+        : x1(cast(u32)(floor(std::min({v1.x, v2.x, v3.x})))),
+          y1(cast(u32)(floor(std::min({v1.y, v2.y, v3.y})))),
+          x2(cast(u32)(ceil(std::max({v1.x, v2.x, v3.x})))),
+          y2(cast(u32)(ceil(std::max({v1.y, v2.y, v3.y})))) {}
 
     static constexpr auto from_size(u32 x, u32 y, u32 w, u32 h) -> Rect {
         return Rect{ x, y, x + w, y + h };
@@ -1302,10 +1302,10 @@ struct Rect {
     constexpr auto empty()  const -> bool { return x1 >= x2 || y1 >= y2; }
 
     force_inline void clip(u32 screen_width, u32 screen_height) {
-        x1 = std::clamp(x1, static_cast<u32>(0), screen_width);
-        x2 = std::clamp(x2, static_cast<u32>(0), screen_width);
-        y1 = std::clamp(y1, static_cast<u32>(0), screen_height);
-        y2 = std::clamp(y2, static_cast<u32>(0), screen_height);
+        x1 = std::clamp(x1, cast(u32)0, screen_width);
+        x2 = std::clamp(x2, cast(u32)0, screen_width);
+        y1 = std::clamp(y1, cast(u32)0, screen_height);
+        y2 = std::clamp(y2, cast(u32)0, screen_height);
     }
 };
 

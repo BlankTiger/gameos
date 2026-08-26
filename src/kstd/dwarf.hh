@@ -110,8 +110,8 @@ auto parse_attribute_specs(Byte_Reader& debug_abbrev) -> Array<Attribute_Spec> {
 
         if (attribute_type_value == 0 && form_value == 0) break;
 
-        auto attribute_type = static_cast<Attribute_Type>(attribute_type_value);
-        auto form           = static_cast<Form>(form_value);
+        auto attribute_type = cast(Attribute_Type)attribute_type_value;
+        auto form           = cast(Form)form_value;
         s64  implicit_const = 0;
         if (form == Form::IMPLICIT_CONST) {
             auto [implicit_const_value, implicit_const_ok] = debug_abbrev.read_sleb128();
@@ -131,7 +131,7 @@ using Abbreviations = Hash_Table<u64, Abbreviation>;
 // `debug_abbrev` must be initialized with memory of the .debug_abbrev section.
 // It's stopped at the (0, 0, 0) terminator that ends the abbreviations table.
 //
-auto parse_abbreviations(Byte_Reader& debug_abbrev, usize preallocate_abbreviation_count = 0) -> Abbreviations {
+auto parse_abbreviations(Byte_Reader& debug_abbrev, ssize preallocate_abbreviation_count = 0) -> Abbreviations {
     Abbreviations abbreviations(preallocate_abbreviation_count);
 
     for (;;) {
@@ -142,7 +142,7 @@ auto parse_abbreviations(Byte_Reader& debug_abbrev, usize preallocate_abbreviati
 
         auto [tag_value, tag_ok] = debug_abbrev.read_uleb128();
         kstd_assert(tag_ok);
-        auto tag = static_cast<Tag>(tag_value);
+        auto tag = cast(Tag)tag_value;
 
         auto [has_children, has_children_ok] = debug_abbrev.read_bool();
         kstd_assert(has_children_ok);
@@ -206,7 +206,7 @@ auto parse_compilation_unit_header(Byte_Reader& debug_info) -> Compilation_Unit_
     return {
         length,
         version,
-        static_cast<Unit_Type>(type_value),
+        cast(Unit_Type)type_value,
         address_size,
         abbreviation_offset
     };
@@ -234,22 +234,22 @@ struct Attribute_Value {
     };
 };
 
-inline auto normalize_section_offset(Array_View<const u8> section, u32 raw_offset) -> usize {
+inline auto normalize_section_offset(Array_View<const u8> section, u32 raw_offset) -> ssize {
     if (raw_offset <= section.size) return raw_offset;
 
     // Linker resolves this DWARF relocation to section address when debug
     // sections are embedded in the loaded kernel image.
-    auto section_address = reinterpret_cast<psize>(section.data);
-    kstd_assert(static_cast<psize>(raw_offset) >= section_address, "dwarf: section offset out of range");
+    auto section_address = cast(psize)section.data;
+    kstd_assert(raw_offset >= section_address, "dwarf: section offset out of range");
 
-    auto offset = static_cast<psize>(raw_offset) - section_address;
+    auto offset = cast(psize)raw_offset - section_address;
     kstd_assert(offset <= section.size, "dwarf: section offset out of range");
-    return static_cast<usize>(offset);
+    return cast(ssize)offset;
 }
 
 auto read_section_string(Array_View<const u8> section, u32 offset) -> string {
     auto section_offset = normalize_section_offset(section, offset);
-    Byte_Reader reader(const_cast<u8*>(section.data + section_offset), section.size - section_offset);
+    Byte_Reader reader(cast(u8*)(section.data + section_offset), section.size - section_offset);
     auto [str, ok] = reader.read_cstring();
     kstd_assert(ok, "dwarf: unterminated string in .debug_str/.debug_line_str");
     return str;
@@ -263,7 +263,7 @@ auto resolve_strx(
 ) -> string {
     auto section_offset = normalize_section_offset(debug_str_offsets_bytes, str_offsets_base);
     Byte_Reader reader(debug_str_offsets_bytes);
-    auto skip_ok = reader.skip(section_offset + index * sizeof(u32));
+    auto skip_ok = reader.skip(section_offset + index * size_of(u32));
     kstd_assert(skip_ok, "dwarf: strx index out of range");
 
     auto [str_offset, str_offset_ok] = reader.read_u32();
@@ -456,7 +456,7 @@ auto read_attribute_value(
         case Form::RNGLISTX: {
             auto [index, ok] = debug_info.read_uleb128();
             kstd_assert(ok);
-            (void)index;
+            cast(void)index;
             return { NONE, 0 };
         } break;
 
@@ -514,14 +514,14 @@ auto read_attribute_value(
         case Form::STRP_SUP: {
             auto [value, ok] = debug_info.read_u32();
             kstd_assert(ok);
-            (void)value;
+            cast(void)value;
             return { NONE, 0 };
         } break;
 
         case Form::REF_SUP8: {
             auto [value, ok] = debug_info.read_u64();
             kstd_assert(ok);
-            (void)value;
+            cast(void)value;
             return { NONE, 0 };
         } break;
 
@@ -530,7 +530,7 @@ auto read_attribute_value(
             kstd_assert(ok);
             return read_attribute_value(
                 debug_info,
-                static_cast<Form>(actual_form),
+                cast(Form)actual_form,
                 address_size,
                 implicit_const,
                 sections
@@ -550,7 +550,7 @@ struct Subprogram_Info {
     psize  high_pc; // Exclusive, already normalized from offset-form Attribute_Type::HIGH_PC.
 
     auto format() const -> string {
-        return sprint("Subprogram_Info{ %, %, % }", name, reinterpret_cast<void*>(low_pc), reinterpret_cast<void*>(high_pc));
+        return sprint("Subprogram_Info{ %, %, % }", name, cast(void*)low_pc, cast(void*)high_pc);
     }
 };
 
@@ -563,7 +563,7 @@ struct Parse_Compilation_Unit_Result {
 };
 
 struct Pending_Subprogram {
-    usize  specification_offset;
+    u64    specification_offset;
     string name;
     psize  low_pc;
     psize  high_pc;
@@ -581,13 +581,13 @@ struct Pending_Subprogram {
 //
 auto parse_compilation_unit_debug_information_entries(
     Byte_Reader& debug_info,
-    usize compilation_unit_start,
-    usize compilation_unit_end,
+    u64 compilation_unit_start,
+    u64 compilation_unit_end,
     const Abbreviations& abbreviations,
     u8 address_size,
     Sections& sections
 ) -> Parse_Compilation_Unit_Result {
-    Hash_Table<usize, string> names;
+    Hash_Table<u64, string> names;
     Array<Pending_Subprogram> pending_subprograms;
 
     Array<Subprogram_Info> infos;
@@ -625,7 +625,7 @@ auto parse_compilation_unit_debug_information_entries(
         string name{};
         psize  low_pc{};
         psize  high_pc_raw{};
-        usize  specification_offset{};
+        u64    specification_offset{};
         bool   high_pc_is_offset = false;
 
         for (const auto& spec : declaration->attribute_specs) {
@@ -743,14 +743,14 @@ auto parse_subprograms(Byte_Reader& debug_info, Sections& sections) -> Parse_Com
 
         auto compilation_unit_start = debug_info.current_offset;
         auto header                 = parse_compilation_unit_header(debug_info);
-        auto compilation_unit_end   = compilation_unit_start + sizeof(u32) + header.length;
+        auto compilation_unit_end   = compilation_unit_start + size_of(u32) + header.length;
 
         auto abbreviation_offset = normalize_section_offset(
             sections.debug_abbrev_bytes,
-            static_cast<u32>(header.abbreviation_offset)
+            cast(u32)header.abbreviation_offset
         );
         Byte_Reader abbreviation_reader(
-            const_cast<u8*>(sections.debug_abbrev_bytes.data + abbreviation_offset),
+            cast(u8*)(sections.debug_abbrev_bytes.data + abbreviation_offset),
             sections.debug_abbrev_bytes.size - abbreviation_offset
         );
         auto abbreviations = parse_abbreviations(abbreviation_reader, 400);
@@ -806,8 +806,8 @@ auto parse_entry_formats(Byte_Reader& debug_line) -> Entry_Formats {
         kstd_assert(form_ok);
 
         entry_formats.push_back({
-            static_cast<Line_Content_Type>(line_content_type_value),
-            static_cast<Form>(form_value)
+            cast(Line_Content_Type)line_content_type_value,
+            cast(Form)form_value
         });
     }
 
@@ -821,7 +821,7 @@ struct Paths_And_Indices {
 
 auto parse_directories_or_file_names(
     Byte_Reader& debug_line,
-    usize address_size,
+    u8 address_size,
     const Entry_Formats& entry_formats,
     const Sections& sections
 ) -> Paths_And_Indices {
@@ -833,13 +833,13 @@ auto parse_directories_or_file_names(
     for (u64 index = 0; index < count; ++index) {
         string path{};
         bool   has_path = false;
-        s64    directory_index = -1;
+        ssize  directory_index = -1;
 
         defer({
             kstd_assert(has_path);
             directories_or_file_names.push_back(path);
             if (directory_index != -1)
-                directory_indices.push_back(static_cast<u32>(directory_index));
+                directory_indices.push_back(cast(u32)directory_index);
         });
 
         for (const auto& [line_content_type, form] : entry_formats) {
@@ -856,7 +856,7 @@ auto parse_directories_or_file_names(
             if (line_content_type == Line_Content_Type::DIRECTORY_INDEX) {
                 kstd_assert(value.kind == Attribute_Value_Kind::UNSIGNED);
                 kstd_assert(value.v_unsigned <= 0xffffffff);
-                directory_index = static_cast<s64>(value.v_unsigned);
+                directory_index = cast(ssize)value.v_unsigned;
             }
         }
     }
@@ -931,7 +931,7 @@ auto parse_debug_line_header(Byte_Reader& debug_line, const Sections& sections) 
         sections
     );
 
-    for (usize index = 0; index < file_names.size; ++index) {
+    for (ssize index = 0; index < file_names.size; ++index) {
         auto directory_index = file_directory_indices[index];
         if (file_names[index].size == 0 || file_names[index][0] == path::SEPARATOR)
             continue;
@@ -1016,7 +1016,7 @@ struct Debug_Line_State {
     explicit Debug_Line_State(bool default_is_stmt) : is_stmt(default_is_stmt) {}
 };
 
-auto parse_line_table(const Sections& sections, u32 debug_line_offset, usize preallocate_row_count = 0) -> Array<Source_Row> {
+auto parse_line_table(const Sections& sections, u32 debug_line_offset, ssize preallocate_row_count = 0) -> Array<Source_Row> {
     Byte_Reader debug_line(sections.debug_line_bytes);
     auto normalized_offset = normalize_section_offset(sections.debug_line_bytes, debug_line_offset);
     auto skip_ok = debug_line.skip(normalized_offset);
@@ -1025,11 +1025,11 @@ auto parse_line_table(const Sections& sections, u32 debug_line_offset, usize pre
     const auto unit_start = debug_line.current_offset;
     const auto header     = parse_debug_line_header(debug_line, sections);
 
-    auto payload_start = unit_start + sizeof(u32);
+    auto payload_start = unit_start + size_of(u32);
     kstd_assert(payload_start <= debug_line.size);
-    kstd_assert(header.unit_length <= static_cast<u64>(debug_line.size - payload_start));
+    kstd_assert(header.unit_length <= debug_line.size - payload_start);
 
-    auto unit_end = payload_start + static_cast<usize>(header.unit_length);
+    auto unit_end = payload_start + header.unit_length;
 
     Debug_Line_State state(header.default_value_of_is_stmt_register);
 
@@ -1047,7 +1047,7 @@ auto parse_line_table(const Sections& sections, u32 debug_line_offset, usize pre
             kstd_assert(extended_opcode_ok);
 
             using enum Line_Number_Extended_Opcode;
-            switch (static_cast<Line_Number_Extended_Opcode>(extended_opcode)) {
+            switch (cast(Line_Number_Extended_Opcode)extended_opcode) {
                 case END_SEQUENCE: {
                     kstd_assert(length == 1);
                     state.end_sequence = true;
@@ -1091,7 +1091,7 @@ auto parse_line_table(const Sections& sections, u32 debug_line_offset, usize pre
         }
         else if (opcode < header.opcode_base) {
             using enum Line_Number_Standard_Opcode;
-            switch (static_cast<Line_Number_Standard_Opcode>(opcode)) {
+            switch (cast(Line_Number_Standard_Opcode)opcode) {
                 case COPY: {
                     state.basic_block    = false;
                     state.prologue_end   = false;

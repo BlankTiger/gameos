@@ -8,7 +8,7 @@
 namespace font {
 
 using Glyph_Width = u8;
-constexpr u32 GLYPH_WIDTH = sizeof(Glyph_Width) * CHAR_BIT;
+constexpr u32 GLYPH_WIDTH = size_of(Glyph_Width) * CHAR_BIT;
 constexpr u32 GLYPH_HEIGHT = 16;
 constexpr u32 GLYPH_COUNT = 128;
 

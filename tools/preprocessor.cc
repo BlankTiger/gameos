@@ -45,7 +45,7 @@ struct Lexer {
           position(position) {}
 
     auto next_token() -> Token {
-        while (position < input.size() && std::isspace(static_cast<unsigned char>(input[position]))) position++;
+        while (position < input.size() && std::isspace(cast(unsigned char)input[position])) position++;
 
         if (position >= input.size()) return {Token_Kind::END, input.size(), input.size()};
 
@@ -79,9 +79,9 @@ struct Lexer {
             while (position < input.size() && is_identifier_part(input[position])) position++;
             return {Token_Kind::IDENTIFIER, begin, position};
         }
-        if (std::isdigit(static_cast<unsigned char>(input[position]))) {
+        if (std::isdigit(cast(unsigned char)input[position])) {
             position++;
-            while (position < input.size() && (std::isalnum(static_cast<unsigned char>(input[position])) ||
+            while (position < input.size() && (std::isalnum(cast(unsigned char)input[position]) ||
                                                 input[position] == '.' || input[position] == '\''))
                 position++;
             return {Token_Kind::NUMBER, begin, position};
@@ -105,11 +105,11 @@ struct Lexer {
     }
 
     static auto is_identifier_start(char c) -> bool {
-        return std::isalpha(static_cast<unsigned char>(c)) || c == '_';
+        return std::isalpha(cast(unsigned char)c) || c == '_';
     }
 
     static auto is_identifier_part(char c) -> bool {
-        return std::isalnum(static_cast<unsigned char>(c)) || c == '_';
+        return std::isalnum(cast(unsigned char)c) || c == '_';
     }
 
     auto prefixed_quote_position() const -> usize {
@@ -190,7 +190,7 @@ static auto read_png_file(const std::string& path) -> std::pair<std::vector<u8>,
     }
     std::println("    Getting pixels from {}, width: {}, height: {}", path, width, height);
 
-    usize pixel_count = static_cast<usize>(width * height);
+    usize pixel_count = cast(usize)(width * height);
     std::vector<u8> result(pixels, pixels + pixel_count * 4);
 
     stbi_image_free(pixels);
@@ -214,7 +214,7 @@ static auto get_resource_data(const std::filesystem::path& path) -> std::pair<st
 static auto embed_identifier(const std::filesystem::path& path) -> std::string {
     std::string result = "__embedded__";
     for (char c : path.filename().string()) {
-        if (std::isalnum(static_cast<unsigned char>(c)))
+        if (std::isalnum(cast(unsigned char)c))
             result += c;
         else
             result += '_';
@@ -336,7 +336,7 @@ struct Preprocessor {
         } else if (input.substr(pos, 4) == "@for") {
             usize directive_pos = pos;
             pos += 4;
-            while (std::isspace(static_cast<unsigned char>(peek()))) get();
+            while (std::isspace(cast(unsigned char)peek())) get();
             if (peek() == '(') {
                 get();
                 for_state(directive_pos);
@@ -568,7 +568,7 @@ struct Preprocessor {
         s64 step = increment.find("++") != std::string::npos ? 1 : increment.find("--") != std::string::npos ? -1 : 0;
         assert(step != 0 && "@for increment expects ++variable or --variable");
 
-        while (std::isspace(static_cast<unsigned char>(peek()))) get();
+        while (std::isspace(cast(unsigned char)peek())) get();
         assert(get() == '{' && "@for expects a braced body");
         usize body_line = line_no;
         usize body_start = pos;
@@ -732,7 +732,7 @@ static auto write_resources_header(const std::string& filename, const std::vecto
         out << "    .data = Static_Array<u8, " << r.data.size() << ">" << "{\n";
         for (usize i = 0; i < r.data.size(); i++) {
             if (i % 12 == 0) out << "        ";
-            out << "0x" << std::hex << std::setw(2) << std::setfill('0') << static_cast<u32>(r.data[i]) << std::dec
+            out << "0x" << std::hex << std::setw(2) << std::setfill('0') << cast(u32)r.data[i] << std::dec
                 << ",";
             if (i % 12 != 11) out << " ";
             if (i % 12 == 11) out << "\n";
@@ -841,7 +841,7 @@ auto main(int argc, char** argv) -> int {
     Resource_Pool pool;
 
     auto thread_count = std::max<u32>(1, std::thread::hardware_concurrency());
-    thread_count = static_cast<u32>(std::min<usize>(thread_count, std::max<usize>(1, input_files.size())));
+    thread_count = cast(u32)(std::min<usize>(thread_count, std::max<usize>(1, input_files.size())));
 
     {
         std::vector<std::jthread> workers;

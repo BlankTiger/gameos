@@ -96,7 +96,8 @@ foreach(header ${all_headers})
         OUTPUT ${stamp}
         COMMAND ${CMAKE_CXX_COMPILER}
                 -std=c++23 -ffreestanding -fno-exceptions -fno-rtti -mno-red-zone
-                -Wno-pragma-once-outside-header
+                -Wno-pragma-once-outside-header -Wno-narrowing -Wno-sign-compare
+                -Wno-int-to-pointer-cast
                 -I ${GENERATED_DIR}/src -I ${GENERATED_DIR}
                 -fsyntax-only ${header}
         COMMAND ${CMAKE_COMMAND} -E touch ${stamp}
@@ -122,6 +123,7 @@ foreach(source ${all_cxx_sources})
                 -fno-exceptions -fno-rtti
                 -mno-red-zone -gdwarf-5
                 -Wall -Wextra
+                -Wno-sign-compare -Wno-narrowing -Wno-int-to-pointer-cast
                 -I ${GENERATED_DIR}/src -I ${GENERATED_DIR}
                 -fsyntax-only ${source}
         COMMAND ${CMAKE_COMMAND} -E touch ${stamp}
@@ -139,6 +141,9 @@ target_compile_options(gameos PRIVATE
     $<$<COMPILE_LANGUAGE:C,CXX,ASM>:-gdwarf-5>
     $<$<COMPILE_LANGUAGE:C,CXX>:-Wall>
     $<$<COMPILE_LANGUAGE:C,CXX>:-Wextra>
+    $<$<COMPILE_LANGUAGE:C,CXX>:-Wno-sign-compare>
+    $<$<COMPILE_LANGUAGE:C,CXX>:-Wno-narrowing>
+    $<$<COMPILE_LANGUAGE:C,CXX>:-Wno-int-to-pointer-cast>
     $<$<COMPILE_LANGUAGE:C,CXX>:-mno-red-zone>
     $<$<COMPILE_LANGUAGE:C,CXX>:-fno-omit-frame-pointer>
     $<$<CONFIG:Release>:-g>

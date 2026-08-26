@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>
+
 #include "numbers.hh"
 
 #define GAMEOS 1
@@ -29,6 +31,12 @@
 #define NAME_CONCAT(x, y) NAME_CONCAT_IMPL(x, y)
 #define DEFER_UNIQ(prefix) NAME_CONCAT(prefix, __COUNTER__)
 
+#define cast(type) (type)
+
+#define size_of(value) cast(ssize)sizeof(value)
+#define align_of(value) cast(ssize)alignof(value)
+#define offset_of(type, member) cast(ssize)offsetof(type, member)
+
 template <typename F>
 struct Defer {
     F f;
@@ -43,8 +51,9 @@ struct Defer {
 // (as opposed to a compile-time N). Declared here rather than in
 // array.hh since string.hh needs it for a forward declaration
 // before array.hh itself is reachable (see string.hh comment).
-inline constexpr usize DYNAMIC_EXTENT = static_cast<usize>(-1);
+inline constexpr ssize DYNAMIC_EXTENT = -1;
 
 namespace mem {
-    inline constexpr usize PAGE_SIZE = 4096;
+    inline constexpr ssize PAGE_SSIZE = 4096;
+    inline constexpr auto  PAGE_USIZE = cast(usize)PAGE_SSIZE;
 }

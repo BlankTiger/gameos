@@ -8,10 +8,10 @@
 
 #include "tetris/main.hh"
 
-constexpr usize BLOCK_TEST_BODY_COUNT = available_bodies.size();
-constexpr usize BLOCK_TEST_MAX_BLOCKS = ARBITRARY_FALLING_BODY_BLOCK_SIZE_LIMIT;
-constexpr usize BLOCK_TEST_MAX_VERTICES = BLOCK_TEST_MAX_BLOCKS * gfx::unit_cube_vertices.size;
-constexpr usize BLOCK_TEST_MAX_INDICES = BLOCK_TEST_MAX_BLOCKS * gfx::unit_cube_indices.size;
+constexpr int BLOCK_TEST_BODY_COUNT = available_bodies.size();
+constexpr int BLOCK_TEST_MAX_BLOCKS = ARBITRARY_FALLING_BODY_BLOCK_SIZE_LIMIT;
+constexpr int BLOCK_TEST_MAX_VERTICES = BLOCK_TEST_MAX_BLOCKS * gfx::unit_cube_vertices.size;
+constexpr int BLOCK_TEST_MAX_INDICES = BLOCK_TEST_MAX_BLOCKS * gfx::unit_cube_indices.size;
 constexpr f32 BLOCK_TEST_CUBE_SCALE = 0.65f;
 constexpr f32 BLOCK_TEST_CUBE_GAP = 0.1f;
 constexpr f32 BLOCK_TEST_BLOCK_SPACING = 2.f + BLOCK_TEST_CUBE_GAP / BLOCK_TEST_CUBE_SCALE;
@@ -29,21 +29,21 @@ auto make_block_test_meshes() -> Static_Array<gfx::Mesh, BLOCK_TEST_BODY_COUNT>&
     if (block_test_meshes_initialized) return block_test_meshes;
     block_test_meshes_initialized = true;
 
-    usize body_index = 0;
+    ssize body_index = 0;
     for (const auto& body : available_bodies) {
         auto& body_storage = block_test_mesh_storage[body_index];
-        usize vertex_count = 0;
-        usize index_count = 0;
+        ssize vertex_count = 0;
+        ssize index_count = 0;
 
         const auto center = calculate_center_of_body(create_new_falling_body(body));
         for (const auto& [row, col, layer] : body) {
             const Vector3<f32> offset{
-                static_cast<f32>(row) - static_cast<f32>(center.x),
-                static_cast<f32>(col) - static_cast<f32>(center.y),
-                static_cast<f32>(layer) - static_cast<f32>(center.z),
+                cast(f32)row - cast(f32)center.x,
+                cast(f32)col - cast(f32)center.y,
+                cast(f32)layer - cast(f32)center.z,
             };
 
-            const usize vertex_offset = vertex_count;
+            const ssize vertex_offset = vertex_count;
             for (const auto& source_vertex : gfx::DEBUG_CUBE.vertices) {
                 auto vertex = source_vertex;
                 vertex.position += offset * BLOCK_TEST_BLOCK_SPACING;
@@ -52,9 +52,9 @@ auto make_block_test_meshes() -> Static_Array<gfx::Mesh, BLOCK_TEST_BODY_COUNT>&
 
             for (const auto& [i1, i2, i3] : gfx::DEBUG_CUBE.indices) {
                 body_storage.indices[index_count++] = {
-                    static_cast<u32>(vertex_offset + i1),
-                    static_cast<u32>(vertex_offset + i2),
-                    static_cast<u32>(vertex_offset + i3),
+                    cast(u32)(vertex_offset + i1),
+                    cast(u32)(vertex_offset + i2),
+                    cast(u32)(vertex_offset + i3),
                 };
             }
         }
@@ -85,7 +85,7 @@ auto blocks_tests_main() -> void {
     constexpr f32 MOUSE_ROTATION_SENSITIVITY = 0.01f;
     constexpr auto TARGET_TICKS = ticks_per_frame(144);
 
-    usize body_index = 0;
+    ssize body_index = 0;
     u64 last_tick = get_ticks();
     u64 body_started_at = last_tick;
     gfx::Mesh_Instance body_instance{
@@ -117,11 +117,11 @@ auto blocks_tests_main() -> void {
         }
 
         if (input::mouse_button_held(input::Mouse_Button::LEFT)) {
-            body_instance.rotate({0.f, 1.f, 0.f}, MOUSE_ROTATION_SENSITIVITY * static_cast<f32>(mouse_delta.x));
-            body_instance.rotate({1.f, 0.f, 0.f}, MOUSE_ROTATION_SENSITIVITY * static_cast<f32>(mouse_delta.y));
+            body_instance.rotate({0.f, 1.f, 0.f}, MOUSE_ROTATION_SENSITIVITY * cast(f32)mouse_delta.x);
+            body_instance.rotate({1.f, 0.f, 0.f}, MOUSE_ROTATION_SENSITIVITY * cast(f32)mouse_delta.y);
         }
 
-        const f64 dt = static_cast<f64>(elapsed) / TICK_RATE;
+        const auto dt = cast(f64)elapsed / TICK_RATE;
         const f64 fps = dt > 0.0 ? 1.0 / dt : 0.0;
 
         gfx::clear(gfx::BLACK);

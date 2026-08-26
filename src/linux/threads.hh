@@ -23,7 +23,7 @@ auto spawn_thread(F&& function, Args&&... args) -> std::thread {
             void* temporary_storage = nullptr;
             Temporary_Allocator_State temporary_state{};
             if (inherited_context.temporary_state != nullptr && inherited_context.temporary_state->base != nullptr) {
-                auto allocation = mem::alloc(mem::TEMPORARY_STORAGE_SIZE, alignof(std::max_align_t), inherited_context.allocator);
+                auto allocation = mem::alloc(mem::TEMPORARY_STORAGE_SIZE, align_of(std::max_align_t), inherited_context.allocator);
                 kstd_assert(allocation.memory != nullptr, "Thread temporary storage allocation failed.");
 
                 temporary_storage = allocation.memory;
@@ -34,7 +34,7 @@ auto spawn_thread(F&& function, Args&&... args) -> std::thread {
             std::apply(std::move(function), std::move(args));
 
             if (temporary_storage != nullptr)
-                (void)mem::free(temporary_storage, mem::TEMPORARY_STORAGE_SIZE, alignof(std::max_align_t), inherited_context.allocator);
+                cast(void)mem::free(temporary_storage, mem::TEMPORARY_STORAGE_SIZE, align_of(std::max_align_t), inherited_context.allocator);
         }
     );
 }

@@ -55,7 +55,7 @@ auto build_debug_info() -> void {
 
     using namespace hidden;
     PUSH_ALLOCATOR(debug_info_building_allocator.get_allocator());
-    defer(serial::println("DWARF parsing uses: % MB", static_cast<f32>(debug_info_building_allocator.bytes_used()) / 1024 / 1024));
+    defer(serial::println("DWARF parsing uses: % MB", cast(f32)debug_info_building_allocator.bytes_used() / 1024 / 1024));
 
     auto debug_info_size        = ptr_addr(__debug_info_end)        - ptr_addr(__debug_info_start);
     auto debug_abbrev_size      = ptr_addr(__debug_abbrev_end)      - ptr_addr(__debug_abbrev_start);

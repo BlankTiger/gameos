@@ -144,11 +144,11 @@ auto read_redirection_entry(u32 pin) -> Redirection_Entry {
 
 template <typename Register>
 auto read_register() -> Register {
-    static_assert(sizeof(Register) == sizeof(u32));
+    static_assert(size_of(Register) == size_of(u32));
 
     using namespace hidden;
 
-    *ptr_offset(mmio, IO_REGISTER_SELECT) = static_cast<u32>(Register::INDEX);
+    *ptr_offset(mmio, IO_REGISTER_SELECT) = cast(u32)Register::INDEX;
     auto value = *ptr_offset(mmio, IO_WINDOW);
     Register r{ .raw = value };
     return r;
@@ -169,7 +169,7 @@ auto route_industry_standard_architecture_irq(ISA_Irq isa_irq, Interrupt_Vector_
     const auto& madt = acpi::madt();
     const auto info = ioapic_info();
 
-    auto gsi = static_cast<u32>(isa_irq);
+    auto gsi = cast(u32)isa_irq;
     acpi::MPS_INTI_Flags flags{};
 
     for (const auto& ov : madt.overrides) {
@@ -185,7 +185,7 @@ auto route_industry_standard_architecture_irq(ISA_Irq isa_irq, Interrupt_Vector_
 
     entry.high.destination_apic_id = destination_apic_id;
 
-    entry.low.vector           = static_cast<u32>(vector);
+    entry.low.vector           = cast(u32)vector;
     entry.low.masked           = 0;
     entry.low.delivery_mode    = Delivery_Mode::FIXED;
     entry.low.destination_mode = Destination_Mode::PHYSICAL;
@@ -224,9 +224,9 @@ auto initialize() -> void {
     auto version = read_register<Version_Register>();
     serial::println(
         "IOAPIC ioapic_id=%, version=%, max RTE=%",
-        static_cast<u32>(id.ioapic_id),
-        static_cast<u32>(version.version),
-        static_cast<u32>(version.max_redirection_entry)
+        cast(u32)id.ioapic_id,
+        cast(u32)version.version,
+        cast(u32)version.max_redirection_entry
     );
 
     mask_all_pins(version.max_redirection_entry);

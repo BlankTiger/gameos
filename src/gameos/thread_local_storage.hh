@@ -11,8 +11,8 @@
 namespace tls {
 
 constexpr u32   IA32_FS_BASE    = 0xC0000100;
-constexpr usize MAX_DESTRUCTORS = 32;
-constexpr usize TLS_ALIGNMENT   = 16;
+constexpr ssize MAX_DESTRUCTORS = 32;
+constexpr ssize TLS_ALIGNMENT   = 16;
 
 extern "C" u8 __tls_start[];
 extern "C" u8 __tdata_end[];
@@ -38,13 +38,13 @@ struct Block {
 
 inline Static_Array<Block*, acpi::MAX_CPUS> idle_blocks;
 
-force_inline auto block_size() -> usize {
-    auto image_size = ptr_addr(__tls_end) - ptr_addr(__tls_start);
+force_inline auto block_size() -> ssize {
+    auto image_size = cast(ssize)(ptr_addr(__tls_end) - ptr_addr(__tls_start));
     return mem::align_up(image_size, TLS_ALIGNMENT);
 }
 
-force_inline auto allocation_size() -> usize {
-    return block_size() + 2 * sizeof(psize);
+force_inline auto allocation_size() -> ssize {
+    return block_size() + 2 * size_of(psize);
 }
 
 force_inline auto set_base(void* base) -> void {
@@ -59,13 +59,13 @@ auto create(const Context& inherited_context) -> Block* {
     auto allocator = inherited_context.allocator;
     kstd_assert(allocator.valid());
 
-    auto block_allocation = mem::alloc(sizeof(Block), alignof(Block), allocator);
+    auto block_allocation = mem::alloc(size_of(Block), align_of(Block), allocator);
     auto image_allocation = mem::alloc(allocation_size(), TLS_ALIGNMENT, allocator);
     kstd_assert(block_allocation.error == mem::Allocator_Error::NONE);
     kstd_assert(image_allocation.error == mem::Allocator_Error::NONE);
 
-    auto* block = static_cast<Block*>(block_allocation.memory);
-    auto* image = static_cast<u8*>(image_allocation.memory);
+    auto* block = cast(Block*)block_allocation.memory;
+    auto* image = cast(u8*)image_allocation.memory;
 
     void* temporary_storage = nullptr;
     if (inherited_context.temporary_state != nullptr) {
@@ -124,10 +124,10 @@ auto activate(Block* block) -> void {
     kstd_assert(block != nullptr);
 
     auto* thread_pointer = ptr_offset(block->allocation, block_size());
-    *reinterpret_cast<psize*>(thread_pointer) = ptr_addr(thread_pointer);
+    *cast(psize*)thread_pointer = ptr_addr(thread_pointer);
 
-    auto* block_pointer_storage = ptr_offset(thread_pointer, sizeof(psize));
-    *reinterpret_cast<Block**>(block_pointer_storage) = block;
+    auto* block_pointer_storage = ptr_offset(thread_pointer, size_of(psize));
+    *cast(Block**)block_pointer_storage = block;
 
     set_base(thread_pointer);
     context = block->context;
@@ -159,7 +159,7 @@ auto destroy(Block* block) -> void {
     kstd_debug_assert(error_free_alloc == mem::Allocator_Error::NONE);
 
     block->~Block();
-    auto error_free_block = mem::free(block, sizeof(Block), alignof(Block), allocator);
+    auto error_free_block = mem::free(block, size_of(Block), align_of(Block), allocator);
     kstd_debug_assert(error_free_block == mem::Allocator_Error::NONE);
 }
 
@@ -168,8 +168,8 @@ extern "C" auto __cxa_thread_atexit(
     void*               object,
     void*               dso_handle
 ) -> int {
-    auto* thread_pointer = static_cast<u8*>(base());
-    auto* block = *reinterpret_cast<Block**>(thread_pointer + sizeof(psize));
+    auto* thread_pointer = cast(u8*)base();
+    auto* block = *cast(Block**)(thread_pointer + size_of(psize));
     if (block->destructors.size == MAX_DESTRUCTORS) return -1;
 
     block->destructors.push_back({function, object, dso_handle});

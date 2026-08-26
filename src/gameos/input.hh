@@ -114,7 +114,7 @@ struct Poll_Result {
 
 namespace hidden {
 
-constexpr usize EVENT_QUEUE_CAPACITY = 256;
+constexpr ssize EVENT_QUEUE_CAPACITY = 256;
 
 inline Ring_Buffer<Event, EVENT_QUEUE_CAPACITY> events;
 inline synchronization::Spinlock                lock;
@@ -364,7 +364,7 @@ TEST(Input, mouse_motion_is_accumulated_for_frame) {
 
 TEST(Input, queue_overflow_does_not_break_state) {
     reset();
-    for (usize index = 0; index < hidden::EVENT_QUEUE_CAPACITY; ++index)
+    for (int index = 0; index < hidden::EVENT_QUEUE_CAPACITY; ++index)
         submit_event(Event{ .type = Event_Type::MOUSE_MOTION, .mouse_motion = { 1, 1 } });
 
     submit_event(Event{ .type = Event_Type::KEY_DOWN, .key_down = { Key::A, false } });

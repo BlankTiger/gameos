@@ -7,7 +7,7 @@
     struct iterator {                                                        \
         using iterator_category = std::random_access_iterator_tag;           \
         using value_type        = T;                                         \
-        using difference_type   = usize;                                     \
+        using difference_type   = ssize;                                     \
         using pointer           = T*;                                        \
         using reference         = T&;                                        \
         T* ptr;                                                              \
@@ -34,24 +34,24 @@
             --ptr;                                                           \
             return tmp;                                                      \
         }                                                                    \
-        auto operator + (usize n) const -> iterator {                        \
+        auto operator + (ssize n) const -> iterator {                        \
             return iterator(ptr + n);                                        \
         }                                                                    \
-        auto operator - (usize n) const -> iterator {                        \
+        auto operator - (ssize n) const -> iterator {                        \
             return iterator(ptr - n);                                        \
         }                                                                    \
-        auto operator - (const iterator& other) const -> usize {             \
+        auto operator - (const iterator& other) const -> ssize {             \
             return ptr - other.ptr;                                          \
         }                                                                    \
-        auto operator += (usize n) -> iterator& {                            \
+        auto operator += (ssize n) -> iterator& {                            \
             ptr += n;                                                        \
             return *this;                                                    \
         }                                                                    \
-        auto operator -= (usize n) -> iterator& {                            \
+        auto operator -= (ssize n) -> iterator& {                            \
             ptr -= n;                                                        \
             return *this;                                                    \
         }                                                                    \
-        auto operator [] (usize n) const -> T& {                             \
+        auto operator [] (ssize n) const -> T& {                             \
             return *(ptr + n);                                               \
         }                                                                    \
         auto operator < (const iterator& other) const -> bool {              \

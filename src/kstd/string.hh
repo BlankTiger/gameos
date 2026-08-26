@@ -15,7 +15,7 @@
 // Array_View<T, N> is a view of exactly N elements.
 // Array_View<T> with N=DYNAMIC_EXTENT carries its own runtime size.
 //
-template <typename T, usize N = DYNAMIC_EXTENT>
+template <typename T, ssize N = DYNAMIC_EXTENT>
 struct Array_View;
 
 struct string;
@@ -30,12 +30,12 @@ struct string;
 //
 struct string {
     char* data = nullptr;
-    usize size = 0;
+    ssize size = 0;
 
     constexpr string() = default;
-    constexpr string(char* data, usize size) : data(data), size(size) {}
-    constexpr string(const char* data, usize size)
-        : data(const_cast<char*>(data)), size(size) {}
+    constexpr string(char* data, ssize size) : data(data), size(size) {}
+    constexpr string(const char* data, ssize size)
+        : data(cast(char*)data), size(size) {}
 
     // Construction from an Array_View<u8> lives on the Array_View side (see
     // array.hh's `operator string()`): array.hh has to include this header
@@ -43,15 +43,15 @@ struct string {
 
     // Intentionally not `explicit`: accept string literals like const char*.
     constexpr string(const char* cstr)
-        : data(const_cast<char*>(cstr)), size(cstr != nullptr ? kstd_strlen(cstr) : 0) {}
+        : data(cast(char*)cstr), size(cstr != nullptr ? kstd_strlen(cstr) : 0) {}
 
-    auto operator [] (usize index) const -> char {
-        kstd_assert(index < size, "string index out of bounds", std::source_location::current());
+    auto operator [] (ssize index) const -> char {
+        kstd_assert(index >= 0 && index < size, "string index out of bounds", std::source_location::current());
         return data[index];
     }
 
-    force_inline auto slice(usize index, usize count) const -> string {
-        if (index >= size)
+    force_inline auto slice(ssize index, ssize count) const -> string {
+        if (index < 0 || index >= size)
             return {};
 
         auto remaining = size - index;
@@ -61,7 +61,7 @@ struct string {
 
     auto operator == (const string& other) const -> bool {
         if (size != other.size) return false;
-        for (usize i = 0; i < size; ++i) {
+        for (ssize i = 0; i < size; ++i) {
             if (data[i] != other.data[i]) return false;
         }
         return true;
@@ -91,21 +91,21 @@ struct string {
 // allocator null -> current global allocator at free time (must match alloc heap).
 inline auto free_string(string s, mem::Allocator allocator = {}) -> void {
     if (s.data == nullptr || s.size == 0) return;
-    (void)mem::free(s.data, s.size, alignof(char), allocator);
+    cast(void)mem::free(s.data, s.size, align_of(char), allocator);
 }
 
 // Free heap bytes from String_Builder::to_c_string / csprint.
 // allocator null -> current global allocator at free time (must match alloc heap).
 inline auto free_c_string(const char* s, mem::Allocator allocator = {}) -> void {
     if (s == nullptr) return;
-    (void)mem::free(const_cast<char*>(s), kstd_strlen(s) + 1, alignof(char), allocator);
+    cast(void)mem::free(cast(char*)s, kstd_strlen(s) + 1, align_of(char), allocator);
 }
 
 inline auto copy_string(string s, mem::Allocator allocator = {}) -> string {
     if (s.size == 0) return string{};
 
-    auto allocation = mem::alloc(s.size, alignof(char), allocator);
-    auto* data = static_cast<char*>(allocation.memory);
+    auto allocation = mem::alloc(s.size, align_of(char), allocator);
+    auto* data = cast(char*)allocation.memory;
     kstd_assert(data != nullptr, "copy_string allocation failed");
     kstd_memcpy(data, s.data, s.size);
     return string(data, s.size);
@@ -117,7 +117,7 @@ force_inline auto tcopy(string s) -> string {
 
 // Null-terminated copy in temp (for C APIs). Not counted in the string length.
 inline auto temp_c_string(string s) -> const char* {
-    auto* data = static_cast<char*>(mem::talloc(s.size + 1, alignof(char)));
+    auto* data = cast(char*)(mem::talloc(s.size + 1, align_of(char)));
     if (s.size > 0) kstd_memcpy(data, s.data, s.size);
     data[s.size] = '\0';
     return data;
@@ -165,16 +165,16 @@ TEST(string, index_out_of_bounds_assert) {
 TEST(string, iterator) {
     string s = "abc";
     char buf[4] = {};
-    usize i = 0;
+    ssize i = 0;
     for (char c : s) buf[i++] = c;
     EXPECT_STREQ(buf, "abc");
 }
 
 TEST(string, bool_is_content_presence) {
-    EXPECT_FALSE(static_cast<bool>(string{}));
-    EXPECT_FALSE(static_cast<bool>(string(static_cast<const char*>(nullptr))));
-    EXPECT_FALSE(static_cast<bool>(string("x", 0)));
-    EXPECT_TRUE(static_cast<bool>(string("x")));
+    EXPECT_FALSE(cast(bool)(string{}));
+    EXPECT_FALSE(cast(bool)(string(cast(const char*)nullptr)));
+    EXPECT_FALSE(cast(bool)string("x", 0));
+    EXPECT_TRUE(cast(bool)string("x"));
 }
 
 TEST(string, slice_returns_requested_range) {

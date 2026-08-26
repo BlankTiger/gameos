@@ -31,10 +31,10 @@ auto add_usable_region(Memory_Regions& regions, u64 base, u64 length) -> void {
 auto reserve_range(Memory_Regions& regions, u64 start, u64 end) -> void {
     if (start >= end) return;
 
-    start = align_down(start, static_cast<u64>(mem::PAGE_SIZE));
-    end   = align_up(end,     static_cast<u64>(mem::PAGE_SIZE));
+    start = align_down(start, mem::PAGE_USIZE);
+    end   = align_up(end,     mem::PAGE_USIZE);
 
-    for (usize i = 0; i < regions.size;) {
+    for (ssize i = 0; i < regions.size;) {
         const u64 region_start = regions[i].base;
         const u64 region_end   = region_start + regions[i].size;
 
@@ -44,7 +44,7 @@ auto reserve_range(Memory_Regions& regions, u64 start, u64 end) -> void {
         }
 
         if (start <= region_start && end >= region_end) {
-            const usize last = regions.size - 1;
+            auto last = regions.size - 1;
             if (i != last) regions[i] = regions[last];
             regions.size--;
             continue;
@@ -87,7 +87,7 @@ auto parse_multiboot2_memory_map(Memory_Regions& regions, const boot::Multiboot2
 
             while (ptr_addr(entry) < ptr_addr(tag_end)) {
                 if (entry->type == MULTIBOOT_MMAP_USABLE) add_usable_region(regions, entry->addr, entry->len);
-                entry = reinterpret_cast<const boot::Multiboot2_Memory_Map_Entry*>(ptr_addr(entry) + mmap_tag->entry_size);
+                entry = cast(const boot::Multiboot2_Memory_Map_Entry*)(ptr_addr(entry) + mmap_tag->entry_size);
             }
         }
 
@@ -115,7 +115,7 @@ auto reserve_multiboot2_data(Memory_Regions& regions, const boot::Multiboot2_Inf
     const auto* end = mbi->end_tag();
 
     while (ptr_addr(tag) < ptr_addr(end)) {
-        const auto tag_type = static_cast<boot::Multiboot2_Tag_Type>(tag->type);
+        const auto tag_type = cast(boot::Multiboot2_Tag_Type)tag->type;
         if (tag_type == boot::Multiboot2_Tag_Type::CMDLINE || tag_type == boot::Multiboot2_Tag_Type::BOOT_LOADER_NAME) {
             const auto* text = tag->payload_as<char>();
             reserve_range(regions, ptr_addr(text), ptr_addr(text) + kstd_strlen(text) + 1);
@@ -148,7 +148,7 @@ auto initialize(const boot::Multiboot2_Info* mbi) -> Context {
 
     auto allocator = buddy.get_allocator();
 
-    constexpr usize TEMPORARY_ALLOCATOR_SIZE = 1 * 1024 * 1024;
+    constexpr auto TEMPORARY_ALLOCATOR_SIZE = 1 * 1024 * 1024;
     auto temporary_allocation = mem::alloc(TEMPORARY_ALLOCATOR_SIZE, allocator);
     void* temporary_memory = temporary_allocation.memory;
     kstd_assert(temporary_memory != nullptr, "Failed to allocate temporary allocator backing memory.");
@@ -168,53 +168,53 @@ auto initialize(const boot::Multiboot2_Info* mbi) -> Context {
 }  // namespace mem
 
 auto operator new(usize size) -> void* {
-    if (void* ptr = mem::alloc(size, context.allocator).memory) return ptr;
+    if (void* ptr = mem::alloc(cast(ssize)size, context.allocator).memory) return ptr;
     halt::forever("new failed");
 }
 
 auto operator new[](usize size) -> void* {
-    if (void* ptr = mem::alloc(size, context.allocator).memory) return ptr;
+    if (void* ptr = mem::alloc(cast(ssize)size, context.allocator).memory) return ptr;
     halt::forever("new[] failed");
 }
 
 auto operator new(usize size, std::align_val_t alignment) -> void* {
-    if (void* ptr = mem::alloc(size, static_cast<usize>(alignment)).memory) return ptr;
+    if (void* ptr = mem::alloc(cast(ssize)size, cast(ssize)alignment).memory) return ptr;
     halt::forever("aligned new failed");
 }
 
 auto operator new[](usize size, std::align_val_t alignment) -> void* {
-    if (void* ptr = mem::alloc(size, static_cast<usize>(alignment)).memory) return ptr;
+    if (void* ptr = mem::alloc(cast(ssize)size, cast(ssize)alignment).memory) return ptr;
     halt::forever("aligned new[] failed");
 }
 
 auto operator delete(void* ptr) noexcept -> void {
-    (void)mem::free(ptr, 0);
+    cast(void)mem::free(ptr, 0);
 }
 
 auto operator delete[](void* ptr) noexcept -> void {
-    (void)mem::free(ptr, 0);
+    cast(void)mem::free(ptr, 0);
 }
 
 auto operator delete(void* ptr, usize size) noexcept -> void {
-    (void)mem::free(ptr, size);
+    cast(void)mem::free(ptr, cast(ssize)size);
 }
 
 auto operator delete[](void* ptr, usize size) noexcept -> void {
-    (void)mem::free(ptr, size);
+    cast(void)mem::free(ptr, cast(ssize)size);
 }
 
 auto operator delete(void* ptr, std::align_val_t alignment) noexcept -> void {
-    (void)mem::free(ptr, 0, static_cast<usize>(alignment));
+    cast(void)mem::free(ptr, 0, cast(ssize)alignment);
 }
 
 auto operator delete[](void* ptr, std::align_val_t alignment) noexcept -> void {
-    (void)mem::free(ptr, 0, static_cast<usize>(alignment));
+    cast(void)mem::free(ptr, 0, cast(ssize)alignment);
 }
 
 auto operator delete(void* ptr, usize size, std::align_val_t alignment) noexcept -> void {
-    (void)mem::free(ptr, size, static_cast<usize>(alignment));
+    cast(void)mem::free(ptr, cast(ssize)size, cast(ssize)alignment);
 }
 
 auto operator delete[](void* ptr, usize size, std::align_val_t alignment) noexcept -> void {
-    (void)mem::free(ptr, size, static_cast<usize>(alignment));
+    cast(void)mem::free(ptr, cast(ssize)size, cast(ssize)alignment);
 }

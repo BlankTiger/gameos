@@ -12,10 +12,10 @@
 
 namespace acpi {
 
-constexpr usize RSDP_V1_SIZE            = 20;
-constexpr usize MAX_CPUS                = 64;
-constexpr usize MAX_IOAPICS             = 4;
-constexpr usize MAX_INTERRUPT_OVERRIDES = 32;
+constexpr int RSDP_V1_SIZE            = 20;
+constexpr int MAX_CPUS                = 64;
+constexpr int MAX_IOAPICS             = 4;
+constexpr int MAX_INTERRUPT_OVERRIDES = 32;
 
 inline constexpr char RSDP_SIGNATURE[8] = {
     'R', 'S', 'D', ' ', 'P', 'T', 'R', ' '
@@ -25,11 +25,11 @@ inline constexpr char RSDT_SIGNATURE[4] = { 'R', 'S', 'D', 'T' };
 inline constexpr char XSDT_SIGNATURE[4] = { 'X', 'S', 'D', 'T' };
 
 // Every ACPI table: sum of all bytes in the structure is 0 mod 256.
-force_inline auto checksum_ok(const void* table, usize size) -> bool {
+force_inline auto checksum_ok(const void* table, ssize size) -> bool {
     u8 sum = 0;
-    const auto* bytes = static_cast<const u8*>(table);
-    for (usize i = 0; i < size; ++i) {
-        sum = static_cast<u8>(sum + bytes[i]);
+    const auto* bytes = cast(const u8*)table;
+    for (ssize i = 0; i < size; ++i) {
+        sum = cast(u8)(sum + bytes[i]);
     }
     return sum == 0;
 }
@@ -47,7 +47,7 @@ struct RSDP {
     u8   reserved[3];
 } __attribute__((packed));
 
-static_assert(sizeof(RSDP) == 36);
+static_assert(size_of(RSDP) == 36);
 
 struct SDT_Header {
     char signature[4];
@@ -61,7 +61,7 @@ struct SDT_Header {
     u32  creator_revision;
 } __attribute__((packed));
 
-static_assert(sizeof(SDT_Header) == 36);
+static_assert(size_of(SDT_Header) == 36);
 
 // MADT Multiple APIC Flags.
 union MADT_Flags {
@@ -72,7 +72,7 @@ union MADT_Flags {
     u32 raw;
 } __attribute__((packed));
 
-static_assert(sizeof(MADT_Flags) == 4);
+static_assert(size_of(MADT_Flags) == 4);
 
 // Local APIC / Local x2APIC Processor Local APIC Flags.
 union Local_APIC_Flags {
@@ -84,7 +84,7 @@ union Local_APIC_Flags {
     u32 raw;
 } __attribute__((packed));
 
-static_assert(sizeof(Local_APIC_Flags) == 4);
+static_assert(size_of(Local_APIC_Flags) == 4);
 
 enum struct Polarity : u16 {
     BUS_DEFAULT = 0b00,
@@ -110,7 +110,7 @@ union MPS_INTI_Flags {
     u16 raw;
 } __attribute__((packed));
 
-static_assert(sizeof(MPS_INTI_Flags) == 2);
+static_assert(size_of(MPS_INTI_Flags) == 2);
 
 struct MADT {
     SDT_Header header;
@@ -118,7 +118,7 @@ struct MADT {
     MADT_Flags flags;
 } __attribute__((packed));
 
-static_assert(sizeof(MADT) == 44);
+static_assert(size_of(MADT) == 44);
 
 enum struct MADT_Entry_Type : u8 {
     LOCAL_APIC   = 0,
@@ -139,7 +139,7 @@ struct MADT_Local_APIC {
     Local_APIC_Flags  flags;
 } __attribute__((packed));
 
-static_assert(sizeof(MADT_Local_APIC) == 8);
+static_assert(size_of(MADT_Local_APIC) == 8);
 
 struct MADT_IOAPIC {
     MADT_Entry_Header header;
@@ -149,7 +149,7 @@ struct MADT_IOAPIC {
     u32               gsi_base;
 } __attribute__((packed));
 
-static_assert(sizeof(MADT_IOAPIC) == 12);
+static_assert(size_of(MADT_IOAPIC) == 12);
 
 struct MADT_ISO {
     MADT_Entry_Header header;
@@ -159,7 +159,7 @@ struct MADT_ISO {
     MPS_INTI_Flags    flags;
 } __attribute__((packed));
 
-static_assert(sizeof(MADT_ISO) == 10);
+static_assert(size_of(MADT_ISO) == 10);
 
 struct MADT_Local_X2APIC {
     MADT_Entry_Header header;
@@ -169,7 +169,7 @@ struct MADT_Local_X2APIC {
     u32               acpi_processor_uid;
 } __attribute__((packed));
 
-static_assert(sizeof(MADT_Local_X2APIC) == 16);
+static_assert(size_of(MADT_Local_X2APIC) == 16);
 
 struct CPU_Desc {
     u32  apic_id;
@@ -231,10 +231,10 @@ auto find_rsdp_in_range(u64 start, u64 end) -> const RSDP* {
 
 auto find_rsdp_bios_scan() -> const RSDP* {
     u16 extended_bios_data_area_segment = 0;
-    kstd_memcpy(&extended_bios_data_area_segment, addr_as<const u8*>(0x40E), sizeof(extended_bios_data_area_segment));
+    kstd_memcpy(&extended_bios_data_area_segment, addr_as<const u8*>(0x40E), size_of(extended_bios_data_area_segment));
     // Word at 0x40E is a real-mode segment, not a byte address.
     // One segment unit is 16 bytes, so base = segment * 16.
-    const u64 extended_bios_data_area_base = static_cast<u64>(extended_bios_data_area_segment) << 4;
+    const auto extended_bios_data_area_base = cast(u64)extended_bios_data_area_segment << 4;
     if (extended_bios_data_area_base != 0) {
         const auto* rsdp = find_rsdp_in_range(extended_bios_data_area_base, extended_bios_data_area_base + 1024);
         if (rsdp != nullptr) return rsdp;
@@ -284,7 +284,7 @@ auto find_rsdp(const boot::Multiboot2_Info* mbi) -> const RSDP* {
 
 auto sdt_valid(const SDT_Header* header) -> bool {
     if (header == nullptr) return false;
-    if (header->length < sizeof(SDT_Header)) return false;
+    if (header->length < size_of(SDT_Header)) return false;
     return checksum_ok(header, header->length);
 }
 
@@ -292,15 +292,15 @@ auto find_madt_in_rsdt(const SDT_Header* rsdt) -> const MADT* {
     if (!sdt_valid(rsdt)) return nullptr;
     if (!kstd_memeq(rsdt->signature, RSDT_SIGNATURE)) return nullptr;
 
-    const usize entry_bytes = rsdt->length - sizeof(SDT_Header);
-    const usize entry_count = entry_bytes / sizeof(u32);
-    const auto* entries = addr_as<const u32*>(ptr_addr(rsdt) + sizeof(SDT_Header));
+    const ssize entry_bytes = rsdt->length - size_of(SDT_Header);
+    const ssize entry_count = entry_bytes / size_of(u32);
+    const auto* entries = addr_as<const u32*>(ptr_addr(rsdt) + size_of(SDT_Header));
 
-    for (usize i = 0; i < entry_count; ++i) {
+    for (ssize i = 0; i < entry_count; ++i) {
         const auto* header = addr_as<const SDT_Header*>(entries[i]);
         if (!sdt_valid(header)) continue;
         if (kstd_memeq(header->signature, MADT_SIGNATURE)) {
-            return reinterpret_cast<const MADT*>(header);
+            return cast(const MADT*)header;
         }
     }
     return nullptr;
@@ -310,15 +310,15 @@ auto find_madt_in_xsdt(const SDT_Header* xsdt) -> const MADT* {
     if (!sdt_valid(xsdt)) return nullptr;
     if (!kstd_memeq(xsdt->signature, XSDT_SIGNATURE)) return nullptr;
 
-    const usize entry_bytes = xsdt->length - sizeof(SDT_Header);
-    const usize entry_count = entry_bytes / sizeof(u64);
-    const auto* entries = addr_as<const u64*>(ptr_addr(xsdt) + sizeof(SDT_Header));
+    const ssize entry_bytes = xsdt->length - size_of(SDT_Header);
+    const ssize entry_count = entry_bytes / size_of(u64);
+    const auto* entries = addr_as<const u64*>(ptr_addr(xsdt) + size_of(SDT_Header));
 
-    for (usize i = 0; i < entry_count; ++i) {
+    for (ssize i = 0; i < entry_count; ++i) {
         const auto* header = addr_as<const SDT_Header*>(entries[i]);
         if (!sdt_valid(header)) continue;
         if (kstd_memeq(header->signature, MADT_SIGNATURE)) {
-            return reinterpret_cast<const MADT*>(header);
+            return cast(const MADT*)header;
         }
     }
     return nullptr;
@@ -354,15 +354,15 @@ auto push_cpu(MADT_Info& info, u32 apic_id, u32 acpi_id, bool enabled) -> void {
 }
 
 auto parse_madt_entries(const MADT* table, MADT_Info& info) -> void {
-    const auto* bytes     = reinterpret_cast<const u8*>(table);
-    const auto* entry     = bytes + sizeof(MADT);
+    const auto* bytes     = cast(const u8*)table;
+    const auto* entry     = bytes + size_of(MADT);
     const auto* table_end = bytes + table->header.length;
 
-    while (entry + sizeof(MADT_Entry_Header) <= table_end) {
-        const auto* header = reinterpret_cast<const MADT_Entry_Header*>(entry);
+    while (entry + size_of(MADT_Entry_Header) <= table_end) {
+        const auto* header = cast(const MADT_Entry_Header*)entry;
         const u8    length = header->length;
 
-        if (length < sizeof(MADT_Entry_Header)) {
+        if (length < size_of(MADT_Entry_Header)) {
             serial::println("MADT: corrupt entry length < 2");
             break;
         }
@@ -372,17 +372,17 @@ auto parse_madt_entries(const MADT* table, MADT_Info& info) -> void {
         }
 
         using enum MADT_Entry_Type;
-        switch (static_cast<MADT_Entry_Type>(header->type)) {
+        switch (cast(MADT_Entry_Type)header->type) {
             case LOCAL_APIC: {
-                if (length < sizeof(MADT_Local_APIC)) break;
-                const auto* e = reinterpret_cast<const MADT_Local_APIC*>(entry);
+                if (length < size_of(MADT_Local_APIC)) break;
+                const auto* e = cast(const MADT_Local_APIC*)entry;
                 push_cpu(info, e->apic_id, e->acpi_processor_uid, e->flags.enabled);
             } break;
 
             case IOAPIC: {
-                if (length < sizeof(MADT_IOAPIC)) break;
+                if (length < size_of(MADT_IOAPIC)) break;
 
-                const auto* e = reinterpret_cast<const MADT_IOAPIC*>(entry);
+                const auto* e = cast(const MADT_IOAPIC*)entry;
                 info.ioapics.push_back({
                     .id        = e->ioapic_id,
                     .gsi_base  = e->gsi_base,
@@ -391,9 +391,9 @@ auto parse_madt_entries(const MADT* table, MADT_Info& info) -> void {
             } break;
 
             case ISO: {
-                if (length < sizeof(MADT_ISO)) break;
+                if (length < size_of(MADT_ISO)) break;
 
-                const auto* e = reinterpret_cast<const MADT_ISO*>(entry);
+                const auto* e = cast(const MADT_ISO*)entry;
                 info.overrides.push_back({
                     .isa_irq = e->source,
                     .gsi     = e->gsi,
@@ -402,8 +402,8 @@ auto parse_madt_entries(const MADT* table, MADT_Info& info) -> void {
             } break;
 
             case LOCAL_X2APIC: {
-                if (length < sizeof(MADT_Local_X2APIC)) break;
-                const auto* e = reinterpret_cast<const MADT_Local_X2APIC*>(entry);
+                if (length < size_of(MADT_Local_X2APIC)) break;
+                const auto* e = cast(const MADT_Local_X2APIC*)entry;
                 push_cpu(info, e->x2apic_id, e->acpi_processor_uid, e->flags.enabled);
             } break;
         }
@@ -422,7 +422,7 @@ auto print_madt(const MADT_Info& info) -> void {
         info.overrides.size
     );
 
-    for (usize i = 0; i < info.cpus.size; ++i) {
+    for (ssize i = 0; i < info.cpus.size; ++i) {
         const auto& cpu = info.cpus[i];
         serial::println(
             "MADT cpu[%] -> apic_id=% acpi_id=% enabled=% bsp=%",
@@ -434,7 +434,7 @@ auto print_madt(const MADT_Info& info) -> void {
         );
     }
 
-    for (usize i = 0; i < info.ioapics.size; ++i) {
+    for (ssize i = 0; i < info.ioapics.size; ++i) {
         const auto& io = info.ioapics[i];
         serial::println(
             "MADT ioapic[%] -> id=% mmio=% gsi_base=%",
@@ -445,7 +445,7 @@ auto print_madt(const MADT_Info& info) -> void {
         );
     }
 
-    for (usize i = 0; i < info.overrides.size; ++i) {
+    for (ssize i = 0; i < info.overrides.size; ++i) {
         const auto& o = info.overrides[i];
         serial::println(
             "MADT override[%] -> isa_irq=% gsi=% polarity=% trigger=%",

@@ -9,13 +9,13 @@ struct Resource_View {
 
     template <typename T>
     auto data_as() const -> Array_View<const T> {
-        kstd_assert(data.size % sizeof(T) == 0, "resource size is not a multiple of target type size");
-        kstd_assert(ptr_addr(data.data) % alignof(T) == 0, "resource data is not aligned for target type");
-        return { data.size / sizeof(T), reinterpret_cast<const T*>(data.data) };
+        kstd_assert(data.size % size_of(T) == 0, "resource size is not a multiple of target type size");
+        kstd_assert(ptr_addr(data.data) % align_of(T) == 0, "resource data is not aligned for target type");
+        return { data.size / size_of(T), cast(const T*)data.data };
     }
 };
 
-template <usize N>
+template <ssize N>
 struct Resource {
     Static_Array<u8, N> data;
     const u32 width;
