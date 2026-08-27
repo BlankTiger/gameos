@@ -50,7 +50,7 @@ struct Trace {
 };
 
 // Skip this many traces to get rid of the assert/halt traces.
-constexpr auto SKIP_FRAME_COUNT = 0;
+constexpr auto SKIP_FRAME_COUNT = 3;
 
 // Arbitrary.
 constexpr auto DEFAULT_FRAME_COUNT = 10;
@@ -66,6 +66,7 @@ auto get_stack_trace_from(Stack_Frame* start_frame, u32 max_frame_count = DEFAUL
 
     auto* frame = start_frame;
     for (u32 frame_index = 0; frame && frame_index < max_frame_count; ++frame_index) {
+        if (frame->rip == 0) break;
         if (frame_index >= skip_frame_count) {
             auto function_name = dwarf::function_name_for_address(frame->rip);
             auto row_result    = dwarf::source_for_address(frame->rip);
@@ -87,7 +88,7 @@ auto print_stack_trace_from(Stack_Frame* start_frame, u32 max_frame_count = DEFA
     halt::println("Stack trace:");
     auto stack_trace = get_stack_trace_from(start_frame, max_frame_count, skip_frame_count);
     for (const auto& trace : stack_trace) {
-        halt::println("%:% % (%)", trace.file_name, trace.line_number, trace.function_name, trace.function_address);
+        halt::println("  %:% % (%)", trace.file_name, trace.line_number, trace.function_name, trace.function_address);
     }
 }
 

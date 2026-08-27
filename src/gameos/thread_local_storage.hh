@@ -69,7 +69,7 @@ auto create(const Context& inherited_context) -> Block* {
 
     void* temporary_storage = nullptr;
     if (inherited_context.temporary_state != nullptr) {
-        kstd_assert(inherited_context.temporary_state->base != nullptr);
+        kstd_assert(inherited_context.temporary_state->original_data != nullptr);
 
         auto temporary_allocation = mem::alloc(mem::TEMPORARY_STORAGE_SIZE, TLS_ALIGNMENT, allocator);
         kstd_assert(temporary_allocation.error == mem::Allocator_Error::NONE);
@@ -150,7 +150,7 @@ auto destroy(Block* block) -> void {
     }
 
     auto allocator = block->allocator;
-    auto* temporary_storage = block->context.temporary_state != nullptr ? block->context.temporary_state->base : nullptr;
+    auto* temporary_storage = block->context.temporary_state != nullptr ? block->context.temporary_state->original_data : nullptr;
 
     auto error_free_temp = mem::free(temporary_storage, mem::TEMPORARY_STORAGE_SIZE, TLS_ALIGNMENT, allocator);
     kstd_debug_assert(error_free_temp == mem::Allocator_Error::NONE);

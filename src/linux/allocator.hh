@@ -26,13 +26,13 @@ struct Hosted_Allocator_State {
     static auto proc(Allocator_Mode mode, ssize size, ssize alignment, ssize, void* old_memory, void*) -> Allocator_Result {
         switch (mode) {
             case Allocator_Mode::ALLOCATE: {
-                if (size < 0 || alignment <= 0 || !math::is_power_of_two(alignment))
+                if (size < 0 || !math::is_power_of_two(alignment))
                     return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
 
                 if (size == 0) return result(nullptr);
 
                 const ssize requested_alignment = alignment;
-                const ssize raw_alignment       = requested_alignment < align_of(std::max_align_t) ? align_of(std::max_align_t) : requested_alignment;
+                const ssize raw_alignment       = requested_alignment < MAX_ALIGN ? MAX_ALIGN : requested_alignment;
                 const ssize requested_size      = size;
                 if (requested_size > SSIZE_MAX_VALUE - size_of(Allocation_Header) - requested_alignment + 1)
                     return result(nullptr, Allocator_Error::INVALID_ARGUMENT);
@@ -87,8 +87,8 @@ struct Hosted_Allocator_State {
                 if (header->magic != HEADER_MAGIC)
                     return result(nullptr, Allocator_Error::INVALID_POINTER);
 
-                info->size      = header->size;
-                info->alignment = header->alignment;
+                info->requested_size      = header->size;
+                info->requested_alignment = header->alignment;
 
                 return result(nullptr);
             } break;

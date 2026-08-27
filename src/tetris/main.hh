@@ -1000,7 +1000,7 @@ auto tetris_main() -> void {
 
     constexpr auto TARGET_TICKS = ticks_per_frame(FPS_MAX);
 
-    const auto* temporary_allocator_mark = mem::temporary_allocator_mark();
+    const auto temporary_allocator_mark = mem::temporary_allocator_mark();
     while (true) {
         input::begin_frame();
         if (input::key_pressed(Key::ESCAPE)) break;

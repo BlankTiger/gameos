@@ -203,7 +203,7 @@ requires (!std::same_as<std::remove_cv_t<T>, bool>)
 template <std::integral T>
 requires (!std::same_as<std::remove_cv_t<T>, bool>)
 [[nodiscard]] force_inline constexpr auto is_power_of_two(T value) -> bool {
-    return (value & (value - 1)) == 0;
+    return value > 0 && (value & (value - 1)) == 0;
 }
 
 [[nodiscard]] force_inline constexpr auto floor_pow2(u64 n) -> u64 {

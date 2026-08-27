@@ -134,7 +134,7 @@ force_inline auto alloc_array(
     const auto allocation_size = alloc_array_size<T>(count, alignment);
     if (allocation_size == 0) return {0, nullptr};
 
-    auto allocation = alloc(allocation_size, align_of(std::max_align_t), allocator);
+    auto allocation = alloc(allocation_size, MAX_ALIGN, allocator);
     if (allocation.memory == nullptr) return {0, nullptr};
     void* base = allocation.memory;
 
@@ -686,7 +686,7 @@ struct Array {
     }
 
     auto ensure_space_for(ssize new_elements_count) -> void {
-            kstd_assert(new_elements_count >= 0 && new_elements_count <= SSIZE_MAX_VALUE - size, "Array size overflow");
+        kstd_assert(new_elements_count >= 0 && new_elements_count <= SSIZE_MAX_VALUE - size, "Array size overflow");
         reserve(size + new_elements_count);
     }
 

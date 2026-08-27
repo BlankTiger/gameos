@@ -113,7 +113,19 @@ base layer:
 - [x] debug allocator threadsafe flag should be only set when the backing has it set and then it should use the lock, otherwise it shouldn't.
 - [x] math::is_power_of_two for argument 0
 - [x] get number type situation under control
+- [x] temporary overflow pages
+- [x] implement ACTUALLY_RESIZE on allocators (buddy?)
+- [x] extract alignof(std::max_align_t) as MAX_ALIGN in basic.hh
+- [ ] make assert a macro that doesn't evaluate the error message if the condition is not false
+- [ ] store traces on debug allocator
 
+
+
+docs:
+- DWARF abbreviations
+- allocators
+- context
+- metaprogramming
 
 
 utils:

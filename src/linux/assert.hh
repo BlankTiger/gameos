@@ -4,6 +4,7 @@
 #include <cstdlib>
 
 #include "kstd/assert.hh"
+#include "linux/stack_trace.hh"
 
 namespace kstd {
 
@@ -16,6 +17,7 @@ namespace kstd {
         stderr, "%s:%u:%u: %s\n",
         location.file_name(), location.line(), location.column(), msg
     );
+    stack_trace::print_stack_trace(10, 2);
     std::abort();
 }
 
